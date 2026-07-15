@@ -1,0 +1,212 @@
+import type { Methodology, Category, Offer } from '../methodology/schema';
+import type {
+  NormalizedCategory,
+  Context,
+  Diagnosis,
+  DiagnosisCategory,
+  CategoryState,
+  BlindSpot,
+  DispersionFlag,
+  EvidenceReceipt,
+} from './types';
+import { scoreCategory } from './score';
+import { gapFor } from './gap';
+import { benchmarkFor } from './benchmark';
+import { dispersionFor } from './dispersion';
+import { analyzeConstraint, type ConstraintResult } from './constraint';
+
+interface Thresholds {
+  break: number;
+  gate: number;
+  blind_spot_gap: number;
+  dispersion: number;
+}
+
+function categoryState(
+  cat: Category,
+  score: number,
+  percentile: number | null,
+  t: Thresholds,
+): CategoryState {
+  if (cat.kind === 'stage') {
+    if (score < t.break) return 'broken';
+    if (percentile !== null && percentile < 25) return 'watch';
+    return 'ok';
+  }
+  if (score < t.gate) return 'gate';
+  if (percentile !== null && percentile < 25) return 'watch';
+  return 'ok';
+}
+
+function meanOfItems(norm: NormalizedCategory, ids: string[]): number | null {
+  const vals: number[] = [];
+  for (const id of ids) {
+    const v = norm.itemValues.get(id);
+    if (v) vals.push(...v);
+  }
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+}
+
+function itemMean10(norm: NormalizedCategory, id: string): number | null {
+  const vals = norm.itemValues.get(id) ?? [];
+  return vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) : null;
+}
+
+function selectOffer(constraint: ConstraintResult, methodology: Methodology): Offer {
+  const primary = constraint.primary_constraint;
+  if (!primary) return methodology.offers.no_constraint;
+  if (primary.category_id === 'gen') {
+    const mode = constraint.generosity_mode;
+    if (mode === 'breadth') return methodology.offers.generosity.breadth;
+    if (mode === 'both') return methodology.offers.generosity.both;
+    return methodology.offers.generosity.depth; // depth or null fallback
+  }
+  const stageOffer = methodology.offers.stages[primary.category_id];
+  if (!stageOffer) throw new Error(`assemble: no offer for stage "${primary.category_id}"`);
+  return stageOffer;
+}
+
+function computeConfidence(
+  constraint: ConstraintResult,
+  categories: DiagnosisCategory[],
+  methodology: Methodology,
+): number {
+  const { low_response_penalty, floor } = methodology.rules.confidence;
+  const primary = constraint.primary_constraint;
+  if (!primary) {
+    const anySingle = categories.some(c => c.respondent_count === 1);
+    return Math.max(floor, 1 - low_response_penalty * (anySingle ? 1 : 0));
+  }
+  let conf = 1.0;
+  const primaryCat = categories.find(c => c.category_id === primary.category_id);
+  if (primaryCat && primaryCat.respondent_count === 1) conf -= low_response_penalty;
+  if (primary.category_id === 'disc') conf -= low_response_penalty;
+  return Math.max(floor, conf);
+}
+
+function buildEvidenceTrail(
+  constraint: ConstraintResult,
+  blindSpots: BlindSpot[],
+  dispersionFlags: DispersionFlag[],
+  normalized: Map<string, NormalizedCategory>,
+  methodology: Methodology,
+): EvidenceReceipt[] {
+  const trail: EvidenceReceipt[] = [];
+
+  const primary = constraint.primary_constraint;
+  if (primary) {
+    const cat = methodology.questions.categories.find(c => c.id === primary.category_id)!;
+    const norm = normalized.get(primary.category_id)!;
+    trail.push({
+      claim: `primary_constraint:${primary.category_id}`,
+      refs: cat.items.map(it => ({ kind: 'item', ref: it.id, value: itemMean10(norm, it.id) })),
+    });
+  }
+
+  for (const bs of blindSpots) {
+    trail.push({
+      claim: `blind_spot:${bs.category_id}`,
+      refs: [
+        { kind: 'metric', ref: `${bs.category_id}.belief`, value: bs.belief },
+        { kind: 'metric', ref: `${bs.category_id}.evidence`, value: bs.evidence },
+      ],
+    });
+  }
+
+  for (const d of dispersionFlags) {
+    trail.push({
+      claim: `dispersion:${d.category_id}`,
+      refs: d.respondents.map(r => ({
+        kind: 'metric',
+        ref: `${d.category_id}.${r.label}`,
+        value: Math.round(r.mean * 10) / 10,
+      })),
+    });
+  }
+
+  if (constraint.generosity_mode) {
+    const genNorm = normalized.get('gen')!;
+    const ids = [
+      ...methodology.rules.generosity.breadth_items,
+      ...methodology.rules.generosity.depth_items,
+    ];
+    trail.push({
+      claim: `generosity_mode:${constraint.generosity_mode}`,
+      refs: ids.map(id => ({ kind: 'metric', ref: id, value: itemMean10(genNorm, id) })),
+    });
+  }
+
+  return trail;
+}
+
+export function assemble(
+  normalized: Map<string, NormalizedCategory>,
+  methodology: Methodology,
+  context: Context,
+): Diagnosis {
+  const t = methodology.rules.thresholds;
+  const categoryNames = new Map(methodology.questions.categories.map(c => [c.id, c.name]));
+
+  const scores = new Map<string, number>();
+  const categories: DiagnosisCategory[] = [];
+  const blind_spots: BlindSpot[] = [];
+  const dispersion_flags: DispersionFlag[] = [];
+
+  for (const cat of methodology.questions.categories) {
+    const norm = normalized.get(cat.id)!;
+    const score = scoreCategory(norm);
+    scores.set(cat.id, score);
+
+    const g = gapFor(norm, cat, t.blind_spot_gap);
+    const cohort_percentile = benchmarkFor(cat.id, score, methodology, context.attendance_band);
+    const state = categoryState(cat, score, cohort_percentile, t);
+
+    categories.push({
+      category_id: cat.id,
+      kind: cat.kind,
+      score,
+      belief: g.belief,
+      evidence: g.evidence,
+      gap: g.gap,
+      gap_class: g.gap_class,
+      cohort_percentile,
+      state,
+      respondent_count: norm.respondentCount,
+    });
+
+    if (g.gap_class === 'blind_spot' && g.belief !== null && g.evidence !== null && g.gap !== null) {
+      blind_spots.push({ category_id: cat.id, belief: g.belief, evidence: g.evidence, gap: g.gap });
+    }
+
+    const disp = dispersionFor(norm, t.dispersion);
+    if (disp) dispersion_flags.push(disp);
+  }
+
+  const genNorm = normalized.get('gen')!;
+  const generosityMeans = {
+    breadth: meanOfItems(genNorm, methodology.rules.generosity.breadth_items),
+    depth: meanOfItems(genNorm, methodology.rules.generosity.depth_items),
+  };
+
+  const constraint = analyzeConstraint(scores, generosityMeans, methodology, categoryNames);
+
+  const overall_score = Math.round(
+    [...scores.values()].reduce((a, b) => a + b, 0) / scores.size,
+  );
+
+  return {
+    methodology_version: methodology.questions.version,
+    overall_score,
+    categories,
+    primary_constraint: constraint.primary_constraint,
+    contributing: constraint.contributing,
+    do_not_work_on: constraint.do_not_work_on,
+    gating_conditions: constraint.gating_conditions,
+    generosity_mode: constraint.generosity_mode,
+    blind_spots,
+    dispersion_flags,
+    offer: selectOffer(constraint, methodology),
+    confidence: computeConfidence(constraint, categories, methodology),
+    evidence_trail: buildEvidenceTrail(constraint, blind_spots, dispersion_flags, normalized, methodology),
+  };
+}
