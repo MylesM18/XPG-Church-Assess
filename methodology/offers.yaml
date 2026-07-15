@@ -1,0 +1,13 @@
+version: "0.1.0"
+stages:
+  guest: { type: "guest_retention", call_type: "Guest Retention Diagnostic", hook: "You may be paying for guests you aren't keeping." }
+  conn:  { type: "belonging", call_type: "Belonging & Assimilation Review", hook: "Your church may feel more connected than it is." }
+  disc:  { type: "discipleship_pipeline", call_type: "Discipleship Pathway & Leadership Pipeline Session", hook: "Your ceiling isn't your building. It's the number of people who can lead." }
+  vol:   { type: "volunteer_mobilization", call_type: "Volunteer Mobilization Session", hook: "You may be one burnout away from three ministries stopping." }
+generosity:
+  depth:   { type: "generosity_depth", call_type: "Generosity Culture & Discipleship Review", hook: "Most of your people give. Few have been taught why." }
+  breadth: { type: "generosity_breadth_routes_upstream", call_type: "Belonging & Assimilation Review", hook: "Your givers are generous; there just aren't enough of them, and that's a connection problem." }
+  # Claude-drafted
+  both:    { type: "generosity_depth", call_type: "Generosity Culture & Discipleship Review", hook: "Most of your people give. Few have been taught why." }
+# Claude-drafted (no source offer for the no-constraint path):
+no_constraint: { type: "capacity", call_type: "Capacity & Next-Ceiling Session", hook: "Nothing here is broken. Let's talk about the ceiling you'll hit next, not the one you're hitting now." }

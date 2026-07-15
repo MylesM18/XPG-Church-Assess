@@ -1,0 +1,13 @@
+version: "0.1.0"
+blocks:
+  verdict: "Your primary constraint is {primary_name}. It scored {primary_score} out of 100, below the point where a stage is working. Everything after it in the chain will look weak until this is fixed."
+  verdict_no_constraint: "Nothing in your chain is broken. Every stage is holding. This is a capacity conversation, not a repair one."
+  evidence: "Here is what that score rests on: {evidence_lines}."
+  blind_spot: "You rated {bs_name} highly, but the countable side tells a different story. Belief sits at {bs_belief}, the evidence at {bs_evidence}, a gap of {bs_gap} points."
+  cost: "Left alone, {primary_name} caps everything downstream. Spending on {downstream_list} first raises numbers once and changes nothing."
+  do_not_work_on: "Do not work on these yet, they are symptoms of the constraint above: {do_not_list}."
+  next_step: "Start with {primary_name}. {offer_hook}"
+inserts:
+  gating: "Before this can hold, address {gating_list}. These are the ground the fix stands on."
+  dispersion: "Your leaders do not agree on {disp_name}. Answers ranged across {disp_spread} points. That disagreement is itself the finding."
+  benchmark_note: "Benchmarks are XPG provisional priors, not an observed cohort yet."
