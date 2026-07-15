@@ -1,0 +1,322 @@
+version: "0.1.0"
+categories:
+  - id: guest
+    name: "Guest Experience"
+    kind: stage
+    position: 1
+    items:
+      - id: G1
+        text: "When a first-time guest visits, what actually happens to their information?"
+        signal: evidence
+        anchors:
+          lo: "Nothing. We don't know who visited or how to reach them."
+          mid: "We capture some guests (a connection card, a table) but it's inconsistent and no one owns the follow-up."
+          hi: "Nearly every first-time guest is captured, and their information reaches a specific person the same week."
+      - id: G2
+        text: "After a guest visits, how fast and how reliably are they contacted?"
+        signal: evidence
+        anchors:
+          lo: "They aren't, unless they reach out to us first."
+          mid: "Sometimes, eventually, by whoever remembers — usually more than a week later."
+          hi: "Every captured guest is personally contacted within 48 hours, and one role owns that this happens."
+      - id: G3
+        text: "Could a guest who wanted to go deeper figure out how, without asking a staff member?"
+        signal: belief
+        anchors:
+          lo: "No. They'd have to know someone or ask."
+          mid: "There's a next step (a class, a lunch, an app) but it's easy to miss and we don't point to it clearly."
+          hi: "Every guest leaves knowing exactly what to do next, and it's obvious without asking anyone."
+      - id: G4
+        text: "Do you know what share of first-time guests come back a second time?"
+        signal: evidence
+        anchors:
+          lo: "We have no idea. We don't track it."
+          mid: "We have a rough sense but no real number."
+          hi: "We know our return rate and can see whether it's moving."
+      - id: G5
+        text: "Who is responsible for what happens to a guest in their first 30 days?"
+        signal: evidence
+        anchors:
+          lo: "No one. It's nobody's job."
+          mid: "It's shared across a few people or a team, so it falls through the cracks."
+          hi: "One person owns the 30-day guest journey and is accountable for it."
+  - id: conn
+    name: "Community / Connection"
+    kind: stage
+    position: 2
+    items:
+      - id: C1
+        text: "What share of your regular attenders are personally known by someone who is not on paid staff?"
+        signal: belief
+        anchors:
+          lo: "Very few. Most people come and go anonymously."
+          mid: "Maybe half. There's a committed core, and a large edge of people no one would notice leaving."
+          hi: "Nearly everyone is known and cared for by a non-staff person."
+      - id: C2
+        text: "What share of adults are in a group, class, or consistent relational community?"
+        signal: evidence
+        anchors:
+          lo: "Under 15%. Groups aren't really a thing here."
+          mid: "Around a third. We have groups but most people aren't in one."
+          hi: "More than half of adults are in a real group."
+      - id: C3
+        text: "If a regular attender stopped coming for a month, what would happen?"
+        signal: evidence
+        anchors:
+          lo: "Nothing. No one would notice."
+          mid: "Someone might notice eventually, but no one owns reaching out."
+          hi: "Someone would notice within a week or two and personally reach out."
+      - id: C4
+        text: "How does a new person actually get connected into relationship here?"
+        signal: belief
+        anchors:
+          lo: "They're on their own. If they don't force their way in, they stay on the edge."
+          mid: "We have a path (groups launch, a class) but it's seasonal or easy to miss."
+          hi: "There's a clear, always-available on-ramp and we actively walk people onto it."
+      - id: C5
+        text: "Is relational life concentrated in a small core, or spread across the body?"
+        signal: evidence
+        anchors:
+          lo: "Everything runs through the same 20 people who've been here for years."
+          mid: "There's a core and a slowly growing second ring, but it's still concentrated."
+          hi: "Relationship and ownership are spread widely; new people become insiders regularly."
+  - id: disc
+    name: "Discipleship / Leadership"
+    kind: stage
+    position: 3
+    items:
+      - id: D1
+        text: "Could your staff describe the path a new believer walks here — and would they describe it the same way?"
+        signal: belief
+        anchors:
+          lo: "No. There's no defined path; everyone would say something different."
+          mid: "There's an implicit path a few leaders could sketch, but it's not written or shared."
+          hi: "There's a clear, named path, and our leaders would all describe it consistently."
+      - id: D2
+        text: "Are people visibly maturing — moving from new to grounded to serving to leading?"
+        signal: belief
+        anchors:
+          lo: "Not really. People plateau after they get comfortable."
+          mid: "Some are, but it's accidental — the self-motivated ones."
+          hi: "We can point to people at every stage and name who's moving."
+      - id: D3
+        text: "In the last year, how many people moved from being served to leading others?"
+        signal: evidence
+        anchors:
+          lo: "None that I can name."
+          mid: "A handful, but it wasn't intentional."
+          hi: "Many, through a deliberate pipeline we run."
+      - id: D4
+        text: "Do your people understand the reasons behind the Christian life, or mostly the behaviors?"
+        signal: belief
+        anchors:
+          lo: "Mostly behaviors and attendance. The \"why\" isn't taught."
+          mid: "We teach solid content on Sundays, but it doesn't consistently translate into formed conviction."
+          hi: "Our people can articulate why, not just what, and it shows in how they live."
+      - id: D5
+        text: "If your best disciple-maker left, would formation continue?"
+        signal: belief
+        anchors:
+          lo: "No. It depends on specific gifted individuals."
+          mid: "Partly — some of it is systematized, much of it isn't."
+          hi: "Yes. Formation runs on a reproducible model, not on heroes."
+  - id: vol
+    name: "Volunteer"
+    kind: stage
+    position: 4
+    items:
+      - id: V1
+        text: "What share of your regular adults serve at least once a month?"
+        signal: evidence
+        anchors:
+          lo: "Under 10%. The same few people do everything."
+          mid: "Around 20%. A committed group serves; most attend and leave."
+          hi: "Over a third serve regularly."
+      - id: V2
+        text: "Are the same people carrying multiple roles because no one else will step up?"
+        signal: evidence
+        anchors:
+          lo: "Yes. A small group is exhausted and holding everything together."
+          mid: "Somewhat — key people are stretched, but it's not yet a crisis."
+          hi: "No. Load is spread; no one is carrying three jobs."
+      - id: V3
+        text: "How easy is it for someone who wants to serve to actually start?"
+        signal: belief
+        anchors:
+          lo: "Hard. They have to know someone or chase it down."
+          mid: "Possible, but clunky — an interested person can slip through the cracks."
+          hi: "Easy and obvious. A willing person is serving within two weeks."
+      - id: V4
+        text: "Once someone serves, do they grow — or just fill a slot?"
+        signal: belief
+        anchors:
+          lo: "They fill a slot. There's no development."
+          mid: "Some team leaders invest; most don't."
+          hi: "Serving is a development path; volunteers grow into leaders."
+      - id: V5
+        text: "Do your staff primarily do the ministry, or equip others to?"
+        signal: belief
+        anchors:
+          lo: "Staff do it themselves; it's faster than training someone."
+          mid: "Mixed — some equip, some are the bottleneck."
+          hi: "Staff multiply ministry through volunteers as their main job."
+  - id: gen
+    name: "Generosity"
+    kind: stage
+    position: 5
+    items:
+      - id: GEN1
+        text: "What share of your regular households give anything at all in a year?"
+        signal: evidence
+        anchors:
+          lo: "Under 25%. A small minority funds the church."
+          mid: "Around 40%. A committed minority gives; most don't."
+          hi: "More than half of households give."
+      - id: GEN2
+        text: "Do your people understand why they give, or mostly where to give?"
+        signal: belief
+        anchors:
+          lo: "Mostly logistics. Generosity isn't taught as formation."
+          mid: "We teach on it periodically, usually around budget needs."
+          hi: "Generosity is discipled as worship; our people know why, not just where."
+      - id: GEN3
+        text: "Is generosity of time modeled and celebrated, not just money?"
+        signal: belief
+        anchors:
+          lo: "We mostly talk about money when we talk about giving."
+          mid: "We value both but emphasize financial giving."
+          hi: "Time and money are both discipled as generosity; we celebrate both."
+      - id: GEN4
+        text: "Does a person have a clear next step to grow in generosity from wherever they are?"
+        signal: belief
+        anchors:
+          lo: "No. You're either a giver or you're not; there's no path."
+          mid: "There's teaching but no personal next step for different starting points."
+          hi: "Everyone has a clear next step, whether they've never given or already tithe."
+      - id: GEN5
+        text: "Is your generosity funding vision, or just keeping the lights on?"
+        signal: belief
+        anchors:
+          lo: "We're in survival mode; giving barely covers operations."
+          mid: "We're stable but have little margin for new mission."
+          hi: "Generosity funds vision and mission beyond our own walls."
+  - id: gov
+    name: "Governance / Accountability"
+    kind: enabler
+    position: null
+    items:
+      - id: GOV1
+        text: "When a real decision needs to be made, is it clear who makes it?"
+        signal: belief
+        anchors:
+          lo: "No. Decisions stall, or everything routes to one person."
+          mid: "Mostly clear for routine things, murky for anything hard or new."
+          hi: "Clear, understood, and followed at every level."
+      - id: GOV2
+        text: "Do staff and key leaders know what they own and what they don't?"
+        signal: belief
+        anchors:
+          lo: "No. Roles overlap and things fall through the cracks."
+          mid: "Roughly — there are titles, but real ownership is fuzzy."
+          hi: "Yes. Everyone knows their lane and their authority."
+      - id: GOV3
+        text: "When someone (including a leader) underperforms, is it addressed?"
+        signal: belief
+        anchors:
+          lo: "No. We avoid it, especially with long-tenured people."
+          mid: "Sometimes, inconsistently, depending on who it is."
+          hi: "Yes, directly and fairly, at every level."
+      - id: GOV4
+        text: "Can the church function and decide when the senior leader is away?"
+        signal: belief
+        anchors:
+          lo: "No. Everything waits for them."
+          mid: "Partly — routine things move, big things wait."
+          hi: "Yes. Authority is genuinely distributed."
+      - id: GOV5
+        text: "Does your governing body provide real accountability and wisdom, or rubber-stamp?"
+        signal: belief
+        anchors:
+          lo: "It's a rubber stamp, or a source of dysfunction."
+          mid: "It functions, but leans passive or overly deferential."
+          hi: "It provides genuine accountability, wisdom, and support."
+  - id: comm
+    name: "Communication"
+    kind: enabler
+    position: null
+    items:
+      - id: COM1
+        text: "Could every staff member state this season's top priorities the same way, without checking?"
+        signal: belief
+        anchors:
+          lo: "No. Everyone's working off a different understanding."
+          mid: "Roughly aligned, but it drifts and needs re-stating constantly."
+          hi: "Yes. Priorities are clear, shared, and current across the team."
+      - id: COM2
+        text: "Can a newcomer find service times, location, and how to take a next step in under a minute online?"
+        signal: belief
+        anchors:
+          lo: "No. Our digital presence is outdated or confusing."
+          mid: "The basics are findable; next steps and depth are not."
+          hi: "Yes. Everything a newcomer needs is obvious and current."
+      - id: COM3
+        text: "Do your people know what matters most, or is everything announced with equal weight?"
+        signal: belief
+        anchors:
+          lo: "Everything's a headline, so nothing is. People tune out."
+          mid: "We prioritize somewhat, but over-communicate and dilute the important things."
+          hi: "People clearly know what matters most; we protect the main things."
+      - id: COM4
+        text: "Do you have to say something five times for it to stick?"
+        signal: belief
+        anchors:
+          lo: "Yes. Nothing moves unless we exhaust every channel repeatedly."
+          mid: "Important things need heavy repetition to land."
+          hi: "Clear communication lands the first or second time."
+      - id: COM5
+        text: "Do you actually hear back from your congregation, or only talk at them?"
+        signal: belief
+        anchors:
+          lo: "Broadcast only. We don't really know what they're hearing."
+          mid: "Some feedback channels, lightly used."
+          hi: "Real two-way communication; we know what's landing."
+  - id: sys
+    name: "Org Structure / Systems"
+    kind: enabler
+    position: null
+    items:
+      - id: SYS1
+        text: "Do your core processes live in systems, or in specific people's heads?"
+        signal: belief
+        anchors:
+          lo: "In heads. If a key person left, we'd lose how things are done."
+          mid: "Some documented, much of it tribal knowledge."
+          hi: "Core processes are documented and repeatable, independent of any individual."
+      - id: SYS2
+        text: "Do your systems (ChMS, giving, communication, scheduling) work together, or is it duct tape?"
+        signal: belief
+        anchors:
+          lo: "Fragmented. Nothing talks to anything; lots of manual re-entry."
+          mid: "We have tools, but they're siloed and clunky."
+          hi: "Our systems are integrated and reduce manual work."
+      - id: SYS3
+        text: "When someone new joins (staff or volunteer), is there a repeatable way to bring them in?"
+        signal: belief
+        anchors:
+          lo: "No. Every onboarding is improvised."
+          mid: "There's a rough process, inconsistently followed."
+          hi: "Yes. Onboarding is defined and consistent."
+      - id: SYS4
+        text: "Can leadership see what's actually happening (attendance, giving, serving, groups) without a fire drill?"
+        signal: belief
+        anchors:
+          lo: "No. Getting a straight number is a project."
+          mid: "We can get some data, with effort."
+          hi: "Leadership has current, trustworthy data at hand."
+      - id: SYS5
+        text: "If you doubled in size, would your systems hold?"
+        signal: belief
+        anchors:
+          lo: "No. We'd break. We're already strained."
+          mid: "We'd struggle and have to rebuild on the fly."
+          hi: "Our systems would scale with us."
