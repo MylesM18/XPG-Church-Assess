@@ -1,0 +1,31 @@
+version: "0.1.0"
+chain: [guest, conn, disc, vol, gen]
+enablers:
+  gov:  { gates: all }
+  comm: { gates: [guest, conn] }
+  sys:  { gates: [vol, disc] }
+generosity:
+  breadth_items: [GEN1]
+  depth_items: [GEN2, GEN4]
+thresholds:
+  break: 45
+  severe: 25
+  gate: 45
+  blind_spot_gap: 20
+  dispersion: 2.0
+constraint_logic: |
+  1. score all categories 0-100
+  2. walk `chain` in order; a stage is BROKEN if score < thresholds.break
+  3. primary_constraint = first broken stage
+  4. do_not_work_on = every broken stage AFTER primary in the chain
+  5. gating_conditions = enablers with score < thresholds.gate
+  6. discipleship (disc) has one evidence item (D3) in v1 -> when disc is primary,
+     penalize confidence (low_response_penalty); it may still be primary only if it is
+     the earliest break, otherwise it is reported as contributing / do_not_work_on
+  7. generosity split: breadth = mean(breadth_items), depth = mean(depth_items);
+     both low -> both; only breadth low -> breadth; only depth low -> depth; else null
+     (low = mean*10 < thresholds.break)
+  8. if no stage is broken -> NO_STRUCTURAL_CONSTRAINT (capacity offer; invent no problem)
+confidence:
+  low_response_penalty: 0.15
+  floor: 0.4
