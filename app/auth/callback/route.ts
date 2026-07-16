@@ -5,9 +5,11 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   // Only allow relative redirects — `${origin}${next}` with an absolute or
-  // userinfo-bearing `next` (e.g. "@evil.com") would be an open redirect.
+  // userinfo-bearing `next` (e.g. "@evil.com") would be an open redirect. Also rejects
+  // protocol-relative (`//evil.com`) and backslash-protocol-relative (`/\evil.com`)
+  // forms, consistent with resolveNext in lib/auth/resolve-next.ts.
   let next = searchParams.get('next') ?? '/'
-  if (!next.startsWith('/')) next = '/'
+  if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) next = '/'
 
   if (code) {
     const supabase = await createClient()
