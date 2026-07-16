@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { resolveNext } from '@/lib/auth/resolve-next'
 
 export default function SignInPage() {
   const supabase = createClient()
@@ -9,10 +10,19 @@ export default function SignInPage() {
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const callbackUrl = () =>
-    typeof window !== 'undefined'
-      ? `${window.location.origin}/auth/callback?next=/get-started`
-      : '/auth/callback?next=/get-started'
+  // Forward the `?next=` the sign-in page was loaded with (e.g. the answer page
+  // or createInvitation redirect here when unauthenticated) through the magic
+  // link so /auth/callback lands the user back where they started. Falls back to
+  // /get-started for a bare sign-in visit. Open-redirect guarded in resolveNext.
+  const callbackUrl = () => {
+    const origin =
+      typeof window !== 'undefined' ? window.location.origin : ''
+    const next =
+      typeof window !== 'undefined'
+        ? resolveNext(window.location.search)
+        : '/get-started'
+    return `${origin}/auth/callback?next=${encodeURIComponent(next)}`
+  }
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault()
