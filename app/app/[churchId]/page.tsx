@@ -26,12 +26,15 @@ export default async function DashboardPage({
   const supabase = await createClient()
 
   // RLS: a non-member gets zero rows here → 404 (server-side permission wall).
-  const { data: church } = await supabase
+  const { data: church, error } = await supabase
     .from('churches')
     .select('id, name, brand_color')
     .eq('id', churchId)
     .maybeSingle()
 
+  // An RLS denial returns no rows with error=null; a real query failure sets
+  // error — surface it as 500 rather than masquerading as a 404 permission wall.
+  if (error) throw error
   if (!church) notFound()
 
   const methodology = loadMethodology()

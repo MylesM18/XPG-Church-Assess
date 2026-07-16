@@ -4,13 +4,26 @@ import { createClient } from '@/lib/supabase/server'
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/'
+  // Only allow relative redirects — `${origin}${next}` with an absolute or
+  // userinfo-bearing `next` (e.g. "@evil.com") would be an open redirect.
+  let next = searchParams.get('next') ?? '/'
+  if (!next.startsWith('/')) next = '/'
 
   if (code) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`)
+      // Behind a load balancer the real host is in x-forwarded-host; in local
+      // dev `origin` is authoritative. (Canonical @supabase/ssr callback.)
+      const forwardedHost = request.headers.get('x-forwarded-host')
+      const isLocalEnv = process.env.NODE_ENV === 'development'
+      if (isLocalEnv) {
+        return NextResponse.redirect(`${origin}${next}`)
+      } else if (forwardedHost) {
+        return NextResponse.redirect(`https://${forwardedHost}${next}`)
+      } else {
+        return NextResponse.redirect(`${origin}${next}`)
+      }
     }
   }
 
