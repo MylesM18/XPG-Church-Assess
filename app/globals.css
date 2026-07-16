@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #FBF9F5;
+  --color-ink: #1A1C22;
+  --color-ink-soft: #565962;
+  --color-line: #E4DED3;
+  --color-berry: #8E2B3E;        /* RESERVED: diagnosis/constraint/active only — never a brand tile */
+  --color-berry-deep: #6E1F30;
+  --color-sage: #4E6B60;         /* healthy / enabler */
+  --color-sand: #EEE8DD;
+
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-body: var(--font-hanken), system-ui, sans-serif;
+}
+
+html,
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-body);
+}
