@@ -1,5 +1,5 @@
 begin;
-select plan(12);
+select plan(16);
 
 -- two users: a member (admin) and a non-member
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
@@ -51,6 +51,36 @@ select is((select count(*)::int from church_members), 0, 'non-member selects no 
 set local request.jwt.claims to '{"sub":"44444444-4444-4444-4444-444444444444","email":"member@test.com","role":"authenticated"}';
 select is((select count(*)::int from profiles), 1, 'member sees exactly their own profile');
 select is((select id from profiles), '44444444-4444-4444-4444-444444444444'::uuid, 'and it is their row');
+
+-- ── M2 I2: cross-tenant writes are denied by RLS (churches_update, profiles_update_own) ──
+-- Seed a SECOND church (church B) owned by the stranger, with a known id, as superuser.
+reset role;
+insert into churches (id, name, brand_color, created_by)
+values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'RLS Test Church B', '#555555',
+        '55555555-5555-5555-5555-555555555555');
+insert into church_members (church_id, user_id, role, granted_by)
+values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+        '55555555-5555-5555-5555-555555555555', 'admin',
+        '55555555-5555-5555-5555-555555555555');
+
+-- member (admin of church A only) attempts to UPDATE church B → USING clause filters it, 0 rows, no error
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"44444444-4444-4444-4444-444444444444","email":"member@test.com","role":"authenticated"}';
+select lives_ok(
+  $$update churches set name = 'hijacked' where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'$$,
+  'cross-tenant church UPDATE runs but matches 0 rows under churches_update');
+
+-- member attempts to UPDATE the stranger's profile row → profiles_update_own filters it
+select lives_ok(
+  $$update profiles set full_name = 'hijacked' where id = '55555555-5555-5555-5555-555555555555'$$,
+  'cross-tenant profile UPDATE runs but matches 0 rows under profiles_update_own');
+
+-- inspect as superuser: neither row was actually changed
+reset role;
+select is((select name from churches where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'),
+          'RLS Test Church B', 'church B name unchanged — cross-tenant church update denied');
+select is((select full_name from profiles where id = '55555555-5555-5555-5555-555555555555'),
+          null, 'stranger profile unchanged — cross-tenant profile update denied');
 
 select * from finish();
 rollback;
