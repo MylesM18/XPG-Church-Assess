@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import yaml from 'js-yaml';
 import {
@@ -11,7 +10,7 @@ import {
   type Methodology,
 } from './schema';
 
-const DEFAULT_DIR = fileURLToPath(new URL('../../methodology', import.meta.url));
+const DEFAULT_DIR = path.join(process.cwd(), 'methodology');
 
 export function loadMethodology(dir: string = DEFAULT_DIR): Methodology {
   const read = (file: string): unknown => {
