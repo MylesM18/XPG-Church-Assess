@@ -1,5 +1,5 @@
 begin;
-select plan(7);
+select plan(9);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
  ('99999999-9999-9999-9999-999999999999','authenticated','authenticated','admin9@test.com','x',now(),now());
@@ -81,6 +81,27 @@ select throws_ok(
   '23514',
   'new row for relation "responses" violates check constraint "responses_value_check"',
   'out-of-range value rejected by DB CHECK');
+
+-- empty answers payload is rejected by the bounds guard (plumbing bound, not methodology
+-- validation -- that stays in lib/answers/validate.ts). This must run BEFORE the status
+-- flip, so a bare empty-array call cannot silently burn the token.
+reset role;
+insert into invitations (id, run_id, church_id, category_id, status, created_by, expires_at)
+select 'd0000000-0000-0000-0000-000000000004',
+       (select id from assessment_runs where status = 'in_progress'),
+       (select id from churches where name = 'Submit Test Church'),
+       'guest', 'pending', '99999999-9999-9999-9999-999999999999', now() + interval '30 days';
+set local role anon;
+set local request.jwt.claims to '{"role":"anon"}';
+select throws_ok(
+  $$select submit_invited_response('d0000000-0000-0000-0000-000000000004', 'X', '[]'::jsonb)$$,
+  'P0001',
+  'invalid answer payload',
+  'empty answers array rejected by bounds guard');
+
+reset role;
+select is((select status from invitations where id = 'd0000000-0000-0000-0000-000000000004'),
+          'pending', 'invitation NOT burned after bounds-guard rejection (token untouched)');
 
 select * from finish();
 rollback;

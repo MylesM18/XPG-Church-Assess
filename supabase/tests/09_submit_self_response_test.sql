@@ -1,5 +1,5 @@
 begin;
-select plan(6);
+select plan(7);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
  ('a1111111-1111-1111-1111-111111111111','authenticated','authenticated','selfadmin@test.com','x',now(),now()),
@@ -51,6 +51,17 @@ select throws_ok(
   '42501',
   'not a member of this church',
   'non-member cannot self-answer');
+
+-- empty answers payload is rejected by the bounds guard (plumbing bound, not methodology
+-- validation -- that stays in lib/answers/validate.ts)
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"a1111111-1111-1111-1111-111111111111","email":"selfadmin@test.com","role":"authenticated"}';
+select throws_ok(
+  $$select submit_self_response(
+      (select id from churches where name = 'Self Test Church'), 'guest', '[]'::jsonb)$$,
+  'P0001',
+  'invalid answer payload',
+  'empty answers array rejected by bounds guard');
 
 select * from finish();
 rollback;
