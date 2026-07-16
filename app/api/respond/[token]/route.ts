@@ -42,7 +42,7 @@ export async function POST(
     p_answers: validated.answers,
   })
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json({ error: 'This link is no longer valid.' }, { status: 400 })
   }
 
   return NextResponse.json({ ok: true })

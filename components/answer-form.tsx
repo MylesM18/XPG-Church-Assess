@@ -40,10 +40,15 @@ export function AnswerForm({
     }
     setPending(true)
     const answers: AnswerInput[] = items.map((i) => ({ item_id: i.id, value: values[i.id] ?? 5 }))
-    const result = await onSubmit(answers, requireName ? name.trim() : null)
-    setPending(false)
-    if (result.ok) setDone(true)
-    else setError(result.error ?? 'Something went wrong. Please try again.')
+    try {
+      const result = await onSubmit(answers, requireName ? name.trim() : null)
+      if (result.ok) setDone(true)
+      else setError(result.error ?? 'Something went wrong. Please try again.')
+    } catch {
+      setError('Something went wrong. Please try again.')
+    } finally {
+      setPending(false)
+    }
   }
 
   return (
