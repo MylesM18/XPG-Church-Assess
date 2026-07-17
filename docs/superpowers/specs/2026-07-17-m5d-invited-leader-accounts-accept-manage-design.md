@@ -172,8 +172,8 @@ begin
     raise exception 'not authenticated' using errcode = 'insufficient_privilege';
   end if;
   if not exists (
-    select 1 from public.church_members
-    where church_id = p_church_id and user_id = v_uid and role = 'admin'
+    select 1 from public.church_members cm
+    where cm.church_id = p_church_id and cm.user_id = v_uid and cm.role = 'admin'
   ) then
     raise exception 'must be an admin of this church' using errcode = 'insufficient_privilege';
   end if;
