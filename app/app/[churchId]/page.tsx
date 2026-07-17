@@ -6,6 +6,7 @@ import { resolveBrand } from '@/lib/brand/resolve'
 import { coverage, type CoverageRow, type CoverageStatus } from '@/lib/coverage/coverage'
 import { ChainGlyph } from './chain-glyph'
 import { InvitePanel } from './invite-panel'
+import { GenerateButton } from './generate-button'
 
 function gatesLabel(gates: 'all' | string[] | undefined): string {
   if (gates === 'all') return 'all stages'
@@ -19,11 +20,9 @@ const STATUS_LABEL: Record<CoverageStatus, string> = {
   covered: 'Covered',
 }
 
-// M5 stubs remain disabled; M4 stubs become links (rendered inline below).
-const DISABLED_STUBS = [
-  ['View diagnosis', 'M5'],
-  ['Manage access', 'M5'],
-] as const
+// 'View diagnosis' is now a live control (see the diagnosis section below).
+// 'Manage access' stays disabled until M5d.
+const DISABLED_STUBS = [['Manage access', 'M5d']] as const
 
 export default async function DashboardPage({
   params,
@@ -56,6 +55,33 @@ export default async function DashboardPage({
   const statusById = new Map(result.categories.map((c) => [c.category_id, c.status]))
   const anyStarted = result.categories.some((c) => c.status !== 'not_started')
   const header = `${anyStarted ? 'Assessment in progress' : 'Assessment not started'} · ${result.coveredCount} of ${categories.length} areas`
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: membership } = await supabase
+    .from('church_members')
+    .select('role')
+    .eq('church_id', churchId)
+    .eq('user_id', user?.id ?? '')
+    .maybeSingle()
+  const role = membership?.role ?? null
+
+  const { data: run } = await supabase
+    .from('assessment_runs')
+    .select('id')
+    .eq('church_id', churchId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  let hasDiagnosis = false
+  if (run) {
+    const { data: diagRows } = await supabase
+      .from('diagnoses')
+      .select('id')
+      .eq('run_id', run.id)
+      .limit(1)
+    hasDiagnosis = (diagRows?.length ?? 0) > 0
+  }
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 px-6 py-10">
@@ -101,7 +127,34 @@ export default async function DashboardPage({
 
       <InvitePanel churchId={churchId} categories={categories.map((c) => ({ id: c.id, name: c.name }))} />
 
-      <section className="flex flex-wrap gap-2">
+      <section className="flex flex-wrap items-start gap-2">
+        {hasDiagnosis ? (
+          <Link
+            href={`/app/${churchId}/diagnosis`}
+            className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90"
+          >
+            View diagnosis
+          </Link>
+        ) : result.coveredCount === categories.length && role === 'admin' ? (
+          <GenerateButton churchId={churchId} />
+        ) : (
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            className="cursor-not-allowed rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink-soft opacity-60"
+          >
+            Generate diagnosis{' '}
+            <span className="text-xs">
+              (
+              {result.coveredCount < categories.length
+                ? `Answer all 8 areas first — ${result.coveredCount} of ${categories.length}`
+                : 'Admins can generate the diagnosis'}
+              )
+            </span>
+          </button>
+        )}
+
         {DISABLED_STUBS.map(([label, milestone]) => (
           <button
             key={label}

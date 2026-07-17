@@ -1,0 +1,89 @@
+begin;
+select plan(7);
+
+insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
+ ('c1111111-1111-1111-1111-111111111111','authenticated','authenticated','respadmin@test.com','x',now(),now()),
+ ('c2222222-2222-2222-2222-222222222222','authenticated','authenticated','respstranger@test.com','x',now(),now());
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"c1111111-1111-1111-1111-111111111111","email":"respadmin@test.com","role":"authenticated"}';
+select create_church_with_admin('Responses Test Church', '#bbbbbb', '0.1.0');
+reset role;
+
+-- seed one invitation + three responses on the in_progress run (mirrors 10_get_run_coverage_test)
+insert into invitations (run_id, church_id, category_id, created_by)
+select (select id from assessment_runs
+        where church_id = (select id from churches where name = 'Responses Test Church') and status = 'in_progress'),
+       (select id from churches where name = 'Responses Test Church'),
+       'guest', 'c1111111-1111-1111-1111-111111111111';
+
+insert into responses (run_id, church_id, category_id, item_id, value, respondent_kind, invitation_id, respondent_label)
+select (select id from assessment_runs
+        where church_id = (select id from churches where name = 'Responses Test Church') and status = 'in_progress'),
+       (select id from churches where name = 'Responses Test Church'),
+       'guest', v.item, 5, 'invited',
+       (select id from invitations
+        where church_id = (select id from churches where name = 'Responses Test Church') and category_id = 'guest'),
+       'Someone'
+from (values ('G1'),('G2'),('G3')) as v(item);
+
+-- member reads the raw rows
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"c1111111-1111-1111-1111-111111111111","email":"respadmin@test.com","role":"authenticated"}';
+select is((select count(*)::int from get_run_responses(
+            (select id from churches where name = 'Responses Test Church'))), 3,
+          'member gets the run''s three raw response rows');
+select is((select value from get_run_responses(
+            (select id from churches where name = 'Responses Test Church')) where item_id = 'G1'), 5,
+          'raw value for G1 is 5');
+select is((select respondent_label from get_run_responses(
+            (select id from churches where name = 'Responses Test Church')) where item_id = 'G1'), 'Someone',
+          'raw respondent_label for G1 is preserved');
+
+-- run-scoping: a second (complete) run's rows are excluded
+reset role;
+insert into assessment_runs (church_id, methodology_version, status, completed_at)
+values ((select id from churches where name = 'Responses Test Church'), '0.1.0', 'complete', now());
+insert into invitations (run_id, church_id, category_id, created_by)
+select (select id from assessment_runs
+        where church_id = (select id from churches where name = 'Responses Test Church') and status = 'complete'),
+       (select id from churches where name = 'Responses Test Church'),
+       'conn', 'c1111111-1111-1111-1111-111111111111';
+insert into responses (run_id, church_id, category_id, item_id, value, respondent_kind, invitation_id, respondent_label)
+values ((select id from assessment_runs
+         where church_id = (select id from churches where name = 'Responses Test Church') and status = 'complete'),
+        (select id from churches where name = 'Responses Test Church'),
+        'conn', 'C1', 9, 'invited',
+        (select id from invitations
+         where church_id = (select id from churches where name = 'Responses Test Church') and category_id = 'conn'),
+        'Elder');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"c1111111-1111-1111-1111-111111111111","email":"respadmin@test.com","role":"authenticated"}';
+select is((select count(*)::int from get_run_responses(
+            (select id from churches where name = 'Responses Test Church'))), 3,
+          'only the in_progress run''s rows are returned (complete run excluded)');
+
+-- a non-member cannot read
+set local request.jwt.claims to '{"sub":"c2222222-2222-2222-2222-222222222222","email":"respstranger@test.com","role":"authenticated"}';
+select throws_ok(
+  $$select * from get_run_responses((select id from churches where name = 'Responses Test Church'))$$,
+  '42501', 'not a member of this church', 'non-member cannot read raw responses');
+
+-- anon cannot execute the function at all (revoked); assert SQLSTATE only
+set local role anon;
+select throws_ok(
+  $$select * from get_run_responses((select id from churches where name = 'Responses Test Church'))$$,
+  '42501');
+
+-- no in_progress run → zero rows
+reset role;
+update assessment_runs set status = 'complete', completed_at = now()
+where church_id = (select id from churches where name = 'Responses Test Church') and status = 'in_progress';
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"c1111111-1111-1111-1111-111111111111","email":"respadmin@test.com","role":"authenticated"}';
+select is((select count(*)::int from get_run_responses(
+            (select id from churches where name = 'Responses Test Church'))), 0,
+          'no in_progress run → zero rows');
+
+select * from finish();
+rollback;
