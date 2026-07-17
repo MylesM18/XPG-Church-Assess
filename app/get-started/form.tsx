@@ -7,6 +7,17 @@ const initial: CreateChurchState = { error: null }
 
 const CONTEXTS = ['urban', 'suburban', 'small_town', 'rural'] as const
 
+// Valid cohort bands (keys mirror methodology/benchmarks.yaml). Required: the diagnosis
+// engine keys its cohort percentiles by this band, so a church must have one to generate.
+const ATTENDANCE_BANDS = [
+  ['under_100', 'Under 100'],
+  ['100_249', '100–249'],
+  ['250_499', '250–499'],
+  ['500_999', '500–999'],
+  ['1000_1499', '1,000–1,499'],
+  ['1500_plus', '1,500+'],
+] as const
+
 const inputClass =
   'rounded-md border border-line bg-paper px-3 py-2 font-body text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink'
 
@@ -37,9 +48,22 @@ export function GetStartedForm() {
         </select>
       </label>
 
+      <label className="flex flex-col gap-1 font-body text-sm text-ink-soft">
+        Weekend attendance (required)
+        <select name="attendance_band" defaultValue="" required className={inputClass}>
+          <option value="" disabled>
+            —
+          </option>
+          {ATTENDANCE_BANDS.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+
       {(
         [
-          ['attendance_band', 'Weekend attendance'],
           ['adults_band', 'Adults'],
           ['staff_fte_band', 'Staff (FTE)'],
           ['budget_band', 'Annual budget'],

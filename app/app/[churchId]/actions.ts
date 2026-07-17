@@ -77,7 +77,14 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
     .select('attendance_band')
     .eq('id', churchId)
     .maybeSingle()
-  const ctx = { attendance_band: church?.attendance_band ?? '' }
+  // Require a known attendance band before diagnosing: cohort benchmarks are keyed by it,
+  // and diagnose() (lib/engine/benchmark.ts) throws on an unknown band. Guard here so a
+  // blank/legacy band returns a friendly error instead of a 500. (M5a governance: require band.)
+  const band = church?.attendance_band ?? ''
+  if (!(band in methodology.benchmarks.bands)) {
+    return { ok: false, error: 'Set your church’s weekend attendance band before generating a diagnosis.' }
+  }
+  const ctx = { attendance_band: band }
 
   // Raw per-respondent rows — server-side ONLY, never returned to the browser.
   const { data: raw, error: respError } = await supabase.rpc('get_run_responses', {
