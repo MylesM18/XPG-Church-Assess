@@ -20,10 +20,6 @@ const STATUS_LABEL: Record<CoverageStatus, string> = {
   covered: 'Covered',
 }
 
-// 'View diagnosis' is now a live control (see the diagnosis section below).
-// 'Manage access' stays disabled until M5d.
-const DISABLED_STUBS = [['Manage access', 'M5d']] as const
-
 export default async function DashboardPage({
   params,
 }: {
@@ -155,17 +151,14 @@ export default async function DashboardPage({
           </button>
         )}
 
-        {DISABLED_STUBS.map(([label, milestone]) => (
-          <button
-            key={label}
-            type="button"
-            disabled
-            aria-disabled="true"
-            className="cursor-not-allowed rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink-soft opacity-60"
+        {role === 'admin' && (
+          <Link
+            href={`/app/${churchId}/access`}
+            className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90"
           >
-            {label} <span className="text-xs">({milestone})</span>
-          </button>
-        ))}
+            Manage access
+          </Link>
+        )}
       </section>
     </main>
   )
