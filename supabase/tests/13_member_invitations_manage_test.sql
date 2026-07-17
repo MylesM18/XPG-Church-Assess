@@ -1,5 +1,5 @@
 begin;
-select plan(10);
+select plan(13);
 
 -- admin + a viewer member + a stranger
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
@@ -75,6 +75,21 @@ select is((select invited_email from get_member_invitation_preview('c1aaaaaa-000
           'previewee@test.com', 'preview exposes the invited email');
 select is((select count(*)::int from get_member_invitation_preview('c1aaaaaa-0000-0000-0000-000000000009')),
           0, 'unknown token → zero rows');
+reset role;
+
+-- get_church_members: admin sees name/email/role/joined for every member
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"c1000000-0000-0000-0000-000000000001","email":"cadmin@test.com","role":"authenticated"}';
+select is((select count(*)::int from get_church_members((select id from churches where name = 'Create Invite Church'))),
+          2, 'admin sees both members (admin + seeded viewer)');
+select is((select email from get_church_members((select id from churches where name = 'Create Invite Church'))
+           where role = 'viewer'), 'cviewer@test.com', 'members list exposes the viewer email');
+
+-- a viewer cannot list members
+set local request.jwt.claims to '{"sub":"c1000000-0000-0000-0000-000000000002","email":"cviewer@test.com","role":"authenticated"}';
+select throws_ok(
+  $$select get_church_members((select id from churches where name = 'Create Invite Church'))$$,
+  '42501', 'must be an admin of this church', 'a viewer cannot list members');
 reset role;
 
 select * from finish();
