@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { loadMethodology } from '../../lib/methodology/load';
-import { percentile, benchmarkFor } from '../../lib/engine/benchmark';
+import { percentile, benchmarkFor, isKnownBand } from '../../lib/engine/benchmark';
 
 const m = loadMethodology();
 
@@ -27,5 +27,22 @@ describe('benchmarkFor', () => {
   });
   it('throws on an unknown band', () => {
     expect(() => benchmarkFor('guest', 60, m, 'nope')).toThrow(/attendance_band/);
+  });
+});
+
+describe('isKnownBand', () => {
+  it('accepts a real cohort band', () => {
+    expect(isKnownBand(m, '250_499')).toBe(true);
+    expect(isKnownBand(m, '500_999')).toBe(true);
+  });
+  it('rejects a blank or unknown band', () => {
+    expect(isKnownBand(m, '')).toBe(false);
+    expect(isKnownBand(m, 'nope')).toBe(false);
+  });
+  it('rejects inherited Object.prototype names (guards the `in`-operator bypass)', () => {
+    expect(isKnownBand(m, 'constructor')).toBe(false);
+    expect(isKnownBand(m, '__proto__')).toBe(false);
+    expect(isKnownBand(m, 'toString')).toBe(false);
+    expect(isKnownBand(m, 'hasOwnProperty')).toBe(false);
   });
 });

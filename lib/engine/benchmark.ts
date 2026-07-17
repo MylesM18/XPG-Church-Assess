@@ -18,6 +18,14 @@ export function percentile(value: number, band: BandBenchmark): number {
   return 100;
 }
 
+// True only when `band` is an OWN key of the cohort benchmarks. Uses hasOwnProperty
+// (not the `in` operator) so inherited Object.prototype names — 'constructor',
+// '__proto__', 'toString', … — are correctly rejected instead of slipping past the
+// guard and reaching benchmarkFor(), which would throw on the missing priors.
+export function isKnownBand(methodology: Methodology, band: string): boolean {
+  return Object.prototype.hasOwnProperty.call(methodology.benchmarks.bands, band);
+}
+
 export function benchmarkFor(
   categoryId: string,
   value: number,

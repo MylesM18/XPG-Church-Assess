@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { sendInvitationEmail } from '@/lib/email/send-invitation'
 import { coverage, type CoverageRow } from '@/lib/coverage/coverage'
 import { diagnose } from '@/lib/engine'
+import { isKnownBand } from '@/lib/engine/benchmark'
 import type { Response } from '@/lib/engine/types'
 import { responseHash } from '@/lib/report/response-hash'
 
@@ -81,7 +82,7 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
   // and diagnose() (lib/engine/benchmark.ts) throws on an unknown band. Guard here so a
   // blank/legacy band returns a friendly error instead of a 500. (M5a governance: require band.)
   const band = church?.attendance_band ?? ''
-  if (!(band in methodology.benchmarks.bands)) {
+  if (!isKnownBand(methodology, band)) {
     return { ok: false, error: 'Set your church’s weekend attendance band before generating a diagnosis.' }
   }
   const ctx = { attendance_band: band }
