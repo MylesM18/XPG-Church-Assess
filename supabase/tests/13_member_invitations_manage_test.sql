@@ -1,5 +1,5 @@
 begin;
-select plan(6);
+select plan(10);
 
 -- admin + a viewer member + a stranger
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
@@ -57,6 +57,25 @@ select throws_ok(
 select throws_ok(
   $$select create_member_invitation((select id from churches where name = 'Create Invite Church'), 'owner', 'y@test.com')$$,
   'P0001', 'role must be admin or viewer', 'an invalid role is rejected');
+
+-- get_member_invitation_preview: seed one live invite with a known id
+insert into member_invitations (id, church_id, role, invited_email, status, expires_at, created_by)
+select 'c1aaaaaa-0000-0000-0000-000000000001',
+       (select id from churches where name = 'Create Invite Church'),
+       'viewer', 'previewee@test.com', 'pending', now() + interval '10 days',
+       'c1000000-0000-0000-0000-000000000001';
+
+set local role anon;
+set local request.jwt.claims to '{"role":"anon"}';
+select is((select church_name from get_member_invitation_preview('c1aaaaaa-0000-0000-0000-000000000001')),
+          'Create Invite Church', 'anon may read the preview church name');
+select is((select is_expired from get_member_invitation_preview('c1aaaaaa-0000-0000-0000-000000000001')),
+          false, 'a live invite is not expired');
+select is((select invited_email from get_member_invitation_preview('c1aaaaaa-0000-0000-0000-000000000001')),
+          'previewee@test.com', 'preview exposes the invited email');
+select is((select count(*)::int from get_member_invitation_preview('c1aaaaaa-0000-0000-0000-000000000009')),
+          0, 'unknown token → zero rows');
+reset role;
 
 select * from finish();
 rollback;
