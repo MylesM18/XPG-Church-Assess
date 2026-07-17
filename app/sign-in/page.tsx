@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { resolveNext } from '@/lib/auth/resolve-next'
 
@@ -9,6 +9,17 @@ export default function SignInPage() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Pre-fill the email when arriving from an accept link (/sign-in?email=…). Display convenience
+  // only — the accept RPC still gates on the exact signed-in email server-side.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const hint = new URLSearchParams(window.location.search).get('email')
+    // One-time seed from the URL on mount (accept-link email hint), not a derivation
+    // from props/state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (hint) setEmail(hint)
+  }, [])
 
   // Forward the `?next=` the sign-in page was loaded with (e.g. the answer page
   // or createInvitation redirect here when unauthenticated) through the magic
