@@ -27,6 +27,13 @@ begin
   end if;
 
   if v_target_role = 'admin' then
+    -- Lock this church's admin rows so a concurrent remover blocks and re-reads the
+    -- true post-commit count (prevents two admins removing each other from both passing
+    -- the last-admin guard and orphaning the church with zero admins).
+    perform 1 from public.church_members
+      where church_id = p_church_id and role = 'admin'
+      for update;
+
     select count(*) into v_admin_count from public.church_members
     where church_id = p_church_id and role = 'admin';
     if v_admin_count <= 1 then
