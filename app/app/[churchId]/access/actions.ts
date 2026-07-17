@@ -11,6 +11,10 @@ export interface InviteResult {
   error: string | null
 }
 
+export interface ManageResult {
+  error: string | null
+}
+
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'
 
 async function requireAdmin(churchId: string) {
@@ -48,23 +52,28 @@ export async function inviteMember(_prev: InviteResult, formData: FormData): Pro
   return { link, emailed: sent.ok, error: null }
 }
 
-export async function revokeInvitation(formData: FormData): Promise<void> {
+export async function revokeInvitation(_prev: ManageResult, formData: FormData): Promise<ManageResult> {
   const churchId = String(formData.get('church_id') ?? '')
   const id = String(formData.get('invite_id') ?? '')
-  const { supabase, error } = await requireAdmin(churchId)
-  if (error) return
+  const { supabase, error: authErr } = await requireAdmin(churchId)
+  if (authErr) return { error: authErr }
   // Scoped RLS update (minv_update enforces admin); matches only a still-pending invite → idempotent.
-  await supabase.from('member_invitations')
+  const { error } = await supabase.from('member_invitations')
     .update({ status: 'revoked' })
     .eq('id', id).eq('church_id', churchId).eq('status', 'pending')
+  if (error) return { error: error.message }
   revalidatePath(`/app/${churchId}/access`)
+  return { error: null }
 }
 
-export async function removeMember(formData: FormData): Promise<void> {
+export async function removeMember(_prev: ManageResult, formData: FormData): Promise<ManageResult> {
   const churchId = String(formData.get('church_id') ?? '')
   const userId = String(formData.get('user_id') ?? '')
-  const { supabase, error } = await requireAdmin(churchId)
-  if (error) return
-  await supabase.rpc('remove_member', { p_church_id: churchId, p_user_id: userId })
+  const { supabase, error: authErr } = await requireAdmin(churchId)
+  if (authErr) return { error: authErr }
+  // remove_member is last-admin-guarded server-side; surface its refusal message instead of failing silently.
+  const { error } = await supabase.rpc('remove_member', { p_church_id: churchId, p_user_id: userId })
+  if (error) return { error: error.message }
   revalidatePath(`/app/${churchId}/access`)
+  return { error: null }
 }
