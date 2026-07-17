@@ -634,8 +634,9 @@ git commit -m "feat(m5d): sendMemberInvitationEmail adapter (soft-fail, member c
 - Consumes: `create_member_invitation` RPC (Task 1), `remove_member` RPC (Task 4), `sendMemberInvitationEmail` (Task 6), the existing `InviteResult` shape (`{ link, emailed, error }` — re-declared locally, matching `app/app/[churchId]/actions.ts:14-18`).
 - Produces:
   - `inviteMember(_prev: InviteResult, formData: FormData): Promise<InviteResult>` — used by `invite-member-form.tsx` (Task 8b) via `useActionState`.
-  - `revokeInvitation(formData: FormData): Promise<void>` — used by `pending-invites-list.tsx`.
-  - `removeMember(formData: FormData): Promise<void>` — used by `members-list.tsx`.
+  - `revokeInvitation(_prev: ManageResult, formData: FormData): Promise<ManageResult>` — used by `revoke-invite-button.tsx` (Task 8b) via `useActionState`; surfaces `{ error }`.
+  - `removeMember(_prev: ManageResult, formData: FormData): Promise<ManageResult>` — used by `remove-member-button.tsx` (Task 8b) via `useActionState`; surfaces `{ error }` (e.g. the RPC's `cannot remove the last admin of this church` message).
+  - `ManageResult = { error: string | null }` — minimal `useActionState` state for the mutating actions so a failed revoke/remove shows the reason in the UI instead of failing silently. **(Interface change adjudicated with the user 2026-07-17: originally `Promise<void>`; changed to return an error result so removeMember/revokeInvitation surface RPC/RLS failures.)**
 - `APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'` (same const as `app/app/[churchId]/actions.ts:20`).
 
 **No unit test** (server action over Supabase; behavior proven in the e2e phase). Gate = typecheck + lint. Every action re-checks `getUser()` + admin server-side (never trust the client); the RPCs re-enforce anyway.
@@ -653,6 +654,10 @@ import { acceptLink } from '@/lib/access/accept-state'
 export interface InviteResult {
   link: string | null
   emailed: boolean
+  error: string | null
+}
+
+export interface ManageResult {
   error: string | null
 }
 
@@ -693,25 +698,30 @@ export async function inviteMember(_prev: InviteResult, formData: FormData): Pro
   return { link, emailed: sent.ok, error: null }
 }
 
-export async function revokeInvitation(formData: FormData): Promise<void> {
+export async function revokeInvitation(_prev: ManageResult, formData: FormData): Promise<ManageResult> {
   const churchId = String(formData.get('church_id') ?? '')
   const id = String(formData.get('invite_id') ?? '')
-  const { supabase, error } = await requireAdmin(churchId)
-  if (error) return
+  const { supabase, error: authErr } = await requireAdmin(churchId)
+  if (authErr) return { error: authErr }
   // Scoped RLS update (minv_update enforces admin); matches only a still-pending invite → idempotent.
-  await supabase.from('member_invitations')
+  const { error } = await supabase.from('member_invitations')
     .update({ status: 'revoked' })
     .eq('id', id).eq('church_id', churchId).eq('status', 'pending')
+  if (error) return { error: error.message }
   revalidatePath(`/app/${churchId}/access`)
+  return { error: null }
 }
 
-export async function removeMember(formData: FormData): Promise<void> {
+export async function removeMember(_prev: ManageResult, formData: FormData): Promise<ManageResult> {
   const churchId = String(formData.get('church_id') ?? '')
   const userId = String(formData.get('user_id') ?? '')
-  const { supabase, error } = await requireAdmin(churchId)
-  if (error) return
-  await supabase.rpc('remove_member', { p_church_id: churchId, p_user_id: userId })
+  const { supabase, error: authErr } = await requireAdmin(churchId)
+  if (authErr) return { error: authErr }
+  // remove_member is last-admin-guarded server-side; surface its refusal message instead of failing silently.
+  const { error } = await supabase.rpc('remove_member', { p_church_id: churchId, p_user_id: userId })
+  if (error) return { error: error.message }
   revalidatePath(`/app/${churchId}/access`)
+  return { error: null }
 }
 ```
 
@@ -906,10 +916,11 @@ git commit -m "feat(m5d): accept flow (preview page, accept action/button, sign-
 ## Task 8b: Manage-access screen — page + three components
 
 **Files:**
-- Create: `app/app/[churchId]/access/page.tsx`, `app/app/[churchId]/access/invite-member-form.tsx`, `app/app/[churchId]/access/members-list.tsx`, `app/app/[churchId]/access/pending-invites-list.tsx`
+- Create: `app/app/[churchId]/access/page.tsx`, `app/app/[churchId]/access/invite-member-form.tsx`, `app/app/[churchId]/access/members-list.tsx`, `app/app/[churchId]/access/pending-invites-list.tsx`, `app/app/[churchId]/access/remove-member-button.tsx`, `app/app/[churchId]/access/revoke-invite-button.tsx`
 
 **Interfaces:**
-- Consumes: `get_church_members` RPC (Task 3), `member_invitations` `minv_select` RLS read, `inviteMember`/`revokeInvitation`/`removeMember` actions (Task 7), `acceptLink` (Task 5).
+- Consumes: `get_church_members` RPC (Task 3), `member_invitations` `minv_select` RLS read, `inviteMember`/`revokeInvitation`/`removeMember` actions + `ManageResult` type (Task 7), `acceptLink` (Task 5).
+- `revokeInvitation`/`removeMember` are now `useActionState`-shape (`(_prev: ManageResult, formData) => Promise<ManageResult>`), so their per-row controls are extracted into small `'use client'` components (`remove-member-button.tsx`, `revoke-invite-button.tsx`) that render `{state.error}` in `text-berry`. The list components stay server components and delegate each row's action to those buttons.
 - Admin-gated exactly like the dashboard: `select … from churches` → `notFound()` if null; `getUser()` + `select role from church_members` → `role !== 'admin'` → `notFound()` (mirror `app/app/[churchId]/page.tsx:59-66`).
 
 **No unit test**; gate = typecheck + lint + build; behavior proven in e2e.
@@ -965,10 +976,38 @@ export function InviteMemberForm({ churchId }: { churchId: string }) {
 }
 ```
 
-- [ ] **Step 2: Write `members-list.tsx`** (server component; Remove form per row; last admin disabled)
+- [ ] **Step 2: Write `remove-member-button.tsx`** (`'use client'`; useActionState → surfaces `{error}`) and `members-list.tsx` (server component; last admin disabled)
+
+`app/app/[churchId]/access/remove-member-button.tsx`:
 
 ```tsx
-import { removeMember } from './actions'
+'use client'
+
+import { useActionState } from 'react'
+import { removeMember, type ManageResult } from './actions'
+
+const initial: ManageResult = { error: null }
+
+export function RemoveMemberButton({ churchId, userId }: { churchId: string; userId: string }) {
+  const [state, formAction, pending] = useActionState(removeMember, initial)
+  return (
+    <form action={formAction} className="flex flex-col items-end gap-1">
+      <input type="hidden" name="church_id" value={churchId} />
+      <input type="hidden" name="user_id" value={userId} />
+      <button type="submit" disabled={pending}
+        className="font-body text-xs text-berry underline underline-offset-2 hover:opacity-80 disabled:opacity-50">
+        {pending ? 'Removing…' : 'Remove'}
+      </button>
+      {state.error && <p className="font-body text-xs text-berry">{state.error}</p>}
+    </form>
+  )
+}
+```
+
+`app/app/[churchId]/access/members-list.tsx`:
+
+```tsx
+import { RemoveMemberButton } from './remove-member-button'
 
 export type Member = { user_id: string; full_name: string | null; email: string | null; role: string; joined_at: string }
 
@@ -998,11 +1037,7 @@ export function MembersList({
               {noRemove ? (
                 <span className="font-body text-xs text-ink-soft" title="A church must keep at least one admin.">Last admin</span>
               ) : (
-                <form action={removeMember}>
-                  <input type="hidden" name="church_id" value={churchId} />
-                  <input type="hidden" name="user_id" value={m.user_id} />
-                  <button type="submit" className="font-body text-xs text-berry underline underline-offset-2 hover:opacity-80">Remove</button>
-                </form>
+                <RemoveMemberButton churchId={churchId} userId={m.user_id} />
               )}
             </li>
           )
@@ -1013,10 +1048,38 @@ export function MembersList({
 }
 ```
 
-- [ ] **Step 3: Write `pending-invites-list.tsx`** (server component; Revoke form + copyable accept link)
+- [ ] **Step 3: Write `revoke-invite-button.tsx`** (`'use client'`; useActionState → surfaces `{error}`) and `pending-invites-list.tsx` (server component; copyable accept link)
+
+`app/app/[churchId]/access/revoke-invite-button.tsx`:
 
 ```tsx
-import { revokeInvitation } from './actions'
+'use client'
+
+import { useActionState } from 'react'
+import { revokeInvitation, type ManageResult } from './actions'
+
+const initial: ManageResult = { error: null }
+
+export function RevokeInviteButton({ churchId, inviteId }: { churchId: string; inviteId: string }) {
+  const [state, formAction, pending] = useActionState(revokeInvitation, initial)
+  return (
+    <form action={formAction} className="flex flex-col items-end gap-1">
+      <input type="hidden" name="church_id" value={churchId} />
+      <input type="hidden" name="invite_id" value={inviteId} />
+      <button type="submit" disabled={pending}
+        className="font-body text-xs text-berry underline underline-offset-2 hover:opacity-80 disabled:opacity-50">
+        {pending ? 'Revoking…' : 'Revoke'}
+      </button>
+      {state.error && <p className="font-body text-xs text-berry">{state.error}</p>}
+    </form>
+  )
+}
+```
+
+`app/app/[churchId]/access/pending-invites-list.tsx`:
+
+```tsx
+import { RevokeInviteButton } from './revoke-invite-button'
 import { acceptLink } from '@/lib/access/accept-state'
 
 export type PendingInvite = { id: string; invited_email: string; role: string; expires_at: string }
@@ -1047,11 +1110,7 @@ export function PendingInvitesList({
                 <p className="truncate font-body text-sm text-ink">{inv.invited_email}</p>
                 <p className="font-body text-xs text-ink-soft">{inv.role === 'admin' ? 'Co-admin' : 'Viewer'} · expires {new Date(inv.expires_at).toLocaleDateString()}</p>
               </div>
-              <form action={revokeInvitation}>
-                <input type="hidden" name="church_id" value={churchId} />
-                <input type="hidden" name="invite_id" value={inv.id} />
-                <button type="submit" className="font-body text-xs text-berry underline underline-offset-2 hover:opacity-80">Revoke</button>
-              </form>
+              <RevokeInviteButton churchId={churchId} inviteId={inv.id} />
             </div>
             <code className="break-all font-body text-xs text-ink-soft">{acceptLink(appUrl, inv.id)}</code>
           </li>
@@ -1124,8 +1183,8 @@ Expected: 0 errors, build succeeds.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add app/app/\[churchId\]/access/page.tsx app/app/\[churchId\]/access/invite-member-form.tsx app/app/\[churchId\]/access/members-list.tsx app/app/\[churchId\]/access/pending-invites-list.tsx
-git commit -m "feat(m5d): manage-access screen (page + invite form + members + pending lists)"
+git add app/app/\[churchId\]/access/page.tsx app/app/\[churchId\]/access/invite-member-form.tsx app/app/\[churchId\]/access/members-list.tsx app/app/\[churchId\]/access/pending-invites-list.tsx app/app/\[churchId\]/access/remove-member-button.tsx app/app/\[churchId\]/access/revoke-invite-button.tsx
+git commit -m "feat(m5d): manage-access screen (page + invite form + members + pending lists + row action buttons)"
 ```
 
 ---
