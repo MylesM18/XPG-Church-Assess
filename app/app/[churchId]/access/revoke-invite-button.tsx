@@ -12,7 +12,7 @@ export function RevokeInviteButton({ churchId, inviteId }: { churchId: string; i
       <input type="hidden" name="church_id" value={churchId} />
       <input type="hidden" name="invite_id" value={inviteId} />
       <button type="submit" disabled={pending}
-        className="font-body text-xs text-berry underline underline-offset-2 hover:opacity-80 disabled:opacity-50">
+        className="font-body text-xs text-berry-deep underline underline-offset-2 hover:opacity-80 disabled:opacity-50">
         {pending ? 'Revoking…' : 'Revoke'}
       </button>
       {state.error && <p className="font-body text-xs text-berry">{state.error}</p>}
