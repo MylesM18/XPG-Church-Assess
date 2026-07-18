@@ -56,7 +56,13 @@ async function extractText(buffer: Buffer): Promise<string> {
   }
 }
 
-async function renderText(audience: 'screen' | 'pdf'): Promise<string> {
+// Narrowed to 'pdf': every call site renders for the pdf audience, and a
+// 'screen' audience view is expected to throw (see the guard test below)
+// before renderToBuffer ever produces something extractText could read.
+// Widening this back to 'screen' | 'pdf' would silently re-open the trap a
+// reviewer flagged — a future test passing 'screen' here would throw with the
+// confidentiality guard's message instead of whatever it meant to exercise.
+async function renderText(audience: 'pdf'): Promise<string> {
   const d = diagnosis();
   const blocks = fallbackProse(d, methodology);
   const view = buildReportView(d, blocks, methodology, { audience });
@@ -93,4 +99,42 @@ describe('ReportDocument', () => {
     expect(text).toContain('Benchmarks');
     expect(text.length).toBeGreaterThan(200);
   }, 30_000);
+
+  // The 'pdf' audience rendering successfully (and the sibling tests above
+  // proving no respondent name is present in that output) is already covered
+  // by the tests above, so it isn't repeated here. This test proves the
+  // opposite side: the fail-closed guard in render.ts actually fires.
+  it('throws when a screen-audience view carrying respondent names reaches the renderer', async () => {
+    const d = diagnosis();
+    const blocks = fallbackProse(d, methodology);
+    // Built directly (bypassing renderText) because the render is expected to
+    // reject before renderToBuffer ever runs, so there is no buffer for
+    // renderText's extractText step to read.
+    const view = buildReportView(d, blocks, methodology, { audience: 'screen' });
+
+    // Sanity check: this test only proves the guard is reachable if the
+    // fixture actually carries respondent names for the screen audience. If a
+    // future edit to diagnosis() or view.ts silently emptied this, the
+    // .rejects assertion below would fail to reject too — but assert it
+    // directly here so a break in this precondition is diagnosed immediately.
+    expect(view.dispersion?.respondents.length).toBeGreaterThan(0);
+
+    // renderReportDocument is declared as a plain (non-async) function, so its
+    // guard throws synchronously rather than returning a rejected promise.
+    // Calling it directly as expect(renderReportDocument(...)) would let that
+    // throw escape before .rejects ever attaches to it. Wrapping the call in
+    // an async closure defers evaluation until the closure runs, so the throw
+    // becomes a rejection .rejects can observe — the same reason renderText's
+    // own `await renderReportDocument(...)` above is safe.
+    await expect(
+      (async () =>
+        renderReportDocument({
+          view,
+          churchName: 'Grace Church',
+          brandColor: '#3A4A6B',
+          monogram: 'GC',
+          generatedAt: new Date('2026-07-18T00:00:00Z'),
+        }))(),
+    ).rejects.toThrow('view carries respondent names');
+  });
 });
