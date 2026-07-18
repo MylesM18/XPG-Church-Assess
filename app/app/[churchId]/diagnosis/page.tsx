@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { fallbackProse, type ReportBlocks } from '@/lib/ai/fallback'
-import { chainWalk } from '@/lib/report/chain-walk'
+import { buildReportView } from '@/lib/report/view'
 import type { Diagnosis } from '@/lib/engine/types'
 import {
   EmptyState,
@@ -67,13 +67,7 @@ export default async function DiagnosisPage({
       ? (diagRow.prose as ReportBlocks)
       : fallbackProse(diagnosis, methodology)
 
-  const stages = chainWalk(diagnosis, methodology)
-
-  const primaryId = diagnosis.primary_constraint?.category_id ?? null
-  const receipt = primaryId
-    ? diagnosis.evidence_trail.find((r) => r.claim === `primary_constraint:${primaryId}`)
-    : undefined
-  const dispersion = diagnosis.dispersion_flags[0]
+  const view = buildReportView(diagnosis, blocks, methodology, { audience: 'screen' })
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
@@ -81,29 +75,29 @@ export default async function DiagnosisPage({
         name={church.name}
         brandColor={church.brand_color}
         monogram={brand.monogram}
-        verdict={blocks.verdict}
-        overallScore={diagnosis.overall_score}
-        confidence={diagnosis.confidence}
+        verdict={view.verdict}
+        overallScore={view.overallScore}
+        confidence={view.confidence}
       />
 
-      <ChainWalk stages={stages} />
+      <ChainWalk stages={view.stages} />
 
-      {blocks.evidence && <EvidenceReceipt text={blocks.evidence} refs={receipt?.refs ?? []} />}
-      {blocks.blind_spot && <BlindSpots text={blocks.blind_spot} />}
-      {blocks.cost && <CostSection cost={blocks.cost} doNotWorkOn={blocks.do_not_work_on} />}
-      {blocks.gating && <GatingFlags text={blocks.gating} />}
-      {diagnosis.generosity_mode !== null && <GenerositySplit mode={diagnosis.generosity_mode} />}
-      {blocks.dispersion && (
-        <Disagreement text={blocks.dispersion} respondents={dispersion?.respondents ?? []} />
+      {view.evidence && <EvidenceReceipt text={view.evidence.text} refs={view.evidence.refs} />}
+      {view.blindSpot && <BlindSpots text={view.blindSpot} />}
+      {view.cost && <CostSection cost={view.cost.cost} doNotWorkOn={view.cost.doNotWorkOn} />}
+      {view.gating && <GatingFlags text={view.gating} />}
+      {view.generosityMode !== null && <GenerositySplit mode={view.generosityMode} />}
+      {view.dispersion && (
+        <Disagreement text={view.dispersion.text} respondents={view.dispersion.respondents} />
       )}
 
       <NextStep
-        callType={diagnosis.offer.call_type}
-        hook={diagnosis.offer.hook}
-        nextStep={blocks.next_step}
+        callType={view.nextStep.callType}
+        hook={view.nextStep.hook}
+        nextStep={view.nextStep.text}
       />
 
-      <Appendix diagnosis={diagnosis} methodology={methodology} benchmarkNote={blocks.benchmark_note} />
+      <Appendix diagnosis={diagnosis} methodology={methodology} benchmarkNote={view.appendix.benchmarkNote} />
     </main>
   )
 }
