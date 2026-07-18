@@ -414,15 +414,15 @@ Port the six fixtures from the build spec, retuned for the eight categories. At 
 
 Server-side, official `@anthropic-ai/sdk`. **API key server-only.** Both calls are additive; neither decides anything.
 
-### 8.1 `classify.ts`, free-text → signals
+### 8.1 `classify.ts`, free-text → signals — DEFERRED (no free-text collected yet)
 - Input: the two free-text answers (D1 "one thing you'd fix", D2 "what you already tried that didn't work").
 - Output (structured): `{ stated_priority: string, failed_interventions: string[], sentiment: 'urgent'|'steady'|'discouraged', themes: string[] }`.
 - Model: `ANTHROPIC_MODEL_CLASSIFY` (default `claude-haiku-4-5`). Use **structured outputs** (the API supports it) so the shape is guaranteed. It classifies; it never concludes.
 - Used to enrich the report ("you told us you already tried a small-group relaunch, here's why the diagnosis accounts for that"). If it fails, the report simply omits that enrichment.
 
 ### 8.2 `prose.ts`, Diagnosis → report blocks
-- Input: the finished `Diagnosis` struct + the classify signals.
-- Output: the seven report blocks as JSON `{ verdict, evidence, blind_spot, cost, do_not_work_on, next_step }` (the offer is templated from `offers.yaml`, not written by the model).
+- Input: the finished `Diagnosis` struct. (Classify signals deferred — see §8.1; M5b builds prose only.)
+- Output: the nine-field `ReportBlocks` shape `{ verdict, evidence?, blind_spot?, cost?, do_not_work_on?, next_step, gating?, dispersion?, benchmark_note }` (required: verdict, next_step, benchmark_note). The offer is templated from `offers.yaml`, not written by the model. As shipped in M5b, the model rewords a fixed `fallbackProse` draft and its output is gated by `passesFactCheck` (field parity + numeric containment + category fidelity).
 - Model: `ANTHROPIC_MODEL_PROSE` (default `claude-sonnet-5`).
 - **System-prompt constraints (spec these into the prompt):**
   - You are given a fixed set of facts. You may not add, change, reorder, or invent any number, category, or verdict.
