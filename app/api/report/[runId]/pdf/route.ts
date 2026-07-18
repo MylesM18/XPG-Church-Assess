@@ -1,0 +1,105 @@
+import { createClient } from '@/lib/supabase/server'
+import { loadMethodology } from '@/lib/methodology/load'
+import { resolveBrand } from '@/lib/brand/resolve'
+import { fallbackProse, type ReportBlocks } from '@/lib/ai/fallback'
+import { buildReportView } from '@/lib/report/view'
+import { renderReportDocument } from '@/lib/report/pdf/render'
+import type { Diagnosis } from '@/lib/engine/types'
+
+// renderReportDocument (renderToBuffer) is Node-only (Yoga WASM + Buffer). Edge would fail at runtime.
+export const runtime = 'nodejs'
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Filename-safe ASCII slug. There is no slug column; derive from the name. */
+function slugify(name: string): string {
+  const s = name.normalize('NFKD').replace(/[^\x20-\x7E]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return s || 'church'
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ runId: string }> },
+) {
+  const { runId } = await params
+
+  // Malformed id: fail before touching the database.
+  if (!UUID.test(runId)) return new Response('Not found', { status: 404 })
+
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return new Response('Unauthorized', { status: 401 })
+
+  // RLS gates this select. A non-member and a nonexistent run both yield no
+  // row (no error), and both return 404 — never a 403, which would let a
+  // caller probe which run ids exist. A real query failure sets `error`
+  // instead, which we surface as a 500 so it isn't invisible in logs.
+  const { data: diag, error: diagError } = await supabase
+    .from('diagnoses')
+    .select('payload, prose, run_id')
+    .eq('run_id', runId)
+    .order('generated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (diagError) {
+    console.warn('[m5c] PDF route: diagnoses query failed:', diagError.message)
+    return new Response('Could not generate the PDF', { status: 500 })
+  }
+  if (!diag) return new Response('Not found', { status: 404 })
+
+  const { data: run, error: runError } = await supabase
+    .from('assessment_runs')
+    .select('church_id, churches(name, brand_color)')
+    .eq('id', runId)
+    .maybeSingle()
+
+  if (runError) {
+    console.warn('[m5c] PDF route: assessment_runs query failed:', runError.message)
+    return new Response('Could not generate the PDF', { status: 500 })
+  }
+
+  const church = run?.churches as unknown as { name: string; brand_color: string } | undefined
+  if (!church) return new Response('Not found', { status: 404 })
+
+  try {
+    const diagnosis = diag.payload as Diagnosis
+    const methodology = loadMethodology()
+
+    // Same gate as the report page — the document never depends on AI.
+    const PROSE_MODE = process.env.PROSE_MODE ?? 'fallback'
+    const blocks: ReportBlocks =
+      PROSE_MODE !== 'fallback' && diag.prose
+        ? (diag.prose as ReportBlocks)
+        : fallbackProse(diagnosis, methodology)
+
+    const view = buildReportView(diagnosis, blocks, methodology, { audience: 'pdf' })
+    const brand = resolveBrand(church.name)
+    const generatedAt = new Date()
+
+    const buffer = await renderReportDocument({
+      view,
+      churchName: church.name,
+      brandColor: church.brand_color,
+      monogram: brand.monogram,
+      generatedAt,
+    })
+
+    const filename = `xpg-diagnosis-${slugify(church.name)}-${generatedAt.toISOString().slice(0, 10)}.pdf`
+
+    return new Response(new Uint8Array(buffer), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'private, no-store',
+      },
+    })
+  } catch (err) {
+    // Reason only — never the Diagnosis, the blocks, or respondent data.
+    console.warn('[m5c] PDF render failed:', err instanceof Error ? err.message : 'unknown error')
+    return new Response('Could not generate the PDF', { status: 500 })
+  }
+}

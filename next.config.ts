@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
     '/respond/[token]': ['./methodology/**'],
     '/api/respond/[token]': ['./methodology/**'],
     '/get-started': ['./methodology/**'],
+    '/api/report/[runId]/pdf': ['./assets/fonts/**'],
   },
 }
 

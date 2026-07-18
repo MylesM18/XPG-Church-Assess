@@ -3,6 +3,7 @@ import Link from 'next/link'
 import type { Diagnosis, DiagnosisCategory, EvidenceRef } from '@/lib/engine/types'
 import type { Methodology } from '@/lib/methodology/schema'
 import type { StageView } from '@/lib/report/chain-walk'
+import { GENEROSITY_COPY } from '@/lib/report/copy'
 
 // Confidence band — UI-only presentation mapping, explicitly separate from methodology YAML (spec §7).
 export function confidenceBand(c: number): { label: string; low: boolean } {
@@ -158,13 +159,6 @@ export function GatingFlags({ text }: { text: string }) {
       <p className="font-body text-sm text-ink-soft">{text}</p>
     </section>
   )
-}
-
-const GENEROSITY_COPY: Record<'breadth' | 'depth' | 'both', string> = {
-  breadth:
-    'Breadth: your givers are generous — there just aren’t enough of them yet. This routes upstream to connection.',
-  depth: 'Depth: most of your people give, but few have been taught why. The opportunity is discipleship around generosity.',
-  both: 'Both breadth and depth are low: few givers, and little teaching behind the giving.',
 }
 
 export function GenerositySplit({ mode }: { mode: 'breadth' | 'depth' | 'both' }) {
