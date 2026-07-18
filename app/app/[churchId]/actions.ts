@@ -10,6 +10,7 @@ import { diagnose } from '@/lib/engine'
 import { isKnownBand } from '@/lib/engine/benchmark'
 import type { Response } from '@/lib/engine/types'
 import { responseHash } from '@/lib/report/response-hash'
+import { generateProse } from '@/lib/ai/prose'
 
 export interface InviteResult {
   link: string | null
@@ -104,6 +105,37 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
     p_payload: diagnosis,
   })
   if (saveError) return { ok: false, error: saveError.message }
+
+  // M5b: best-effort AI prose. Gated by PROSE_MODE to match the report page's read gate
+  // exactly (diagnosis/page.tsx), so an unset mode makes no API call. The diagnosis is
+  // already committed above, so this whole block is wrapped: no SDK/network/RPC failure
+  // may break the saved diagnosis or the redirect below.
+  if ((process.env.PROSE_MODE ?? 'fallback') !== 'fallback') {
+    try {
+      // Cache-check: array-tolerant SELECT (RLS permits member SELECT on diagnoses).
+      // Regenerate only when no 'ai' row exists for this hash; the hash changes iff the
+      // answer set changes, so resubmitting identical answers is a no-op.
+      const { data: rows } = await supabase
+        .from('diagnoses')
+        .select('prose_source')
+        .eq('response_hash', hash)
+      const alreadyAi = (rows ?? []).some((r) => r.prose_source === 'ai')
+      if (!alreadyAi) {
+        const blocks = await generateProse(diagnosis, methodology) // never throws → ReportBlocks | null
+        if (blocks) {
+          await supabase.rpc('save_prose', {
+            p_church_id: churchId,
+            p_response_hash: hash,
+            p_prose: blocks,
+            p_prose_source: 'ai',
+          })
+        }
+      }
+    } catch {
+      // Prose is best-effort. Swallow everything so the committed diagnosis and the
+      // redirect below are never affected.
+    }
+  }
 
   revalidatePath(`/app/${churchId}`)
   revalidatePath(`/app/${churchId}/diagnosis`)
