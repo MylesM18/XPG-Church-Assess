@@ -1,6 +1,14 @@
 import path from 'node:path';
 import { Font } from '@react-pdf/renderer';
 
+/**
+ * Brand fonts for PDF reports — static TrueType instances.
+ *
+ * These fonts are generated artifacts from OFL-licensed upstream sources.
+ * For provenance, axis coordinates, and regeneration instructions, see:
+ * `assets/fonts/GENERATION.md`
+ */
+
 export const FONT_DISPLAY = 'Fraunces';
 export const FONT_BODY = 'HankenGrotesk';
 
