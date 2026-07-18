@@ -17,13 +17,24 @@ select lives_ok(
       'guest', 'Pastor Pat', 'pat@example.com', 'email')$$,
   'admin creates an invitation for the guest category');
 
+-- NOTE: every assertion below is scoped to this test's own church. The subqueries
+-- must not be scoped by category_id alone: any committed invitation row (e.g. the
+-- local e2e fixtures) would make them return more than one row and abort the file.
 reset role;
-select is((select count(*)::int from invitations where category_id = 'guest' and status = 'pending'), 1,
+select is((select count(*)::int from invitations
+            where church_id = (select id from churches where name = 'Invite Test Church')
+              and category_id = 'guest' and status = 'pending'), 1,
           'one pending invitation row created');
-select is((select run_id from invitations where category_id = 'guest')
-          = (select id from assessment_runs where status = 'in_progress'), true,
+select is((select run_id from invitations
+            where church_id = (select id from churches where name = 'Invite Test Church')
+              and category_id = 'guest')
+          = (select id from assessment_runs
+              where church_id = (select id from churches where name = 'Invite Test Church')
+                and status = 'in_progress'), true,
           'invitation attached to the church active run');
-select is((select created_by from invitations where category_id = 'guest'),
+select is((select created_by from invitations
+            where church_id = (select id from churches where name = 'Invite Test Church')
+              and category_id = 'guest'),
           '66666666-6666-6666-6666-666666666666'::uuid, 'created_by = auth.uid()');
 
 -- a non-admin (stranger) cannot create an invitation for that church
