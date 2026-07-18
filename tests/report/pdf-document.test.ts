@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createElement, type ReactElement } from 'react';
-import { renderToBuffer } from '@react-pdf/renderer';
-import type { DocumentProps } from '@react-pdf/renderer';
 import { PDFParse } from 'pdf-parse';
-import { ReportDocument } from '@/lib/report/pdf/document';
+import { renderReportDocument } from '@/lib/report/pdf/render';
 import { buildReportView } from '@/lib/report/view';
 import { loadMethodology } from '@/lib/methodology/load';
 import { fallbackProse } from '@/lib/ai/fallback';
@@ -63,18 +60,13 @@ async function renderText(audience: 'screen' | 'pdf'): Promise<string> {
   const d = diagnosis();
   const blocks = fallbackProse(d, methodology);
   const view = buildReportView(d, blocks, methodology, { audience });
-  // renderToBuffer's type expects a ReactElement<DocumentProps> — i.e. a
-  // literal <Document>. ReportDocument is a wrapper component that renders
-  // one, so the element shape at runtime is correct but the prop types
-  // (ReportDocumentProps vs DocumentProps) don't structurally overlap.
-  const element = createElement(ReportDocument, {
+  const buffer = await renderReportDocument({
     view,
     churchName: 'Grace Church',
     brandColor: '#3A4A6B',
     monogram: 'GC',
     generatedAt: new Date('2026-07-18T00:00:00Z'),
-  }) as unknown as ReactElement<DocumentProps>;
-  const buffer = await renderToBuffer(element);
+  });
   return extractText(buffer);
 }
 

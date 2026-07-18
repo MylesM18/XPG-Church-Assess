@@ -80,6 +80,13 @@ export default async function DiagnosisPage({
         confidence={view.confidence}
       />
 
+      <a
+        href={`/api/report/${run!.id}/pdf`}
+        className="font-body text-sm text-ink-soft underline underline-offset-4"
+      >
+        Download PDF
+      </a>
+
       <ChainWalk stages={view.stages} />
 
       {view.evidence && <EvidenceReceipt text={view.evidence.text} refs={view.evidence.refs} />}
