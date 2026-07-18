@@ -51,14 +51,14 @@ Everything below serves these. If a decision trades one of these away for conven
   /methodology
     load.ts               load + validate YAML, expose typed Methodology
   /ai
-    classify.ts           LLM call #1 (free-text → signals)
+    classify.ts           LLM call #1 (free-text → signals) — DEFERRED (not built yet)
     prose.ts              LLM call #2 (Diagnosis → report prose) + fallback
     fallback.ts           deterministic prose from the struct
   /brand
     resolve.ts            church → { monogram, tileColor, displayName }
   /supabase
     server.ts             server client (anon key, RLS)
-    service.ts            service-role client, import ONLY inside /api/respond/*
+    service.ts            service-role client — NEVER BUILT (guardrail: anon-key + RLS only; /api/respond/* uses SECURITY DEFINER RPCs instead, see §6)
   /report
     render.tsx            report React component (used by page + PDF)
 /methodology              THE IP. versioned YAML.
@@ -414,15 +414,15 @@ Port the six fixtures from the build spec, retuned for the eight categories. At 
 
 Server-side, official `@anthropic-ai/sdk`. **API key server-only.** Both calls are additive; neither decides anything.
 
-### 8.1 `classify.ts`, free-text → signals
+### 8.1 `classify.ts`, free-text → signals — DEFERRED (no free-text collected yet)
 - Input: the two free-text answers (D1 "one thing you'd fix", D2 "what you already tried that didn't work").
 - Output (structured): `{ stated_priority: string, failed_interventions: string[], sentiment: 'urgent'|'steady'|'discouraged', themes: string[] }`.
 - Model: `ANTHROPIC_MODEL_CLASSIFY` (default `claude-haiku-4-5`). Use **structured outputs** (the API supports it) so the shape is guaranteed. It classifies; it never concludes.
 - Used to enrich the report ("you told us you already tried a small-group relaunch, here's why the diagnosis accounts for that"). If it fails, the report simply omits that enrichment.
 
 ### 8.2 `prose.ts`, Diagnosis → report blocks
-- Input: the finished `Diagnosis` struct + the classify signals.
-- Output: the seven report blocks as JSON `{ verdict, evidence, blind_spot, cost, do_not_work_on, next_step }` (the offer is templated from `offers.yaml`, not written by the model).
+- Input: the finished `Diagnosis` struct. (Classify signals deferred — see §8.1; M5b builds prose only.)
+- Output: the nine-field `ReportBlocks` shape `{ verdict, evidence?, blind_spot?, cost?, do_not_work_on?, next_step, gating?, dispersion?, benchmark_note }` (required: verdict, next_step, benchmark_note). The offer is templated from `offers.yaml`, not written by the model. As shipped in M5b, the model rewords a fixed `fallbackProse` draft and its output is gated by `passesFactCheck` (field parity + numeric containment + category fidelity).
 - Model: `ANTHROPIC_MODEL_PROSE` (default `claude-sonnet-5`).
 - **System-prompt constraints (spec these into the prompt):**
   - You are given a fixed set of facts. You may not add, change, reorder, or invent any number, category, or verdict.
@@ -434,7 +434,7 @@ Server-side, official `@anthropic-ai/sdk`. **API key server-only.** Both calls a
 
 ### 8.3 The fallback (`fallback.ts`) and the toggle
 - `PROSE_MODE=ai|fallback` env switch. And on **any** AI error/timeout, auto-fall-back.
-- `fallback.ts` fills the same seven-block shape from templates in `copy.yaml`, interpolating the struct's values. Rougher, correct, complete.
+- `fallback.ts` fills the same nine-field `ReportBlocks` shape from templates in `copy.yaml`, interpolating the struct's values. Rougher, correct, complete.
 - `diagnoses.prose_source` records which was used. **This is the mechanism that makes the acceptance test pass.**
 
 ---
@@ -521,7 +521,7 @@ Do not proceed to the next milestone until the current one meets its acceptance 
 ## 15. Security checklist (verify before deploy)
 
 - [ ] RLS enabled on every table; default-deny; member-gated selects; admin-gated member writes.
-- [ ] Service-role key imported **only** in `/lib/supabase/service.ts` and used **only** in the two `/api/respond/*` handlers.
+- [ ] No `/lib/supabase/service.ts` exists and no service-role key is used anywhere; the two `/api/respond/*` handlers run on the anon-key client (RLS) via SECURITY DEFINER RPCs.
 - [ ] Service-role key and `ANTHROPIC_API_KEY` never referenced in any client component or `NEXT_PUBLIC_*` var.
 - [ ] Invitation tokens and share tokens are unguessable UUIDs; invitations expire; share links are opt-in, revocable, and can expire.
 - [ ] Respond handlers validate token status/expiry and validate every submitted value (int 1–10, item belongs to category).

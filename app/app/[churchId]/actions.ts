@@ -10,6 +10,7 @@ import { diagnose } from '@/lib/engine'
 import { isKnownBand } from '@/lib/engine/benchmark'
 import type { Response } from '@/lib/engine/types'
 import { responseHash } from '@/lib/report/response-hash'
+import { generateProse } from '@/lib/ai/prose'
 
 export interface InviteResult {
   link: string | null
@@ -104,6 +105,41 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
     p_payload: diagnosis,
   })
   if (saveError) return { ok: false, error: saveError.message }
+
+  // M5b: best-effort AI prose. Gated by PROSE_MODE to match the report page's read gate
+  // exactly (diagnosis/page.tsx), so an unset mode makes no API call. The diagnosis is
+  // already committed above, so this whole block is wrapped: no SDK/network/RPC failure
+  // may break the saved diagnosis or the redirect below.
+  if ((process.env.PROSE_MODE ?? 'fallback') !== 'fallback') {
+    try {
+      // Cache-check: array-tolerant SELECT (RLS permits member SELECT on diagnoses).
+      // Regenerate only when no 'ai' row exists for this hash; the hash changes iff the
+      // answer set changes, so resubmitting identical answers is a no-op.
+      const { data: rows } = await supabase
+        .from('diagnoses')
+        .select('prose_source')
+        .eq('response_hash', hash)
+      const alreadyAi = (rows ?? []).some((r) => r.prose_source === 'ai')
+      if (!alreadyAi) {
+        const blocks = await generateProse(diagnosis, methodology) // never throws → ReportBlocks | null
+        if (blocks) {
+          await supabase.rpc('save_prose', {
+            p_church_id: churchId,
+            p_response_hash: hash,
+            p_prose: blocks,
+            p_prose_source: 'ai',
+          })
+        }
+      }
+    } catch (err) {
+      // Backstop for the Supabase calls around generateProse (cache-check SELECT,
+      // save_prose RPC) — NOT for generateProse itself, which never throws: its
+      // SDK/network/parse/fact-check failures are already caught and logged inside
+      // lib/ai/prose.ts. Swallow everything here too so the committed diagnosis and the
+      // redirect below are never affected. No secrets, no church/respondent data — reason only.
+      console.warn('[m5b] AI prose persistence failed, falling back to deterministic prose:', err instanceof Error ? err.message : 'unknown error')
+    }
+  }
 
   revalidatePath(`/app/${churchId}`)
   revalidatePath(`/app/${churchId}/diagnosis`)
