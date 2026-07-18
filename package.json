@@ -33,6 +33,7 @@
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.2.10",
+    "pdf-parse": "2.4.5",
     "postcss": "^8.5.19",
     "supabase": "2.104.0",
     "tailwindcss": "4.3.2",
