@@ -48,7 +48,8 @@ function stringValues(b: ReportBlocks): string {
 /**
  * Q3 guardrail. Pure, no I/O. Any failing check ⇒ generateProse returns null.
  *   1. Field parity     — the set of populated fields in `ai` must equal that of `draft`.
- *   2. Numeric containment — every number in `ai` must be a value present in draft ∪ serialized Diagnosis.
+ *   2. Numeric containment — every number in `ai[field]` must be a value present in `draft[field]`
+ *      (checked per field, not against a global allowed set — see rationale below).
  *   3. Category fidelity — if primary_constraint is non-null, its category name must appear in `ai`.
  */
 export function passesFactCheck(
@@ -63,13 +64,21 @@ export function passesFactCheck(
   if (aiFields.size !== draftFields.size) return false;
   for (const f of draftFields) if (!aiFields.has(f)) return false;
 
-  // 2. Numeric containment — membership by value, not count.
-  const allowed = new Set<number>([
-    ...extractNumbers(JSON.stringify(draft)),
-    ...extractNumbers(JSON.stringify(d)),
-  ]);
-  for (const n of extractNumbers(stringValues(ai))) {
-    if (!allowed.has(n)) return false;
+  // 2. Numeric containment — membership by value, scoped per field. A globally-flat
+  // allowed set (draft ∪ serialized Diagnosis) is too permissive: the Diagnosis struct
+  // densely covers 0-100 with every category score, percentile, and evidence value, so
+  // a reword that migrates a number from one field (or another category entirely) into
+  // a DIFFERENT field — e.g. swapping the verdict's primary-category score for a
+  // downstream category's score — would pass. A faithful reword never moves a number
+  // across fields, so checking containment field-by-field against that same field's
+  // draft text closes that hole without rejecting legitimate rewords.
+  for (const [key, aiValue] of Object.entries(ai)) {
+    if (typeof aiValue !== 'string') continue;
+    const draftValue = draft[key as keyof ReportBlocks];
+    const allowed = new Set(extractNumbers(typeof draftValue === 'string' ? draftValue : ''));
+    for (const n of extractNumbers(aiValue)) {
+      if (!allowed.has(n)) return false;
+    }
   }
 
   // 3. Category fidelity — case-insensitive substring of the primary category name.

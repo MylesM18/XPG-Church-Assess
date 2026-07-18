@@ -77,4 +77,19 @@ describe('passesFactCheck', () => {
     const ai = { ...draftFull, verdict: `Guest Experience sits at ${score}.0, or ${score}%, still low.` };
     expect(passesFactCheck(ai, draftFull, dBroken, m)).toBe(true);
   });
+
+  it('(i) rejects a score swapped in from a different category (numeric containment must be per-field, not global)', () => {
+    const guestScore = dBroken.categories.find(c => c.category_id === 'guest')!.score;
+    const connScore = dBroken.categories.find(c => c.category_id === 'conn')!.score;
+    // Preconditions: the two scores differ, and conn's score is not already present
+    // in the verdict field's own text (so this genuinely tests cross-field leakage).
+    expect(connScore).not.toBe(guestScore);
+    expect(draftFull.verdict.includes(String(connScore))).toBe(false);
+    // connScore IS present elsewhere in the serialized Diagnosis struct (it's another
+    // category's score), which is exactly what makes the old global ∪-struct allowed
+    // set too permissive: a reword that migrates a number from one field (or the
+    // struct) into a DIFFERENT field must still be rejected.
+    const ai = { ...draftFull, verdict: draftFull.verdict.replace(String(guestScore), String(connScore)) };
+    expect(passesFactCheck(ai, draftFull, dBroken, m)).toBe(false);
+  });
 });

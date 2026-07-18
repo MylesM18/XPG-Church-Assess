@@ -131,9 +131,12 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
           })
         }
       }
-    } catch {
+    } catch (err) {
       // Prose is best-effort. Swallow everything so the committed diagnosis and the
-      // redirect below are never affected.
+      // redirect below are never affected — but log a reason so a misconfigured
+      // PROSE_MODE (e.g. missing/typo'd API key) is distinguishable from the feature
+      // being off. No secrets, no church/respondent data — reason only.
+      console.warn('[m5b] AI prose generation failed, falling back to deterministic prose:', err instanceof Error ? err.message : 'unknown error')
     }
   }
 
