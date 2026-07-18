@@ -13,7 +13,7 @@ All four fonts were generated as static (non-variable) instances using `fonttool
 - **Upstream source**: `ofl/fraunces/Fraunces[SOFT,WONK,opsz,wght].ttf` in `github.com/google/fonts`
 - **Upstream commit/version**: Not recorded; sources taken from main branch
 - **Axis coordinates**: `opsz=9 wght=400 SOFT=0 WONK=1`
-- **Generation command**: `fonttools varLib.instancer Fraunces[SOFT,WONK,opsz,wght].ttf opsz=9 wght=400 SOFT=0 WONK=1 -o Fraunces-Regular.ttf`
+- **To reproduce this instance**: `fonttools varLib.instancer Fraunces[SOFT,WONK,opsz,wght].ttf opsz=9 wght=400 SOFT=0 WONK=1 --update-name-table -o Fraunces-Regular.ttf`
 - **Notes**: 
   - `opsz=9` and `WONK=1` are Fraunces' own defaults for the "Regular" named instance, not arbitrary choices.
   - These values were read directly from Fraunces' upstream `fvar` table to ensure exact fidelity to the canonical named instance.
@@ -25,7 +25,7 @@ All four fonts were generated as static (non-variable) instances using `fonttool
 - **Upstream source**: `ofl/fraunces/Fraunces[SOFT,WONK,opsz,wght].ttf` in `github.com/google/fonts`
 - **Upstream commit/version**: Not recorded; sources taken from main branch
 - **Axis coordinates**: `opsz=9 wght=600 SOFT=0 WONK=1`
-- **Generation command**: `fonttools varLib.instancer Fraunces[SOFT,WONK,opsz,wght].ttf opsz=9 wght=600 SOFT=0 WONK=1 -o Fraunces-SemiBold.ttf`
+- **To reproduce this instance**: `fonttools varLib.instancer Fraunces[SOFT,WONK,opsz,wght].ttf opsz=9 wght=600 SOFT=0 WONK=1 --update-name-table -o Fraunces-SemiBold.ttf`
 - **Notes**:
   - `opsz=9` and `WONK=1` are Fraunces' own defaults for the "SemiBold" named instance.
   - File size: 73,060 bytes
@@ -36,7 +36,7 @@ All four fonts were generated as static (non-variable) instances using `fonttool
 - **Upstream source**: `ofl/hankengrotesk/HankenGrotesk[wght].ttf` in `github.com/google/fonts`
 - **Upstream commit/version**: Not recorded; sources taken from main branch
 - **Axis coordinates**: `wght=400`
-- **Generation command**: `fonttools varLib.instancer HankenGrotesk[wght].ttf wght=400 -o HankenGrotesk-Regular.ttf`
+- **To reproduce this instance**: `fonttools varLib.instancer HankenGrotesk[wght].ttf wght=400 --update-name-table -o HankenGrotesk-Regular.ttf`
 - **Notes**:
   - File size: 67,892 bytes
   - Verified static (no `fvar` table) via `fontTools.ttLib`
@@ -46,7 +46,7 @@ All four fonts were generated as static (non-variable) instances using `fonttool
 - **Upstream source**: `ofl/hankengrotesk/HankenGrotesk[wght].ttf` in `github.com/google/fonts`
 - **Upstream commit/version**: Not recorded; sources taken from main branch
 - **Axis coordinates**: `wght=700`
-- **Generation command**: `fonttools varLib.instancer HankenGrotesk[wght].ttf wght=700 -o HankenGrotesk-Bold.ttf`
+- **To reproduce this instance**: `fonttools varLib.instancer HankenGrotesk[wght].ttf wght=700 --update-name-table -o HankenGrotesk-Bold.ttf`
 - **Notes**:
   - File size: 67,808 bytes
   - Verified static (no `fvar` table) via `fontTools.ttLib`
