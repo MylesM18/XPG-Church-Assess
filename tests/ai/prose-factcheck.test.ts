@@ -92,4 +92,17 @@ describe('passesFactCheck', () => {
     const ai = { ...draftFull, verdict: draftFull.verdict.replace(String(guestScore), String(connScore)) };
     expect(passesFactCheck(ai, draftFull, dBroken, m)).toBe(false);
   });
+
+  it('(j) rejects a verdict that swaps the real primary score for the literal scale number (100)', () => {
+    const guestScore = dBroken.categories.find(c => c.category_id === 'guest')!.score;
+    // Precondition: guest's score isn't literally 100, so this is a genuine swap, and the
+    // template's own "out of 100" scale token means BOTH 100 and the real score are
+    // already legitimate members of verdict's per-field allowed set — so prong 2 (numeric
+    // containment) alone cannot catch this: "It scored 100 out of 100" passes field parity,
+    // passes per-field containment (100 ∈ allowed), and passes category fidelity (the name
+    // is untouched). Only a check that pins the *specific* primary-score number can catch it.
+    expect(guestScore).not.toBe(100);
+    const ai = { ...draftFull, verdict: draftFull.verdict.replace(String(guestScore), '100') };
+    expect(passesFactCheck(ai, draftFull, dBroken, m)).toBe(false);
+  });
 });

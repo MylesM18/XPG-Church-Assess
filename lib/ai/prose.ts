@@ -88,6 +88,20 @@ export function passesFactCheck(
     if (!stringValues(ai).toLowerCase().includes(primaryName.toLowerCase())) return false;
   }
 
+  // 4. Primary-score pin — symmetric with (3). The verdict template embeds two numbers
+  // ("It scored {primary_score} out of 100"): the church's actual score AND the fixed
+  // scale. Per-field containment (2) only forbids ai.verdict from using numbers absent
+  // from draft.verdict — but both the real score and 100 are legitimately present there,
+  // so a reword that reattaches "100" to the score's noun phrase ("scored 100 out of
+  // 100") still passes every prior check. Pin the one number that matters most: when
+  // there is a primary constraint, its true score must appear in ai.verdict. Skip (do
+  // not crash) if there is no primary constraint, or in the unexpected case its category
+  // is missing from d.categories — never trust a non-null assertion over engine output.
+  if (d.primary_constraint) {
+    const primaryCategory = d.categories.find(c => c.category_id === d.primary_constraint?.category_id);
+    if (primaryCategory && !extractNumbers(ai.verdict).includes(primaryCategory.score)) return false;
+  }
+
   return true;
 }
 
@@ -124,6 +138,13 @@ function toReportBlocks(p: ParsedBlocks): ReportBlocks {
  * post-check failure all resolve to null (⇒ caller does nothing ⇒ report recomputes
  * fallbackProse live). The model is handed the finished draft, so it invents no numbers;
  * passesFactCheck is the hard backstop that does not trust the model.
+ *
+ * Every silent-null path logs a reason so "AI is off" (caller's PROSE_MODE gate) stays
+ * distinguishable from "AI is broken" (a failure here). Log `err.message` only — never
+ * the error object, the request payload, `d`, or the draft: the user message embeds
+ * `JSON.stringify(d)` and `d.dispersion_flags[].respondents[].label` carries respondent
+ * names, so logging anything beyond a short reason string would leak report content.
+ * This file is under eslint globalIgnores, so console.warn here is lint-clean.
  */
 export async function generateProse(
   d: Diagnosis,
@@ -154,10 +175,20 @@ export async function generateProse(
     );
 
     const parsed = message.parsed_output;
-    if (!parsed) return null;
+    if (!parsed) {
+      console.warn('[m5b] AI prose: model returned no parsed output; falling back to deterministic prose');
+      return null;
+    }
     const ai = toReportBlocks(parsed);
-    return passesFactCheck(ai, draft, d, methodology) ? ai : null;
-  } catch {
+    if (!passesFactCheck(ai, draft, d, methodology)) {
+      // Do not log `ai` or `draft` here — they are report content (respondent labels,
+      // church-specific scores), not a diagnostic reason.
+      console.warn('[m5b] AI prose: reword failed fact-check (field parity / numeric containment / category or score fidelity); falling back to deterministic prose');
+      return null;
+    }
+    return ai;
+  } catch (err) {
+    console.warn('[m5b] AI prose: request failed:', err instanceof Error ? err.message : 'unknown error');
     return null;
   }
 }
