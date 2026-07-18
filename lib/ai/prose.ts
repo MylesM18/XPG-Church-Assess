@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 
 /**
  * Mirrors the shipped 9-field ReportBlocks contract (lib/ai/fallback.ts).
@@ -80,4 +80,75 @@ export function passesFactCheck(
   }
 
   return true;
+}
+
+import Anthropic from '@anthropic-ai/sdk';
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import { fallbackProse } from './fallback';
+
+const SYSTEM_PROMPT =
+  'You are given a fixed set of facts as a draft report in JSON. You may not add, change, ' +
+  'reorder, or invent any number, category, or verdict. Rewrite only the wording of each field. ' +
+  'Write in this register: plain words, warm but precise. No em-dashes. No churchy clichés. ' +
+  'Sentence case. Active voice. Name things the way a church leader would. If a fact is absent ' +
+  'from the struct, do not supply it. Return the same JSON block shape you were given — the same ' +
+  'fields, no fields added or dropped. Return only the JSON.';
+
+/** Strict structured output emits every key (null for absent optionals); the TS contract wants
+ *  absent optionals as `undefined`. Normalize null → undefined so the result is a real ReportBlocks. */
+function toReportBlocks(p: ParsedBlocks): ReportBlocks {
+  return {
+    verdict: p.verdict,
+    evidence: p.evidence ?? undefined,
+    blind_spot: p.blind_spot ?? undefined,
+    cost: p.cost ?? undefined,
+    do_not_work_on: p.do_not_work_on ?? undefined,
+    next_step: p.next_step,
+    gating: p.gating ?? undefined,
+    dispersion: p.dispersion ?? undefined,
+    benchmark_note: p.benchmark_note,
+  };
+}
+
+/**
+ * Reword the deterministic draft. NEVER throws: SDK/network error, schema miss, and
+ * post-check failure all resolve to null (⇒ caller does nothing ⇒ report recomputes
+ * fallbackProse live). The model is handed the finished draft, so it invents no numbers;
+ * passesFactCheck is the hard backstop that does not trust the model.
+ */
+export async function generateProse(
+  d: Diagnosis,
+  methodology: Methodology,
+): Promise<ReportBlocks | null> {
+  const draft = fallbackProse(d, methodology);
+  try {
+    const client = new Anthropic(); // reads ANTHROPIC_API_KEY from env (server-only)
+    const model = process.env.ANTHROPIC_MODEL_PROSE ?? 'claude-sonnet-5';
+    const message = await client.messages.parse(
+      {
+        model,
+        max_tokens: 1500,
+        system: SYSTEM_PROMPT,
+        messages: [
+          {
+            role: 'user',
+            content:
+              'Draft report — reword each field’s wording only and return the same JSON shape:\n' +
+              JSON.stringify(draft, null, 2) +
+              '\n\nGround-truth facts — do not introduce any number or category not present here:\n' +
+              JSON.stringify(d, null, 2),
+          },
+        ],
+        output_config: { format: zodOutputFormat(ReportBlocksSchema) },
+      },
+      { timeout: 15000, maxRetries: 0 },
+    );
+
+    const parsed = message.parsed_output;
+    if (!parsed) return null;
+    const ai = toReportBlocks(parsed);
+    return passesFactCheck(ai, draft, d, methodology) ? ai : null;
+  } catch {
+    return null;
+  }
 }
