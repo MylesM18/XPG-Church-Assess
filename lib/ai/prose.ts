@@ -150,8 +150,10 @@ export async function generateProse(
   d: Diagnosis,
   methodology: Methodology,
 ): Promise<ReportBlocks | null> {
-  const draft = fallbackProse(d, methodology);
   try {
+    // Inside the try: fallbackProse indexes d.categories, so a malformed Diagnosis would
+    // throw past this function and escape unlogged if the draft were built outside it.
+    const draft = fallbackProse(d, methodology);
     const client = new Anthropic(); // reads ANTHROPIC_API_KEY from env (server-only)
     const model = process.env.ANTHROPIC_MODEL_PROSE ?? 'claude-sonnet-5';
     const message = await client.messages.parse(
