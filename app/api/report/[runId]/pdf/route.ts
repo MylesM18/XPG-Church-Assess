@@ -33,9 +33,10 @@ export async function GET(
   if (!user) return new Response('Unauthorized', { status: 401 })
 
   // RLS gates this select. A non-member and a nonexistent run both yield no
-  // row, and both return 404 — never a 403, which would let a caller probe
-  // which run ids exist.
-  const { data: diag } = await supabase
+  // row (no error), and both return 404 — never a 403, which would let a
+  // caller probe which run ids exist. A real query failure sets `error`
+  // instead, which we surface as a 500 so it isn't invisible in logs.
+  const { data: diag, error: diagError } = await supabase
     .from('diagnoses')
     .select('payload, prose, run_id')
     .eq('run_id', runId)
@@ -43,13 +44,22 @@ export async function GET(
     .limit(1)
     .maybeSingle()
 
+  if (diagError) {
+    console.warn('[m5c] PDF route: diagnoses query failed:', diagError.message)
+    return new Response('Could not generate the PDF', { status: 500 })
+  }
   if (!diag) return new Response('Not found', { status: 404 })
 
-  const { data: run } = await supabase
+  const { data: run, error: runError } = await supabase
     .from('assessment_runs')
     .select('church_id, churches(name, brand_color)')
     .eq('id', runId)
     .maybeSingle()
+
+  if (runError) {
+    console.warn('[m5c] PDF route: assessment_runs query failed:', runError.message)
+    return new Response('Could not generate the PDF', { status: 500 })
+  }
 
   const church = run?.churches as unknown as { name: string; brand_color: string } | undefined
   if (!church) return new Response('Not found', { status: 404 })

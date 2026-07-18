@@ -17,7 +17,7 @@ export interface ReportView {
   generosityMode: GenerosityMode;
   dispersion?: { text: string; respondents: Array<{ label: string; mean: number }> };
   nextStep: { callType: string; hook: string; text: string };
-  appendix: { categories: DiagnosisCategory[]; benchmarkNote: string };
+  appendix: { categories: Array<DiagnosisCategory & { name: string }>; benchmarkNote: string };
 }
 
 /**
@@ -42,6 +42,10 @@ export function buildReportView(
     : undefined;
 
   const flag = d.dispersion_flags[0];
+
+  // Same resolution pattern chain-walk.ts uses, so the chain section and the
+  // appendix never disagree on how a category_id is displayed.
+  const names = new Map(methodology.questions.categories.map((c) => [c.id, c.name]));
 
   return {
     verdict: blocks.verdict,
@@ -70,6 +74,9 @@ export function buildReportView(
       : undefined,
 
     nextStep: { callType: d.offer.call_type, hook: d.offer.hook, text: blocks.next_step },
-    appendix: { categories: d.categories, benchmarkNote: blocks.benchmark_note },
+    appendix: {
+      categories: d.categories.map((c) => ({ ...c, name: names.get(c.category_id) ?? c.category_id })),
+      benchmarkNote: blocks.benchmark_note,
+    },
   };
 }

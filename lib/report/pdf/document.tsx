@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import type { ReportView } from '../view';
 import { registerReportFonts, FONT_DISPLAY, FONT_BODY } from './fonts';
+import { GENEROSITY_COPY } from '../copy';
 
 registerReportFonts();
 
@@ -119,13 +120,7 @@ export function ReportDocument({
         {view.generosityMode !== null && (
           <View style={s.section}>
             <Text style={s.h2}>Generosity</Text>
-            <Text>
-              {view.generosityMode === 'breadth'
-                ? 'Breadth is the gap: fewer people give than the size of your congregation implies.'
-                : view.generosityMode === 'depth'
-                  ? 'Depth is the gap: people give, but giving per household is shallow.'
-                  : 'Both breadth and depth are gaps: fewer people give, and those who do give shallowly.'}
-            </Text>
+            <Text>{GENEROSITY_COPY[view.generosityMode]}</Text>
           </View>
         )}
 
@@ -149,7 +144,7 @@ export function ReportDocument({
           <Text style={s.h2}>Appendix — all category scores</Text>
           {view.appendix.categories.map((c) => (
             <View key={c.category_id} style={s.appendixRow}>
-              <Text>{c.category_id}</Text>
+              <Text>{c.name}</Text>
               <Text>{c.score}</Text>
             </View>
           ))}

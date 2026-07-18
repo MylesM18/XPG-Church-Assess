@@ -13,6 +13,15 @@ import { ReportDocument, type ReportDocumentProps } from './document';
  * exactly one place.
  */
 export function renderReportDocument(props: ReportDocumentProps): Promise<Buffer> {
+  // Fail-closed invariant: this function must never print respondent names.
+  // view.ts alone decides what gets stripped for the 'pdf' audience — this
+  // only asserts that decision was actually applied to whatever view we were
+  // handed, so a stray caller or a typo'd audience literal can't ship names
+  // past the permission wall.
+  if (props.view.dispersion?.respondents.length) {
+    throw new Error('renderReportDocument: view carries respondent names; expected audience "pdf"');
+  }
+
   const element = createElement(ReportDocument, props) as unknown as ReactElement<DocumentProps>;
   return renderToBuffer(element);
 }
