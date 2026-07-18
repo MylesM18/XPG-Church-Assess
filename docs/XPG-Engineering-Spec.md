@@ -58,7 +58,7 @@ Everything below serves these. If a decision trades one of these away for conven
     resolve.ts            church → { monogram, tileColor, displayName }
   /supabase
     server.ts             server client (anon key, RLS)
-    service.ts            service-role client, import ONLY inside /api/respond/*
+    service.ts            service-role client — NEVER BUILT (guardrail: anon-key + RLS only; /api/respond/* uses SECURITY DEFINER RPCs instead, see §6)
   /report
     render.tsx            report React component (used by page + PDF)
 /methodology              THE IP. versioned YAML.
@@ -521,7 +521,7 @@ Do not proceed to the next milestone until the current one meets its acceptance 
 ## 15. Security checklist (verify before deploy)
 
 - [ ] RLS enabled on every table; default-deny; member-gated selects; admin-gated member writes.
-- [ ] Service-role key imported **only** in `/lib/supabase/service.ts` and used **only** in the two `/api/respond/*` handlers.
+- [ ] No `/lib/supabase/service.ts` exists and no service-role key is used anywhere; the two `/api/respond/*` handlers run on the anon-key client (RLS) via SECURITY DEFINER RPCs.
 - [ ] Service-role key and `ANTHROPIC_API_KEY` never referenced in any client component or `NEXT_PUBLIC_*` var.
 - [ ] Invitation tokens and share tokens are unguessable UUIDs; invitations expire; share links are opt-in, revocable, and can expire.
 - [ ] Respond handlers validate token status/expiry and validate every submitted value (int 1–10, item belongs to category).

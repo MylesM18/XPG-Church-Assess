@@ -47,6 +47,22 @@ describe('generateProse', () => {
     const result = await generateProse(dBroken, m);
     expect(result).not.toBeNull();
     expect(result!.verdict).toContain('Guest Experience');
+
+    // Pins the SDK call shape (binding Global Constraint): model from
+    // env-with-default, no temperature/top_p (both @deprecated on Sonnet-5),
+    // and the exact retry/timeout config. output_config asserts against this
+    // test's own zodOutputFormat stub, not the real helper's return value.
+    expect(mockParse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: process.env.ANTHROPIC_MODEL_PROSE ?? 'claude-sonnet-5',
+        max_tokens: 1500,
+        output_config: { format: { type: 'json_schema' } },
+      }),
+      { timeout: 15000, maxRetries: 0 },
+    );
+    const callArgs = mockParse.mock.calls[0]![0];
+    expect(callArgs).not.toHaveProperty('temperature');
+    expect(callArgs).not.toHaveProperty('top_p');
   });
 
   it('returns null when the reword fails the fact-check (invented number)', async () => {
