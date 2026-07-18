@@ -51,7 +51,7 @@ Everything below serves these. If a decision trades one of these away for conven
   /methodology
     load.ts               load + validate YAML, expose typed Methodology
   /ai
-    classify.ts           LLM call #1 (free-text → signals)
+    classify.ts           LLM call #1 (free-text → signals) — DEFERRED (not built yet)
     prose.ts              LLM call #2 (Diagnosis → report prose) + fallback
     fallback.ts           deterministic prose from the struct
   /brand
@@ -434,7 +434,7 @@ Server-side, official `@anthropic-ai/sdk`. **API key server-only.** Both calls a
 
 ### 8.3 The fallback (`fallback.ts`) and the toggle
 - `PROSE_MODE=ai|fallback` env switch. And on **any** AI error/timeout, auto-fall-back.
-- `fallback.ts` fills the same seven-block shape from templates in `copy.yaml`, interpolating the struct's values. Rougher, correct, complete.
+- `fallback.ts` fills the same nine-field `ReportBlocks` shape from templates in `copy.yaml`, interpolating the struct's values. Rougher, correct, complete.
 - `diagnoses.prose_source` records which was used. **This is the mechanism that makes the acceptance test pass.**
 
 ---
