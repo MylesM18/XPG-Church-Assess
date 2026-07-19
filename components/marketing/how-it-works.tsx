@@ -2,7 +2,7 @@ const STEPS = [
   {
     n: 1,
     title: 'Create your church profile',
-    body: 'A quick overview of your church — size, staff, budget, context. It sets the benchmark every score is measured against, so you\'re compared to churches like yours, not to megachurches.',
+    body: 'A quick overview of your church — size, staff, budget, context. It sets the benchmark every score is measured against, so you’re compared to churches like yours, not to megachurches.',
   },
   {
     n: 2,
