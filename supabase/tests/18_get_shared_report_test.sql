@@ -80,9 +80,9 @@ select is((select valid from get_shared_report('e0000000-0000-0000-0000-00000000
           'an unknown token is invalid');
 
 select is(
-  (select row(valid, payload, prose, church_name, brand_color)::text
+  (select row(valid, payload, church_name, brand_color)::text
      from get_shared_report((select token from t_token))),
-  (select row(valid, payload, prose, church_name, brand_color)::text
+  (select row(valid, payload, church_name, brand_color)::text
      from get_shared_report('e0000000-0000-0000-0000-000000000009')),
   'revoked and unknown tokens return IDENTICAL rows — no oracle');
 
@@ -101,9 +101,9 @@ set local role anon;
 set local request.jwt.claims to '{"role":"anon"}';
 
 select is(
-  (select row(valid, payload, prose, church_name, brand_color)::text
+  (select row(valid, payload, church_name, brand_color)::text
      from get_shared_report((select token from t_expired))),
-  (select row(valid, payload, prose, church_name, brand_color)::text
+  (select row(valid, payload, church_name, brand_color)::text
      from get_shared_report('e0000000-0000-0000-0000-000000000009')),
   'expired and unknown tokens return IDENTICAL rows — no oracle');
 

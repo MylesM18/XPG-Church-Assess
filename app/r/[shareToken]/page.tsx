@@ -4,6 +4,13 @@
 // them in SQL (strip_respondents empties both dispersion_flags[].respondents and
 // evidence_trail[].refs). Both must fail before a name can leak.
 //
+// Those two strips cover `payload` and nothing else, so this page renders deterministic
+// fallbackProse unconditionally rather than reading AI prose. That is not belt-and-braces:
+// AI prose is generated from a prompt embedding the whole Diagnosis, so it can carry
+// respondent names past BOTH strips. get_shared_report no longer returns a `prose` column at
+// all (20260718000600), which is what makes "two independent strips" a true statement of this
+// path's posture — prose is structurally absent here, not merely unused.
+//
 // This is a Server Component and stays one: it passes only the built ReportView and the
 // already-stripped Diagnosis to children. Handing the raw RPC row to a Client Component
 // would ship respondent names to the browser inside RSC flight data.
@@ -58,11 +65,9 @@ export default async function SharedReportPage({
   const methodology = loadMethodology()
   const brand = resolveBrand(row.church_name)
 
-  const PROSE_MODE = process.env.PROSE_MODE ?? 'fallback'
-  const blocks: ReportBlocks =
-    PROSE_MODE !== 'fallback' && row.prose
-      ? (row.prose as ReportBlocks)
-      : fallbackProse(diagnosis, methodology)
+  // Deliberately NOT gated on PROSE_MODE — see the header comment. The RPC returns no prose
+  // column, so there is nothing here for one env var to silently switch on.
+  const blocks: ReportBlocks = fallbackProse(diagnosis, methodology)
 
   const view = buildReportView(diagnosis, blocks, methodology, { audience: 'shared' })
 
