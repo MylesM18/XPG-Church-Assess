@@ -80,7 +80,7 @@ non-immutable index predicate.
 
 ### RPCs
 
-Four functions. The three that touch `report_shares` are
+Five functions. The four that touch `report_shares` are
 `security definer set search_path = public`, following the established idiom in
 `rpc_create_member_invitation.sql`. The `strip_respondents` helper is a pure `immutable`
 function that touches no table and therefore needs neither.
@@ -112,6 +112,13 @@ unchanged; otherwise it revokes any expired row and inserts a new one with
 
 **`revoke_report_share(p_run_id uuid) returns void`** — same admin guard; sets `revoked = true`
 for the run's active row. Idempotent: revoking when nothing is active is a no-op, not an error.
+
+**`get_report_share(p_run_id uuid) returns table(token uuid, expires_at timestamptz)`** —
+admin-gated, read-only, `grant execute to authenticated` only. Added because `report_shares` has
+no RLS policy and no base-table grant, so the diagnosis page cannot `select` from it directly to
+learn whether a run is currently shared. `create_report_share` cannot serve as this reader — it
+is a writer, and calling it during render would mint a link merely by visiting the page. Returns
+zero rows when no live share exists.
 
 **`get_shared_report(p_token uuid)`** — `grant execute to anon, authenticated`. Returns
 `(valid boolean, payload jsonb, prose jsonb, church_name text, brand_color text)`.

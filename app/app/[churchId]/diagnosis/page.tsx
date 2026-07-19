@@ -5,6 +5,7 @@ import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { fallbackProse, type ReportBlocks } from '@/lib/ai/fallback'
 import { buildReportView } from '@/lib/report/view'
+import { shareLink } from '@/lib/report/share-link'
 import type { Diagnosis } from '@/lib/engine/types'
 import {
   EmptyState,
@@ -19,6 +20,9 @@ import {
   NextStep,
   Appendix,
 } from './report'
+import { ShareControl } from './share-control'
+
+const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'
 
 export default async function DiagnosisPage({
   params,
@@ -57,6 +61,23 @@ export default async function DiagnosisPage({
 
   if (!diagRow) return <EmptyState churchId={churchId} />
 
+  // Mirrors the role check at access/page.tsx:18-22, minus its notFound() — viewers are
+  // legitimately allowed on this page, only the share control is admin-only. get_report_share
+  // is itself admin-gated in SQL and would error for a viewer, so skip calling it entirely
+  // rather than let a viewer see a "Create share link" button that can never succeed.
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: membership } = await supabase
+    .from('church_members').select('role')
+    .eq('church_id', churchId).eq('user_id', user?.id ?? '').maybeSingle()
+  const isAdmin = membership?.role === 'admin'
+
+  let existingShareToken: string | null = null
+  if (isAdmin) {
+    const { data: shareRows } = await supabase.rpc('get_report_share', { p_run_id: run!.id })
+    const shareRow = Array.isArray(shareRows) ? shareRows[0] : null
+    existingShareToken = shareRow?.token ?? null
+  }
+
   const diagnosis = diagRow.payload as Diagnosis
   const methodology = loadMethodology()
   const brand = resolveBrand(church.name)
@@ -80,12 +101,22 @@ export default async function DiagnosisPage({
         confidence={view.confidence}
       />
 
-      <a
-        href={`/api/report/${run!.id}/pdf`}
-        className="font-body text-sm text-ink-soft underline underline-offset-4"
-      >
-        Download PDF
-      </a>
+      <div className="flex flex-col gap-4">
+        <a
+          href={`/api/report/${run!.id}/pdf`}
+          className="font-body text-sm text-ink-soft underline underline-offset-4"
+        >
+          Download PDF
+        </a>
+
+        {isAdmin && (
+          <ShareControl
+            churchId={churchId}
+            runId={run!.id}
+            existingLink={existingShareToken ? shareLink(APP_URL, existingShareToken) : null}
+          />
+        )}
+      </div>
 
       <ChainWalk stages={view.stages} />
 

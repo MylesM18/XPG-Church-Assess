@@ -1,0 +1,64 @@
+'use client'
+
+import { useActionState } from 'react'
+import { shareReport, revokeShare, type ShareResult } from './actions'
+
+const EMPTY: ShareResult = { link: null, error: null }
+
+export function ShareControl({
+  churchId, runId, existingLink,
+}: {
+  churchId: string
+  runId: string
+  existingLink: string | null
+}) {
+  const [minted, mintAction, minting] = useActionState(shareReport, EMPTY)
+  const [revoked, revokeAction, revoking] = useActionState(revokeShare, EMPTY)
+
+  // `existingLink` is the single source of truth for shared-or-not. Both actions call
+  // revalidatePath, so the server re-renders this component with the correct value after
+  // every mint and every revoke — there is no need to reconcile client-side action state
+  // against it. The action results are consulted only for their error messages.
+  const link = existingLink
+  const error = minted.error ?? revoked.error
+
+  return (
+    <div className="flex flex-col gap-2">
+      {link ? (
+        <>
+          <p className="font-body text-sm text-ink-soft">
+            Anyone with this link can read this report until it expires.
+          </p>
+          <code className="font-body break-all rounded border border-line bg-paper p-2 text-sm text-ink">
+            {link}
+          </code>
+          <form action={revokeAction}>
+            <input type="hidden" name="church_id" value={churchId} />
+            <input type="hidden" name="run_id" value={runId} />
+            <button
+              type="submit"
+              disabled={revoking}
+              className="font-body text-sm text-ink-soft underline underline-offset-4"
+            >
+              {revoking ? 'Revoking…' : 'Revoke share link'}
+            </button>
+          </form>
+        </>
+      ) : (
+        <form action={mintAction}>
+          <input type="hidden" name="church_id" value={churchId} />
+          <input type="hidden" name="run_id" value={runId} />
+          <button
+            type="submit"
+            disabled={minting}
+            className="font-body text-sm text-ink-soft underline underline-offset-4"
+          >
+            {minting ? 'Creating…' : 'Create share link'}
+          </button>
+        </form>
+      )}
+
+      {error && <p className="font-body text-sm text-ink">{error}</p>}
+    </div>
+  )
+}

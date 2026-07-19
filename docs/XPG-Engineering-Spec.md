@@ -36,7 +36,7 @@ Everything below serves these. If a decision trades one of these away for conven
   /api/invitations        POST (auth)
   /api/members            POST / DELETE (auth, admin only)
   /api/report/[runId]/pdf GET (auth, member)
-  /api/report-share       POST / DELETE (auth, admin)
+  (share mint/revoke are SERVER ACTIONS, not a route — see M6a)
 /lib
   /engine                 PURE. no framework, no db, no network.
     normalize.ts
@@ -73,6 +73,13 @@ Everything below serves these. If a decision trades one of these away for conven
   rls/                    permission-wall tests
 /docs                     these two spec files live here
 ```
+
+> **M6a deviation (2026-07-18):** mint and revoke of report shares are implemented as server
+> actions in `app/app/[churchId]/diagnosis/actions.ts`, not as `POST / DELETE /api/report-share`.
+> This matches the codebase's convergence on server actions for every dashboard mutation
+> (`createInvitation`, `generateDiagnosis`, the M5d access panel), gains CSRF protection and
+> progressive enhancement for free, and avoids adding a second public route.
+> `/r/[shareToken]` is the only new public route in M6a.
 
 ---
 
