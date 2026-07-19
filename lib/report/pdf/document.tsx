@@ -134,11 +134,13 @@ export function ReportDocument({
           </View>
         )}
 
-        <View style={s.section}>
-          <Text style={s.h2}>Your next step</Text>
-          <Text>{view.nextStep.text}</Text>
-          <Text style={s.refs}>{view.nextStep.callType} — {view.nextStep.hook}</Text>
-        </View>
+        {view.nextStep && (
+          <View style={s.section}>
+            <Text style={s.h2}>Your next step</Text>
+            <Text>{view.nextStep.text}</Text>
+            <Text style={s.refs}>{view.nextStep.callType} — {view.nextStep.hook}</Text>
+          </View>
+        )}
 
         <View style={s.section} break>
           <Text style={s.h2}>Appendix — all category scores</Text>

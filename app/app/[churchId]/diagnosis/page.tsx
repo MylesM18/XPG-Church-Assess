@@ -98,11 +98,13 @@ export default async function DiagnosisPage({
         <Disagreement text={view.dispersion.text} respondents={view.dispersion.respondents} />
       )}
 
-      <NextStep
-        callType={view.nextStep.callType}
-        hook={view.nextStep.hook}
-        nextStep={view.nextStep.text}
-      />
+      {view.nextStep && (
+        <NextStep
+          callType={view.nextStep.callType}
+          hook={view.nextStep.hook}
+          nextStep={view.nextStep.text}
+        />
+      )}
 
       <Appendix diagnosis={diagnosis} methodology={methodology} benchmarkNote={view.appendix.benchmarkNote} />
     </main>
