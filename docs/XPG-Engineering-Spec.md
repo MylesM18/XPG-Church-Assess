@@ -26,7 +26,7 @@ Everything below serves these. If a decision trades one of these away for conven
 
 ```
 /app                      Next.js App Router
-  /(marketing)/page.tsx   public landing
+  /page.tsx               public landing
   /get-started            church profile creation (auth-gated)
   /app/[churchId]         admin dashboard
   /app/[churchId]/report  the diagnosis (auth + membership)
