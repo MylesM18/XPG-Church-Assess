@@ -4,7 +4,7 @@
 
 **Goal:** An admin can mint a revocable, 30-day link that lets someone without an account read one church's diagnosis report — with respondent names stripped — and revoking it makes the URL 404 immediately.
 
-**Architecture:** `public.report_shares` already exists from M2; no new table. Five `security definer` RPCs own it (it stays default-deny with no RLS policy and no table grant). Mint/revoke/read-state are admin-gated and reached from server actions; `get_shared_report` is granted to `anon` and returns a uniform invalid row for revoked, expired, and unknown tokens alike. Respondent names are removed twice independently: once in SQL via an `immutable` `strip_respondents` helper, once at render via a new `'shared'` value on `ReportAudience`.
+**Architecture:** `public.report_shares` already exists from M2; no new table. Five `security definer` RPCs own it (it stays default-deny: RLS is enabled with **zero policies**, which is the whole control — see the constraint below for the base-table grants, which are present but inert). Mint/revoke/read-state are admin-gated and reached from server actions; `get_shared_report` is granted to `anon` and returns a uniform invalid row for revoked, expired, and unknown tokens alike. Respondent names are removed twice independently: once in SQL via an `immutable` `strip_respondents` helper, once at render via a new `'shared'` value on `ReportAudience`.
 
 **Tech Stack:** Next.js 16 (App Router, RSC + server actions), `@supabase/ssr` 0.12.3 anon client → Postgres RLS/RPC, Postgres 17 + pgTAP, vitest, Tailwind v4, TypeScript.
 
@@ -14,7 +14,7 @@
 - **Do not touch `next.config.ts` or `vitest.config.ts`.**
 - **`.superpowers/` stays UNTRACKED.** Never `git add` it.
 - anon key + RLS only. **No service-role client in application code.**
-- `report_shares` gets **no RLS policy and no base-table grant** — RPCs stay its sole readers and writers, per `20260715000400_rls_policies.sql:67`.
+- `report_shares` gets **no RLS policy** — RPCs stay its sole readers and writers, per `20260715000400_rls_policies.sql:67`. Stated precisely: RLS is enabled with **zero policies**; base-table grants ARE present (inherited from Supabase's template `grant all on all tables in schema public`) but are **inert** — no policy means no rows are visible. Verified: `set role anon; select count(*) from report_shares;` returns 0. This is **project-wide and pre-existing, not M6a-specific**: all 18 role/table pairs across all 9 public tables carry the same 7 template privileges, and `invitations` and `responses` sit in the identical posture. Tightening the grant layer is already tracked as a deploy-checklist item at `docs/superpowers/specs/2026-07-15-m3-app-shell-auth-dashboard-branding-design.md:152`.
 - Revoked / expired / nonexistent share tokens must be **indistinguishable** — 404, never 403. Same invariant `app/api/report/[runId]/pdf/route.ts` holds for run ids.
 - **pgTAP discipline (recorded bug class):** `plan(N)` must equal the exact number of assertions run — re-count by hand after writing each file. Use the **4-arg** `throws_ok(sql, sqlstate, errmsg, description)` form; the 3-arg form binds arg 3 as *description*, not *errmsg*, and silently passes.
 - **Positive controls are mandatory.** A zero-match confidentiality assertion proves nothing unless the same detector is shown to fire against a surface that *does* contain the data.
@@ -503,7 +503,7 @@ git commit -m "feat(m6a): admin-gated create/revoke/get report share RPCs"
 
 **Interfaces:**
 - Consumes: `public.strip_respondents(jsonb)` (Task 1), `public.create_report_share(uuid)` (Task 2), `public.diagnoses`, `public.churches`.
-- Produces: `public.get_shared_report(p_token uuid) returns table(valid boolean, payload jsonb, prose jsonb, church_name text, brand_color text)`, granted to `anon, authenticated`. Task 5's page consumes it.
+- Produces: `public.get_shared_report(p_token uuid) returns table(valid boolean, payload jsonb, church_name text, brand_color text)`, granted to `anon, authenticated`. Task 5's page consumes it. (The originally-shipped signature also returned `prose jsonb`; `20260718000600_rpc_get_shared_report_drop_prose.sql` removed that column — prose is AI-generated from a prompt embedding the whole Diagnosis, so it bypassed both respondent-name strips.)
 
 - [ ] **Step 1: Write the failing test**
 

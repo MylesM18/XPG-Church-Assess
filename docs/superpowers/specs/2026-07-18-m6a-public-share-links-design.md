@@ -115,8 +115,14 @@ for the run's active row. Idempotent: revoking when nothing is active is a no-op
 
 **`get_report_share(p_run_id uuid) returns table(token uuid, expires_at timestamptz)`** —
 admin-gated, read-only, `grant execute to authenticated` only. Added because `report_shares` has
-no RLS policy and no base-table grant, so the diagnosis page cannot `select` from it directly to
-learn whether a run is currently shared. `create_report_share` cannot serve as this reader — it
+RLS enabled with **zero policies**, so the diagnosis page cannot `select` from it directly to
+learn whether a run is currently shared. (Base-table grants ARE present — inherited from
+Supabase's template `grant all on all tables in schema public` — but are **inert**: no policy
+means no rows are visible. Verified: `set role anon; select count(*) from report_shares;` returns
+0. This is project-wide and pre-existing, not M6a-specific — all 18 role/table pairs across all 9
+public tables carry the same 7 template privileges, and `invitations` and `responses` sit in the
+identical posture. Tightening the grant layer is tracked at
+`docs/superpowers/specs/2026-07-15-m3-app-shell-auth-dashboard-branding-design.md:152`.) `create_report_share` cannot serve as this reader — it
 is a writer, and calling it during render would mint a link merely by visiting the page. Returns
 zero rows when no live share exists.
 
