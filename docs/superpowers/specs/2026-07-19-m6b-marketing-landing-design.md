@@ -2,7 +2,8 @@
 
 **Date:** 2026-07-19
 **Milestone:** M6b (second of three; M6a = share links ✅ merged, M6c = responsive/a11y/token polish)
-**Status:** approved (design approved in 4 gates); spec pending review
+**Status:** APPROVED — design approved in 4 gates (s76); written spec approved by Natalie (s78),
+including both step-7 amendments (berry count four → **five**; h1 break `sm:` → **`min-[861px]:`**)
 **Branches off:** `ca3a5b8` (`chore: rename product Cairn → XP Gathering`)
 
 ## Goal
