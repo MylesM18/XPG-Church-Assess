@@ -1,5 +1,5 @@
 begin;
-select plan(9);
+select plan(10);
 
 -- ── strip_respondents: pure function, tested against crafted payloads ──────
 select is(
@@ -37,6 +37,13 @@ select is(
    where f -> 'respondents' <> '[]'::jsonb),
   0::bigint,
   'every flag in a multi-flag payload is stripped');
+
+select is(
+  jsonb_array_length(
+    strip_respondents('{"dispersion_flags":[{"respondents":[{"label":"A","mean":1}]},{"respondents":[{"label":"B","mean":2}]}]}'::jsonb)
+      -> 'dispersion_flags'),
+  2,
+  'both flags survive stripping');
 
 -- ── the partial unique index ───────────────────────────────────────────────
 select has_index('public', 'report_shares', 'report_shares_one_active_per_run',
