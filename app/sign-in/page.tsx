@@ -57,7 +57,7 @@ export default function SignInPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 px-6">
-      <h1 className="font-display text-3xl text-ink">Sign in to Cairn</h1>
+      <h1 className="font-display text-3xl text-ink">Sign in to XP Gathering</h1>
 
       {sent ? (
         <p className="font-body text-ink-soft">

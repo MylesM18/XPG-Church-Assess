@@ -8,7 +8,7 @@ export default async function Home() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center gap-6 px-6 text-center">
-      <h1 className="font-display text-5xl text-ink">Cairn</h1>
+      <h1 className="font-display text-5xl text-ink">XP Gathering</h1>
       <p className="font-body text-lg text-ink-soft">
         Church health, one honest look at a time.
       </p>

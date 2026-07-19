@@ -6,7 +6,7 @@ const fraunces = Fraunces({ subsets: ['latin'], display: 'swap', variable: '--fo
 const hanken = Hanken_Grotesk({ subsets: ['latin'], display: 'swap', variable: '--font-hanken' })
 
 export const metadata: Metadata = {
-  title: 'Cairn',
+  title: 'XP Gathering',
   description: 'Church health, one honest look at a time.',
 }
 
