@@ -148,7 +148,10 @@ This matches the existing PDF behaviour documented at `lib/report/view.ts:30`.
 **The trap this design guards against:** the stored `payload` genuinely contains respondent
 names — the local fixture diagnosis has them. Two independent mechanisms must both fail before a
 name can leak: the SQL strip in `get_shared_report`, and the `'shared'` audience rule in
-`buildReportView`. Additionally, `/r/[shareToken]/page.tsx` must be a **Server Component** that
+`buildReportView`. Both cover `payload` only — AI `prose` is in scope for neither, which is why
+`get_shared_report` no longer returns a `prose` column at all (`20260718000600`) and the page
+renders deterministic `fallbackProse` unconditionally. Prose is structurally absent from the anon
+path, not merely unused. Additionally, `/r/[shareToken]/page.tsx` must be a **Server Component** that
 passes only the built `ReportView` to any child, never the raw payload — otherwise names would
 travel to the browser inside RSC flight data while remaining invisible in the rendered page.
 

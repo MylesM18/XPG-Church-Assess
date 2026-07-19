@@ -112,6 +112,12 @@ export function passesFactCheck(
   // name-free (lib/ai/fallback.ts). The `?? []` guards are deliberate even though both
   // fields are non-optional in the type — same reasoning as (4), never trust the shape of
   // engine output at a security boundary.
+  //
+  // Scope: exact full labels only. `Priscilla`, `Vandermeer` and `P. Vandermeer` all still pass.
+  // This is NOT a general PII filter — do not extend trust to it as one. That is sufficient here
+  // because the public /r/[shareToken] path no longer receives prose at all (20260718000600), and
+  // on the authenticated diagnosis/PDF paths respondent names render by design. Generation-time
+  // only: prose persisted before this gate is unaffected.
   const haystack = stringValues(ai).toLowerCase();
   for (const f of d.dispersion_flags ?? []) {
     for (const r of f.respondents ?? []) {
