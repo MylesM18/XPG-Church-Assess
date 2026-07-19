@@ -1,7 +1,9 @@
 -- get_shared_report: anon-callable tokenized read of one diagnosis. Mirrors the security
 -- contract of get_invitation_context exactly — revoked, expired and unknown tokens all
 -- return the IDENTICAL invalid row, so there is no oracle distinguishing them. The payload
--- is passed through strip_respondents so respondent names never leave Postgres on this path.
+-- is passed through strip_respondents — which empties both dispersion_flags[].respondents
+-- and evidence_trail[].refs (20260718000500) — so respondent names never leave Postgres on
+-- this path.
 create function public.get_shared_report(p_token uuid)
 returns table(valid boolean, payload jsonb, prose jsonb, church_name text, brand_color text)
 language plpgsql

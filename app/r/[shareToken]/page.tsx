@@ -1,7 +1,8 @@
 // app/r/[shareToken]/page.tsx
 // Public, tokenized, read-only report. No auth. Rendered with audience 'shared', which is
 // the SECOND of two independent respondent-name strips — get_shared_report already removed
-// them in SQL. Both must fail before a name can leak.
+// them in SQL (strip_respondents empties both dispersion_flags[].respondents and
+// evidence_trail[].refs). Both must fail before a name can leak.
 //
 // This is a Server Component and stays one: it passes only the built ReportView and the
 // already-stripped Diagnosis to children. Handing the raw RPC row to a Client Component
