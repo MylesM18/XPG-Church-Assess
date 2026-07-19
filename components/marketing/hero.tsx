@@ -1,3 +1,5 @@
+import { ChainViz } from '@/components/marketing/chain-viz'
+
 export function Hero() {
   return (
     <section className="grid items-center gap-[34px] pb-16 pt-[82px] min-[861px]:grid-cols-[1.15fr_.85fr] min-[861px]:gap-12">
@@ -51,6 +53,7 @@ export function Hero() {
           Results are private to your church&rsquo;s leadership. You control who sees them.
         </p>
       </div>
+      <ChainViz />
     </section>
   )
 }
