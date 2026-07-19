@@ -3,7 +3,7 @@ import type { ReportBlocks } from '../ai/fallback';
 import type { Methodology } from '../methodology/schema';
 import { chainWalk, type StageView } from './chain-walk';
 
-export type ReportAudience = 'screen' | 'pdf';
+export type ReportAudience = 'screen' | 'pdf' | 'shared';
 
 export interface ReportView {
   verdict: string;
@@ -16,7 +16,7 @@ export interface ReportView {
   gating?: string;
   generosityMode: GenerosityMode;
   dispersion?: { text: string; respondents: Array<{ label: string; mean: number }> };
-  nextStep: { callType: string; hook: string; text: string };
+  nextStep?: { callType: string; hook: string; text: string };
   appendix: { categories: Array<DiagnosisCategory & { name: string }>; benchmarkNote: string };
 }
 
@@ -25,9 +25,12 @@ export interface ReportView {
  * document consume this so section content and ordering cannot drift apart;
  * only layout primitives differ between them.
  *
- * audience === 'pdf' empties dispersion.respondents. A PDF leaves the
+ * audience 'pdf' and 'shared' both empty dispersion.respondents. Each leaves the
  * permission wall, so the per-person name-to-score list must not travel with
- * it. The field stays present-but-empty so the narrative still renders.
+ * them. The field stays present-but-empty so the narrative still renders.
+ *
+ * audience 'shared' additionally drops nextStep: the CTA is an admin action, and
+ * a board member reading a forwarded link cannot take it.
  */
 export function buildReportView(
   d: Diagnosis,
@@ -69,11 +72,17 @@ export function buildReportView(
     dispersion: blocks.dispersion
       ? {
           text: blocks.dispersion,
-          respondents: opts.audience === 'pdf' ? [] : (flag?.respondents ?? []),
+          respondents:
+            opts.audience === 'pdf' || opts.audience === 'shared'
+              ? []
+              : (flag?.respondents ?? []),
         }
       : undefined,
 
-    nextStep: { callType: d.offer.call_type, hook: d.offer.hook, text: blocks.next_step },
+    nextStep:
+      opts.audience === 'shared'
+        ? undefined
+        : { callType: d.offer.call_type, hook: d.offer.hook, text: blocks.next_step },
     appendix: {
       categories: d.categories.map((c) => ({ ...c, name: names.get(c.category_id) ?? c.category_id })),
       benchmarkNote: blocks.benchmark_note,

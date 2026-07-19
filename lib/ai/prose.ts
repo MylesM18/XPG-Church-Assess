@@ -46,11 +46,14 @@ function stringValues(b: ReportBlocks): string {
 }
 
 /**
- * Q3 guardrail. Pure, no I/O. Any failing check ⇒ generateProse returns null.
+ * Q3 guardrail. Pure, no I/O. Any of the 5 checks failing ⇒ generateProse returns null.
  *   1. Field parity     — the set of populated fields in `ai` must equal that of `draft`.
  *   2. Numeric containment — every number in `ai[field]` must be a value present in `draft[field]`
  *      (checked per field, not against a global allowed set — see rationale below).
  *   3. Category fidelity — if primary_constraint is non-null, its category name must appear in `ai`.
+ *   4. Primary-score pin — if primary_constraint is non-null, that category's true score must
+ *      appear in `ai.verdict` (closes the "scored 100 out of 100" hole prong 2 alone misses).
+ *   5. Respondent anonymity — no `dispersion_flags[].respondents[].label` may appear in `ai`.
  */
 export function passesFactCheck(
   ai: ReportBlocks,
@@ -100,6 +103,26 @@ export function passesFactCheck(
   if (d.primary_constraint) {
     const primaryCategory = d.categories.find(c => c.category_id === d.primary_constraint?.category_id);
     if (primaryCategory && !extractNumbers(ai.verdict).includes(primaryCategory.score)) return false;
+  }
+
+  // 5. Respondent anonymity. The user message embeds JSON.stringify(d), which carries
+  // dispersion_flags[].respondents[].label. Nothing downstream strips prose, so a reword
+  // that names an individual reaches the public /r/[shareToken] page unfiltered. Fail
+  // closed: returning false routes the caller to deterministic prose, which is provably
+  // name-free (lib/ai/fallback.ts). The `?? []` guards are deliberate even though both
+  // fields are non-optional in the type — same reasoning as (4), never trust the shape of
+  // engine output at a security boundary.
+  //
+  // Scope: exact full labels only. `Priscilla`, `Vandermeer` and `P. Vandermeer` all still pass.
+  // This is NOT a general PII filter — do not extend trust to it as one. That is sufficient here
+  // because the public /r/[shareToken] path no longer receives prose at all (20260718000600), and
+  // on the authenticated diagnosis/PDF paths respondent names render by design. Generation-time
+  // only: prose persisted before this gate is unaffected.
+  const haystack = stringValues(ai).toLowerCase();
+  for (const f of d.dispersion_flags ?? []) {
+    for (const r of f.respondents ?? []) {
+      if (r.label && haystack.includes(r.label.toLowerCase())) return false;
+    }
   }
 
   return true;
@@ -185,7 +208,7 @@ export async function generateProse(
     if (!passesFactCheck(ai, draft, d, methodology)) {
       // Do not log `ai` or `draft` here — they are report content (respondent labels,
       // church-specific scores), not a diagnostic reason.
-      console.warn('[m5b] AI prose: reword failed fact-check (field parity / numeric containment / category or score fidelity); falling back to deterministic prose');
+      console.warn('[m5b] AI prose: reword failed fact-check (field parity / numeric containment / category or score fidelity / respondent anonymity); falling back to deterministic prose');
       return null;
     }
     return ai;

@@ -97,4 +97,29 @@ describe('buildReportView', () => {
     expect(v.verdict).toBeTruthy();
     expect(v.appendix.categories.length).toBe(2);
   });
+
+  it('drops respondent names for the shared audience but keeps the section', () => {
+    const v = buildReportView(diagnosis(WITH_DISPERSION), blocks({ dispersion: 'Your leaders split.' }),
+      methodology, { audience: 'shared' });
+    expect(v.dispersion).toBeDefined();
+    expect(v.dispersion?.text).toBe('Your leaders split.');
+    expect(v.dispersion?.respondents).toEqual([]);
+  });
+
+  it('drops the next-step CTA for the shared audience', () => {
+    const v = buildReportView(diagnosis(), blocks(), methodology, { audience: 'shared' });
+    expect(v.nextStep).toBeUndefined();
+  });
+
+  // Asserted separately from 'shared' on purpose: a future change to one audience must not
+  // be able to silently redefine the other.
+  it('keeps the next-step CTA for the pdf audience', () => {
+    const v = buildReportView(diagnosis(), blocks(), methodology, { audience: 'pdf' });
+    expect(v.nextStep?.text).toBe('Start with the first weekend touchpoint.');
+  });
+
+  it('keeps the next-step CTA for the screen audience', () => {
+    const v = buildReportView(diagnosis(), blocks(), methodology, { audience: 'screen' });
+    expect(v.nextStep?.text).toBe('Start with the first weekend touchpoint.');
+  });
 });

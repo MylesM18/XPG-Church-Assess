@@ -27,6 +27,27 @@ const dHealthy = diagnose(
 );
 const draft3 = fallbackProse(dHealthy, m);
 
+// Two respondents who disagree sharply on one category, so the engine really emits
+// dispersion_flags[].respondents[] carrying their labels. A respondent-anonymity test built
+// on a fixture with an EMPTY respondents array would pass because the loop never runs.
+const NAMED = 'Priscilla Vandermeer';
+function cat2(id: string, a: number, b: number): Response[] {
+  const c = m.questions.categories.find(x => x.id === id)!;
+  return c.items.flatMap(it => [
+    { category_id: id, item_id: it.id, value: a, respondent_label: NAMED },
+    { category_id: id, item_id: it.id, value: b, respondent_label: 'Marcus Ellingsworth' },
+  ]);
+}
+
+// guest stays the primary constraint; comm carries the disagreement (means 1 and 9 →
+// population stddev 4.0, over the 2.0 dispersion threshold in methodology/rules.yaml).
+const dNamed = diagnose(
+  [...cat2('guest', 3, 3), ...cat2('conn', 7, 7), ...cat2('disc', 7, 7), ...cat2('vol', 7, 7),
+   ...cat2('gen', 7, 7), ...cat2('gov', 7, 7), ...cat2('comm', 1, 9), ...cat2('sys', 7, 7)],
+  m, { attendance_band: '500_999' },
+);
+const draftNamed = fallbackProse(dNamed, m);
+
 describe('passesFactCheck', () => {
   it('(a) accepts a faithful reword — same numbers, fields, category', () => {
     const ai = { ...draftFull, verdict: draftFull.verdict + ' In plain terms, this is the ceiling.' };
@@ -104,5 +125,21 @@ describe('passesFactCheck', () => {
     expect(guestScore).not.toBe(100);
     const ai = { ...draftFull, verdict: draftFull.verdict.replace(String(guestScore), '100') };
     expect(passesFactCheck(ai, draftFull, dBroken, m)).toBe(false);
+  });
+
+  it('(k) rejects a reword that names an individual respondent (respondent anonymity)', () => {
+    // Precondition: the fixture genuinely carries the label, so the gate's loop can fire.
+    expect(dNamed.dispersion_flags.some(f => f.respondents.some(r => r.label === NAMED))).toBe(true);
+    expect(draftNamed.evidence).toBeDefined();
+    // Nothing downstream strips prose, so a reword that names an individual would reach the
+    // public /r/[shareToken] page unfiltered. Fail closed to deterministic prose instead.
+    const ai = { ...draftNamed, evidence: `${draftNamed.evidence} ${NAMED} rated this lowest.` };
+    expect(passesFactCheck(ai, draftNamed, dNamed, m)).toBe(false);
+  });
+
+  it('(l) FIRING POSITIVE CONTROL for (k): the same reword without the name passes', () => {
+    // If this did not pass, (k) would prove nothing — it would be failing on some other gate.
+    const ai = { ...draftNamed, evidence: `${draftNamed.evidence} One campus lead rated this lowest.` };
+    expect(passesFactCheck(ai, draftNamed, dNamed, m)).toBe(true);
   });
 });
