@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useEffect, useRef } from 'react'
 import { LiveStatus } from '@/components/live-status'
 import { shareReport, revokeShare, type ShareResult } from './actions'
 
@@ -41,6 +41,33 @@ export function ShareControl({
       ? 'Share link revoked.'
       : null
 
+  // Focus recovery for the branch swap. Minting and revoking each unmount the button the user just
+  // activated and mount a different one at the same position. The two branches are structurally
+  // unlike -- a Fragment vs a bare form -- so React cannot reconcile the button in place, and focus
+  // falls to <body>. Measured failing at the status quo. See the spec section 5.
+  const successorRef = useRef<HTMLButtonElement | null>(null)
+  const acted = useRef(false)
+  const busy = minting || revoking
+
+  // Arm only while this component's own action is pending, so the successor does not steal focus on
+  // first paint or on an unrelated revalidation of the same path. DISARM on an error settle: on that
+  // path `existingLink` does not change, so the consume effect below never runs and the flag would
+  // otherwise stay armed indefinitely -- a later unrelated change to existingLink, from another admin
+  // or another tab, would then move focus here while the user is somewhere else entirely.
+  useEffect(() => {
+    if (busy) acted.current = true
+    else if (error) acted.current = false
+  }, [busy, error])
+
+  // Consume. By the time this runs the swap has committed and React has attached the ref to the
+  // successor button. On mount `acted` is false, so this is inert on first paint with no explicit
+  // first-mount guard -- the same solved-by-construction shape as `announcement` above.
+  useEffect(() => {
+    if (!acted.current) return
+    acted.current = false
+    successorRef.current?.focus()
+  }, [link])
+
   return (
     <div className="flex flex-col gap-2">
       {link ? (
@@ -55,6 +82,7 @@ export function ShareControl({
             <input type="hidden" name="church_id" value={churchId} />
             <input type="hidden" name="run_id" value={runId} />
             <button
+              ref={successorRef}
               type="submit"
               aria-disabled={revoking}
               onClick={(e) => { if (revoking) e.preventDefault() }}
@@ -69,6 +97,7 @@ export function ShareControl({
           <input type="hidden" name="church_id" value={churchId} />
           <input type="hidden" name="run_id" value={runId} />
           <button
+            ref={successorRef}
             type="submit"
             aria-disabled={minting}
             onClick={(e) => { if (minting) e.preventDefault() }}
