@@ -15,7 +15,7 @@ export default async function RespondPage({
 
   const invalid = (
     <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-4 px-6 py-12">
-      <h1 className="font-display text-2xl text-ink">This link isn&apos;t valid</h1>
+      <h1 className="font-display text-2xl text-ink">This link isn’t valid</h1>
       <p className="font-body text-ink-soft">
         It may have expired, already been used, or been entered incorrectly. Please ask whoever
         invited you for a new link.
