@@ -38,7 +38,7 @@ export function InvitePanel({
       </label>
 
       <label className="flex flex-col gap-1 font-body text-sm text-ink-soft">
-        Their email (optional — we&apos;ll email the link)
+        Their email (optional — we’ll email the link)
         <input name="invited_contact" type="email" className={inputClass} />
       </label>
 
