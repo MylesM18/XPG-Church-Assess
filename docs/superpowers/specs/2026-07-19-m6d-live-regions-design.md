@@ -472,3 +472,43 @@ attempt counter or a reset-on-submit step), and any such change would need fresh
 verification before it could be trusted. The project owner chose to record the asymmetry here rather
 than take on that additional behavioural change and its verification cost as part of this
 milestone.
+
+---
+
+## Verification outcome (recorded post-implementation)
+
+The design set out a two-tier verification strategy because component-render tests are unavailable
+in this harness (node-environment vitest, no jsdom, no `@testing-library`, no Playwright, and
+`vitest.config.ts` off-limits). All three tiers are now complete.
+
+**Tier 1 — mechanism, hydrated DOM.** The load-bearing claim is that the live region is permanently
+mounted and only its text mutates; a source grep cannot observe a remount. Measured in a real
+browser at the final commit:
+
+```
+{"sameNode":true,"text":"Probe error message.","role":"alert","className":"font-body text-sm text-berry"}
+```
+
+The same probe was run against a deliberately broken conditional-mount variant for contrast, which
+returned `{"regionExistedBeforeError":false,"sameNode":false}`. The assertion therefore
+discriminates the two designs rather than passing vacuously. The flex-gap decision was confirmed in
+the same run: `{"className":"sr-only","position":"absolute"}` inside a `display:flex` parent with
+`gap:24px`, so the empty region contributes no phantom gap row.
+
+**Tier 2 — application.** `tests/a11y/live-status-component.test.ts` pins the component's shape and
+`tests/a11y/live-regions-applied.test.ts` pins its application across `app/` and `components/`. Both
+were proven non-vacuous by reintroducing the defect and observing the failure name the offending
+file, by two independent parties across two different files.
+
+**Tier 3 — observed announcement.** A human VoiceOver pass was run by the project owner covering the
+three configurations this milestone ships: `role="alert"` (assertive), `role="status"` on a
+permanently `sr-only` element (polite — the least-exercised configuration here), and the focus-move
+success path. **All three announced correctly.**
+
+**Scope of the tier-3 evidence, stated precisely.** The pass was run against a temporary harness page
+that used the real `LiveStatus` component and the real focus-move pattern, because the production
+sites need seeded data to reach (`share-control` requires an admin session with a diagnosis run;
+`answer-form` requires a valid respond token). It therefore confirms that the **mechanism** is
+announced by a real screen reader. It is one step removed from observing each of the ten production
+sites individually, which tier 2 covers statically instead. The SC 4.1.3 conformance claim rests on
+all three tiers together.
