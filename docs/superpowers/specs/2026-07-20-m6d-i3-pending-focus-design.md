@@ -181,3 +181,42 @@ disable fix.
 
 Also still carried forward from earlier items: the repeated-identical-error asymmetry at the five
 `useActionState` sites, and eng-spec §16.10(c)'s missing `app/error.tsx`.
+
+---
+
+## Verification outcome (recorded post-implementation)
+
+All three tiers complete, measured 2026-07-20 at `f337c7b`.
+
+**Tier 1 — census.** `tests/a11y/pending-controls.test.ts`, 4 tests. Proven non-vacuous in both
+directions. ⚠️ Its guard assertion was originally **file-granular** and was found — by probing an
+assertion the author had not exercised — to stay GREEN when only one of `share-control.tsx`'s **two**
+controls lost its guard. It now counts guards per file and requires `guards >= aria-disabled
+bindings`; the previously-slipping case fails with `share-control.tsx (2 controls, 1 guards)`.
+**A presence check cannot verify a per-site invariant when one file holds several sites.**
+
+**Tier 2 — browser proof, both directions.** Sampled from *inside* the page during the pending
+phase, because an out-of-process evaluation can land after the action resolves and report a false
+pass:
+
+| | during pending |
+|---|---|
+| native `disabled` (status quo) | `active=BODY isButton=false` |
+| `aria-disabled` + guard (shipped) | `active=BUTTON isButton=true aria=true` |
+
+Guard verified separately: with `aria-disabled="true"` already committed, two further clicks left
+`invocations=1`.
+
+**Tier 3 — the Tailwind variant.** The generated rule is
+`.aria-disabled\:opacity-50[aria-disabled="true"] { opacity: 0.5; }`, and with the transition
+suppressed the computed opacity goes **1 → 0.5** when the attribute flips. ⚠️ A first reading showed
+`opacity=1` during pending and looked like a failure; it was the button's own `transition-opacity`
+caught mid-flight, not a compile failure. Worth knowing before someone re-measures and reaches the
+wrong conclusion.
+
+**Gates at `f337c7b`:** typecheck 0 · lint 0 · **193 tests / 45 files** · build 0 · U+2019 15.
+
+**What remains unproven.** No screen reader was run against these controls, so how assistive
+technology announces `aria-disabled` on a *submit* control mid-action is untested. Separately, the
+second focus loss — when a control unmounts after success — is untouched here and is recorded as
+M6d I-4 in §6.
