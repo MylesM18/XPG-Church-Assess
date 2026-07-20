@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react'
 import { createInvitation, type InviteResult } from './actions'
+import { LiveStatus } from '@/components/live-status'
 
 const initial: InviteResult = { link: null, emailed: false, error: null }
 
@@ -50,7 +51,21 @@ export function InvitePanel({
         {pending ? 'Creating…' : 'Create invitation'}
       </button>
 
-      {state.error && <p className="font-body text-sm text-berry">{state.error}</p>}
+      <LiveStatus tone="error" message={state.error} className="font-body text-sm text-berry" />
+
+      {/* Announcement only — the visible sentence and the <code> below are unchanged. The URL is
+          deliberately excluded so a screen reader does not spell out a ~60-character token. */}
+      <LiveStatus
+        tone="status"
+        className="sr-only"
+        message={
+          state.link
+            ? state.emailed
+              ? 'Invitation emailed. The link is shown below.'
+              : 'Invitation created but not emailed. The link is shown below.'
+            : null
+        }
+      />
 
       {state.link && (
         <div className="flex flex-col gap-1 rounded-md border border-line bg-paper p-3">
