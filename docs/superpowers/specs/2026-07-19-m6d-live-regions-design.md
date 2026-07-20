@@ -8,7 +8,8 @@ decisions 4–5 and all four design sections in session 113 (2026-07-19).
 sites, not eleven** (§2); three section cross-references pointed at the wrong section (§2, §3, §4);
 the §1 quote was labelled "verbatim" while being condensed; and the success half holds **five**
 announcements, not four, which needed reconciling against the approved headline figure of 14 (§2
-arithmetic note). **One item needs Natalie's confirmation — see that note.**
+arithmetic note). **That note is now CONFIRMED by Natalie (session 115, 2026-07-20): the headline
+stays 14. No open questions remain.**
 **Predecessor:** M6c is SHIPPED and MERGED. The **eleven pre-existing** files this spec touches are
 byte-identical between M6c's head `a8507bd` and merged master — verified by
 `git diff a8507bd..master` returning empty across the whole file set — so every code fact below
@@ -70,7 +71,8 @@ carries the announcement. Those two genuinely need error handling only.
 **14 sites = the 10 error sites + these 4 extra success sites.** Two files (`invite-panel`,
 `invite-member-form`) appear in both halves and therefore carry two regions each.
 
-⚠️ **Arithmetic note.** §5 describes **five** success announcements, not four. The fifth is
+⚠️ **Arithmetic note — CONFIRMED by Natalie, session 115 (2026-07-20). The headline figure stays
+14; this framing is ratified, not open.** §5 describes **five** success announcements, not four. The fifth is
 `components/answer-form.tsx`'s `done` branch, which is **not** an extra site: eng-spec decision 9
 already names it explicitly as the worst case among the ten, so it is counted inside the ten rather
 than added to them. "Four extra" therefore means *four not already named by decision 9*. The
