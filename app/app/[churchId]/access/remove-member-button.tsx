@@ -12,7 +12,7 @@ export function RemoveMemberButton({ churchId, userId }: { churchId: string; use
       <input type="hidden" name="church_id" value={churchId} />
       <input type="hidden" name="user_id" value={userId} />
       <button type="submit" disabled={pending}
-        className="font-body text-xs text-berry-deep underline underline-offset-2 hover:opacity-80 disabled:opacity-50">
+        className="py-2 font-body text-xs text-berry-deep underline underline-offset-2 hover:opacity-80 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
         {pending ? 'Removing…' : 'Remove'}
       </button>
       {state.error && <p className="font-body text-xs text-berry">{state.error}</p>}
