@@ -10,10 +10,7 @@ const ENABLERS = ['Governance', 'Communication', 'Systems']
 
 export function ChainViz() {
   return (
-    <div
-      aria-hidden="true"
-      className="rounded-xl border border-line bg-white px-[26px] py-7 shadow-sm"
-    >
+    <div className="rounded-card border border-line bg-white px-[26px] py-7 shadow-sm">
       <h2 className="mb-5 font-body text-[10.5px] font-semibold uppercase tracking-[1.8px] text-ink-soft">
         How your church is read
       </h2>
