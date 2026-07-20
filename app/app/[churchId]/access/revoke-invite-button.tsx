@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react'
 import { revokeInvitation, type ManageResult } from './actions'
+import { LiveStatus } from '@/components/live-status'
 
 const initial: ManageResult = { error: null }
 
@@ -15,7 +16,7 @@ export function RevokeInviteButton({ churchId, inviteId }: { churchId: string; i
         className="py-2 font-body text-xs text-berry-deep underline underline-offset-2 hover:opacity-80 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
         {pending ? 'Revoking…' : 'Revoke'}
       </button>
-      {state.error && <p className="font-body text-xs text-berry">{state.error}</p>}
+      <LiveStatus tone="error" message={state.error} className="font-body text-xs text-berry" />
     </form>
   )
 }
