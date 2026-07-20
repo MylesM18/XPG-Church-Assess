@@ -136,9 +136,8 @@ export default async function DashboardPage({
         ) : (
           <button
             type="button"
-            disabled
             aria-disabled="true"
-            className="cursor-not-allowed rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink-soft opacity-60"
+            className="cursor-not-allowed rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             Generate diagnosis{' '}
             <span className="text-xs">
