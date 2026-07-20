@@ -104,7 +104,7 @@ export default async function DiagnosisPage({
       <div className="flex flex-col gap-4">
         <a
           href={`/api/report/${run!.id}/pdf`}
-          className="font-body text-sm text-ink-soft underline underline-offset-4"
+          className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
         >
           Download PDF
         </a>
