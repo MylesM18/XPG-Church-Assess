@@ -29,7 +29,7 @@ Everything below serves these. If a decision trades one of these away for conven
   /page.tsx               public landing
   /get-started            church profile creation (auth-gated)
   /app/[churchId]         admin dashboard
-  /app/[churchId]/report  the diagnosis (auth + membership)
+  /app/[churchId]/diagnosis  the diagnosis (auth + membership)
   /respond/[token]        the invited-leader questionnaire (public, tokenized)
   /r/[shareToken]         optional shared report (opt-in, revocable)
   /api/respond/[token]    GET + POST, the ONLY anon-reachable service-role surface
@@ -60,7 +60,8 @@ Everything below serves these. If a decision trades one of these away for conven
     server.ts             server client (anon key, RLS)
     service.ts            service-role client — NEVER BUILT (guardrail: anon-key + RLS only; /api/respond/* uses SECURITY DEFINER RPCs instead, see §6)
   /report
-    render.tsx            report React component (used by page + PDF)
+    render.ts             plain-text fallback renderer (the report React component lives at
+                          app/app/[churchId]/diagnosis/report.tsx, used by page + PDF)
 /methodology              THE IP. versioned YAML.
   questions.yaml
   benchmarks.yaml
@@ -75,7 +76,7 @@ Everything below serves these. If a decision trades one of these away for conven
 ```
 
 > **M6a deviation (2026-07-18):** mint and revoke of report shares are implemented as server
-> actions in `app/app/[churchId]/diagnosis/actions.ts`, not as `POST / DELETE /api/report-share`.
+> actions in `app/app/[churchId]/diagnosis/actions.ts`, not as a dedicated `POST` / `DELETE` REST route.
 > This matches the codebase's convergence on server actions for every dashboard mutation
 > (`createInvitation`, `generateDiagnosis`, the M5d access panel), gains CSRF protection and
 > progressive enhancement for free, and avoids adding a second public route.
@@ -449,9 +450,9 @@ Server-side, official `@anthropic-ai/sdk`. **API key server-only.** Both calls a
 ## 9. Report generation & viewing
 
 - **Deterministic first:** on report view, compute the `response_hash`; if `diagnoses` has no fresh row, run `diagnose()` and upsert the `payload`. Then produce `prose` (AI or fallback), cache it.
-- **In-app report** at `/app/[churchId]/report`, React (`/lib/report/render.tsx`), auth + membership enforced by RLS. This is the primary, secure view. Layout follows the prototype: verdict hero, evidence, blind-spot gap bars, cost, do-not-work-on, gating flag, dispersion, next step, offer, and an appendix of all eight scores with chain tags. Overall score lives in the appendix, never the headline.
+- **In-app report** at `/app/[churchId]/diagnosis`, React (`app/app/[churchId]/diagnosis/report.tsx`), auth + membership enforced by RLS. This is the primary, secure view. Layout follows the prototype: verdict hero, evidence, blind-spot gap bars, cost, do-not-work-on, gating flag, dispersion, next step, offer, and an appendix of all eight scores with chain tags. Overall score lives in the appendix, never the headline.
 - **PDF** via `/api/report/[runId]/pdf`, render the same component with Playwright (or `@react-pdf` if simpler) to a downloadable PDF, auth + membership enforced. The XP forwards this to the board.
-- **Optional share link**, `POST /api/report-share` (admin only) mints a `report_shares` token; `/r/[shareToken]` renders the report read-only if the share row exists and is not revoked/expired. **Off by default; sharing is an explicit, revocable admin action**, this preserves "you control who sees it" while enabling the practical "send it to a board member without an account" case.
+- **Optional share link**, server actions in `app/app/[churchId]/diagnosis/actions.ts` (admin only) mint and revoke a `report_shares` token; `/r/[shareToken]` renders the report read-only if the share row exists and is not revoked/expired. **Off by default; sharing is an explicit, revocable admin action**, this preserves "you control who sees it" while enabling the practical "send it to a board member without an account" case.
 
 ---
 
@@ -461,7 +462,7 @@ Server-side, official `@anthropic-ai/sdk`. **API key server-only.** Both calls a
 - **`/get-started`**, church profile form (the fields in §4). Auth-gate it: if not signed in, send through magic-link, then return here. On submit, call `create_church_with_admin`, resolve + store `brand_color`, create the `assessment_runs` row, redirect to the dashboard.
 - **`/app/[churchId]` dashboard**, branded header (monogram tile + name), completion progress, the eight category cards (chain-position glyph, status, assigned respondents including multiple per category, invite + answer-yourself actions), a "Manage access" entry, and a "View diagnosis" affordance. Mirror the prototype.
 - **`/respond/[token]`**, the questionnaire the invited leader sees: branded with the church they're helping, the anchored 1–10 items for one category, an honesty preamble, and a permission note that they won't see results. On submit → thank-you screen with the confidentiality explanation. No results, ever.
-- **`/app/[churchId]/report`**, the diagnosis, members only.
+- **`/app/[churchId]/diagnosis`**, the diagnosis, members only.
 
 ---
 
@@ -534,5 +535,16 @@ Do not proceed to the next milestone until the current one meets its acceptance 
 - [ ] Respond handlers validate token status/expiry and validate every submitted value (int 1–10, item belongs to category).
 - [ ] Rate limiting on `/api/respond/*` and `/api/invitations`.
 - [ ] No results, scores, or church internals ever returned on any anon path.
-- [ ] A non-member hitting `/app/[churchId]/report` is denied by RLS, not just redirected by the UI.
-```
+- [ ] A non-member hitting `/app/[churchId]/diagnosis` is denied by RLS, not just redirected by the UI.
+
+---
+
+## 16. M6c decisions (2026-07-19): what a future "restore prototype fidelity" pass must not undo
+
+M6c was a presentational polish + accessibility milestone, CSS utility classes, ARIA attributes, one new design token, and marketing text bytes. It touched no engine, schema, or auth code. Record these five here so nobody "fixes" them back:
+
+1. **Marketing content carries three sanctioned edits from the prototype, not two:** `Cairn` → `XP Gathering`; the ghost CTA relabelled `See a completed assessment` → `See how it works`; and **curly apostrophes throughout**. Commit `53e364b`'s message and the M6b ledger's Task-5 note both claim the change "restored the prototype's typographic `’`", the prototype actually has straight `0x27` at all three sites, so that record is backwards. The apostrophe edit is a deliberate typographic *improvement*, not a fidelity restoration. (`53e364b` is already merged into `origin/master`; this entry is a documentation correction, not a history rewrite.)
+2. **`--ink-faint` is deliberately NOT adopted (won't-fix).** Measured **3.23:1** on paper `#FBF9F5`, against `--ink-soft`'s **6.65:1**. All prototype uses of the faint tone are 8.5–13px text, small enough that WCAG SC 1.4.3's 3:1 large-text allowance never applies. Adopting it would have introduced an AA contrast failure.
+3. **`--radius-card: 14px` is adopted**, at the two marketing card sites only, the one new design token this milestone introduces.
+4. **`min-[861px]:` is a marketing-only typographic exception**, not a codebase convention. It lives solely in `components/marketing/`; app routes keep the standard Tailwind `sm:`/`md:`/`lg:` scale.
+5. **Range sliders are excluded from the tap-target sweep**, under SC 2.5.8's user-agent-control exception for native form controls with platform-supplied hit areas.
