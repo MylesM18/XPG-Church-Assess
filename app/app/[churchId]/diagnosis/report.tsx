@@ -19,7 +19,7 @@ export function EmptyState({ churchId }: { churchId: string }) {
       <p className="font-body text-ink-soft">This assessment hasn’t been diagnosed yet.</p>
       <Link
         href={`/app/${churchId}`}
-        className="font-body text-sm text-ink underline underline-offset-2 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        className="py-1.5 font-body text-sm text-ink underline underline-offset-2 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
       >
         ← Back to the dashboard
       </Link>

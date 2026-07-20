@@ -55,7 +55,7 @@ export function InvitePanel({
       {state.link && (
         <div className="flex flex-col gap-1 rounded-md border border-line bg-paper p-3">
           <p className="font-body text-sm text-ink">
-            {state.emailed ? 'Invitation emailed. Link:' : "Invitation created — we couldn't email it, so share this link:"}
+            {state.emailed ? 'Invitation emailed. Link:' : "Invitation created — we couldn’t email it, so share this link:"}
           </p>
           <code className="break-all font-body text-xs text-ink-soft">{state.link}</code>
         </div>
