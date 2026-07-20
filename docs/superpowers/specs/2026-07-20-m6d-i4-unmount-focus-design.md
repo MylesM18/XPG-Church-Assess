@@ -325,8 +325,22 @@ crux evidence. Six recordings, each beginning with the `focusin → BUTTON` entr
 | 4 | mint a share link | `focusin →` successor Revoke button |
 | 5 | revoke a share link | `focusin →` successor Create button |
 | 6 | each of D-1/D-2/D-3 with its fix removed | **seen to fail** |
+| 7 | commit ordering on a successful settle (below) | recorded, whichever way it goes |
 
 Row 6 is not optional. Rows 1–5 prove the mechanism; row 6 is what makes rows 1–5 mean anything.
+
+**Row 7 — an assumption in this spec that was reasoned, not measured.** §5 and §6.2 both rest on the
+claim that on a *successful* settle `pending → false` and the row's unmount land in the **same**
+React commit, so no post-settle effect ever runs to clear the armed flag. Tracing both branches
+suggests the mechanism is safe either way — if they land in separate commits, the arm/disarm effect
+runs with `pending=false, error=null`, neither branch fires, and the flag stays armed as intended.
+**But "I traced it" is the exact standard that produced three defects in this item's inputs.**
+Instrument the two effects in the probe, record which commits they actually run in, and write the
+result into the verification outcome rather than inheriting the assumption.
+
+A narrow related edge, judged unreachable rather than handled: if an error and a change to
+`existingLink` ever arrived in the same commit at share-control, the disarm would run first and
+suppress a *legitimate* focus move. Recorded so the judgement is visible rather than buried.
 
 ### 9.3 Tier 3 — progressive enhancement unchanged
 
@@ -372,6 +386,21 @@ by `rm -rf .next`, before any gate run that is treated as authoritative — a st
 ## 10. Out of scope
 
 Recorded, deliberately not folded in:
+
+- **Neither row action announces its success.** `remove-member-button.tsx` and
+  `revoke-invite-button.tsx` carry only `<LiveStatus tone="error">`; the three `tone="status"`
+  success announcements in the app are at `invite-panel`, `invite-member-form` and `share-control`.
+  So after a successful removal a screen-reader user hears the focus move — `"Members, heading"` —
+  and nothing that names what happened. **Ruled by Natalie, 2026-07-20: leave it out of I-4.**
+
+  The rationale for leaving it: the focus policy written in `components/live-status.tsx` treats the
+  focus-move as the signal precisely when success leaves no successor control, which is this case;
+  the list also visibly shrinks. The rationale for revisiting it later: I-1 gave five other actions
+  an explicit success announcement, so the two destructive list actions are now the exception.
+
+  Anyone picking this up should know it is **not** a one-line addition. The announcing component
+  unmounts, so the message cannot live in the button; it would have to be owned by the list or the
+  page, both of which are server components today. That is a different design than this item's.
 
 - The repeated-identical-error asymmetry at the five `useActionState` sites — a documented
   limitation from I-1, not an SC 4.1.3 failure.
