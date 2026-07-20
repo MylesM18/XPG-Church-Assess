@@ -30,7 +30,7 @@ export function HowItWorks() {
 
       <ol className="grid gap-[22px] min-[861px]:grid-cols-3">
         {STEPS.map((step) => (
-          <li key={step.n} className="rounded-xl border border-line bg-white px-6 py-[26px]">
+          <li key={step.n} className="rounded-card border border-line bg-white px-6 py-[26px]">
             <span
               aria-hidden="true"
               className="mb-4 flex h-[34px] w-[34px] items-center justify-center rounded-full border-[1.5px] border-ink font-display text-[15px] font-semibold text-ink"
