@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { LiveStatus } from '@/components/live-status'
 import type { AnswerInput } from '@/lib/answers/validate'
 
 export interface AnswerFormItem {
@@ -26,9 +27,26 @@ export function AnswerForm({
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  const doneRef = useRef<HTMLHeadingElement>(null)
+
+  // Declared ABOVE the `if (done)` early return on purpose — hooks after it would not run on the
+  // success render and would break the rules of hooks.
+  //
+  // The submit button unmounts with the form, so without this focus falls to <body>. Moving focus
+  // to the confirmation both announces it and leaves the keyboard somewhere sensible. It is an
+  // <h1> because the form's own <h1>{categoryName}</h1> unmounts with it and the route
+  // (app/respond/[token]/page.tsx) supplies a <main> but no heading — so the success page would
+  // otherwise have no <h1> at all.
+  useEffect(() => {
+    if (done) doneRef.current?.focus()
+  }, [done])
 
   if (done) {
-    return <p className="font-body text-ink">Thank you — your answers have been recorded.</p>
+    return (
+      <h1 tabIndex={-1} ref={doneRef} className="font-display text-2xl text-ink">
+        Thank you — your answers have been recorded.
+      </h1>
+    )
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -95,7 +113,7 @@ export function AnswerForm({
         {pending ? 'Submitting…' : 'Submit'}
       </button>
 
-      {error && <p className="font-body text-sm text-berry">{error}</p>}
+      <LiveStatus tone="error" message={error} className="font-body text-sm text-berry" />
     </form>
   )
 }
