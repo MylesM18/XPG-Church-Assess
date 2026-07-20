@@ -3,9 +3,16 @@
 **Status:** APPROVED by Natalie via `superpowers:brainstorming` — decisions 1–3 in session 112,
 decisions 4–5 and all four design sections in session 113 (2026-07-19).
 **Branch:** `feat/m6d-live-regions`, cut off merged `master` `991ff96` (PR #9 merged 2026-07-20).
-**Predecessor:** M6c is SHIPPED and MERGED. All eleven files this spec touches are byte-identical
-between M6c's head `a8507bd` and merged master — verified by `git diff a8507bd..master` returning
-empty for the file set — so every code fact below still holds exactly as recorded.
+**Self-reviewed:** session 114 (2026-07-20). Six defects found **by running** and fixed inline —
+`diagnosis/actions.ts` was **not** in PR #9's diff, so the file count in decision 1 is **ten error
+sites, not eleven** (§2); three section cross-references pointed at the wrong section (§2, §3, §4);
+the §1 quote was labelled "verbatim" while being condensed; and the success half holds **five**
+announcements, not four, which needed reconciling against the approved headline figure of 14 (§2
+arithmetic note). **One item needs Natalie's confirmation — see that note.**
+**Predecessor:** M6c is SHIPPED and MERGED. The **eleven pre-existing** files this spec touches are
+byte-identical between M6c's head `a8507bd` and merged master — verified by
+`git diff a8507bd..master` returning empty across the whole file set — so every code fact below
+still holds exactly as recorded. (The twelfth file, `components/live-status.tsx`, is new.)
 **Next step:** `superpowers:writing-plans`. No implementation skill runs before that.
 
 ---
@@ -13,7 +20,8 @@ empty for the file set — so every code fact below still holds exactly as recor
 ## 1. Problem statement
 
 Recorded in `docs/XPG-Engineering-Spec.md` **section 16, decision 9** (the ninth numbered item —
-there is no heading literally named "16.9"). Verbatim summary of what it commits us to:
+there is no heading literally named "16.9"). Condensed below — the ten file names are dropped here
+and listed in full in §4:
 
 > Deferred to M6d, deliberately and not by oversight: live-region announcements (WCAG SC 4.1.3 AA).
 > `role="status"`, `role="alert"` and `aria-live` return **zero** hits across all of `app/` and
@@ -35,8 +43,10 @@ This is **pre-existing, not an M6c regression**. M6c was scoped to presentationa
 ### Decision 1 — branch base: wait for PR #9 to merge ✅ SATISFIED
 
 Rejected stacking on `feat/m6c-polish-a11y`, and rejected branching off the pre-merge
-`origin/master`. All eleven I-1 files were in PR #9's diff, so branching off the old master would
-have worked on pre-M6c versions of every one of them and conflicted in all eleven.
+`origin/master`. **All ten error sites were in PR #9's diff** (verified:
+`git diff --name-only 8a1eab5..991ff96` lists all ten), so branching off the old master would have
+worked on pre-M6c versions of every one of them and conflicted in all ten. `diagnosis/actions.ts`
+was *not* in that diff, but the ten alone settle the decision.
 
 **Status:** PR #9 merged as `991ff96`. Local `master` fast-forwarded after verifying it was a strict
 ancestor of `origin/master` (0 ahead / 33 behind). `feat/m6d-live-regions` cut off the merged master.
@@ -57,8 +67,15 @@ equally. Four additional silent success sites are therefore in scope:
 `generate-button.tsx` and `accept-button.tsx` succeed by **redirecting**, so navigation itself
 carries the announcement. Those two genuinely need error handling only.
 
-**14 sites = 10 error + 4 success.** Two files (`invite-panel`, `invite-member-form`) appear in both
-halves and therefore carry two regions each.
+**14 sites = the 10 error sites + these 4 extra success sites.** Two files (`invite-panel`,
+`invite-member-form`) appear in both halves and therefore carry two regions each.
+
+⚠️ **Arithmetic note.** §5 describes **five** success announcements, not four. The fifth is
+`components/answer-form.tsx`'s `done` branch, which is **not** an extra site: eng-spec decision 9
+already names it explicitly as the worst case among the ten, so it is counted inside the ten rather
+than added to them. "Four extra" therefore means *four not already named by decision 9*. The
+distinct (file, condition) pair count is 15; the approved headline figure of 14 counts
+`answer-form` once. No scope changes either way — this is a labelling clarification only.
 
 ### Decision 3 — mechanism: one shared `components/live-status.tsx`
 
@@ -68,9 +85,9 @@ Two technical points that **must survive into implementation**:
    content in the same tick. Screen readers register live regions on mount and announce
    *subsequent* mutations, so the first message is silently missed. **The region element must be
    permanently mounted and only its text content may change.** This is the single load-bearing claim
-   of the whole design, and §6 tier 1 exists to prove it.
+   of the whole design, and §8 tier 1 exists to prove it.
 2. **Always-mounting an empty `<p>` would cause a flex-gap layout regression.** Every parent here is
-   a flex column with a `gap` (census in §7), so an empty child would add a phantom gap row. The fix
+   a flex column with a `gap` (census in §9), so an empty child would add a phantom gap row. The fix
    is **`sr-only` when empty**: `sr-only` is `position:absolute`, absolutely-positioned children are
    not flex items and so contribute no `gap`; and unlike `display:none` it remains in the
    accessibility tree, which is exactly what a live region needs.
@@ -163,7 +180,7 @@ Every one of the ten is the identical shape and becomes:
 | `app/app/[churchId]/diagnosis/share-control.tsx` | `error` | `font-body text-sm text-ink` |
 
 Two expression forms exist — five sites use a local `error` from `useState`, five use `state.error`
-from `useActionState`. This matters only for the §6 tier-2 scan: the pattern **`error && <p`** is a
+from `useActionState`. This matters only for the §8 tier-2 scan: the pattern **`error && <p`** is a
 substring of both forms and therefore catches all ten with one search. Verified by running
 `grep -rn "error && <p" app/ components/` → exactly these ten hits and no others.
 
@@ -171,7 +188,7 @@ substring of both forms and therefore catches all ten with one search. Verified 
 
 ---
 
-## 5. The success half — 4 sites, each different
+## 5. The success half — 5 announcements, each different
 
 ### 5.1 `components/answer-form.tsx` (`done`) — focus-move
 
@@ -294,9 +311,9 @@ the same message **on purpose** — do not "improve" that.
 ## 7. File count: 12
 
 The 10 existing error sites, plus new `components/live-status.tsx`, plus
-`app/app/[churchId]/diagnosis/actions.ts`. The four success sites are all already in the ten
-(`answer-form`, `sign-in`, `invite-panel`, `invite-member-form`, `share-control`), so they add no
-new files.
+`app/app/[churchId]/diagnosis/actions.ts`. All five success announcements land in files already
+among the ten (`answer-form`, `sign-in`, `invite-panel`, `invite-member-form`, `share-control`), so
+the success half adds **no new files**.
 
 `invite-panel.tsx` and `access/invite-member-form.tsx` each carry **two** regions — an `alert` for
 errors and a `status` for the link. That is correct: they cannot both fire from a single submit.
