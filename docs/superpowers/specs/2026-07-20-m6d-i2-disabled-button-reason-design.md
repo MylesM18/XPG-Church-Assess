@@ -177,7 +177,19 @@ observing where a real Tab press lands distinguishes them, which is what the evi
 **Tier 3 — measured contrast.** See §4. Both figures measured, both agreeing with the computed
 estimates they replaced.
 
-**What remains unproven.** No screen reader was run against this control. The tier-2 evidence shows
-the control is reachable, visibly focused, and inert; it does not show how a screen reader renders
-`aria-disabled="true"` in practice, which varies by AT. A VoiceOver pass covering this control would
-close that gap, as it did for I-1.
+**Tier 4 — observed announcement.** A human VoiceOver pass was run by the project owner against this
+control. **Both halves confirmed:** the reason is spoken (label plus the bracketed explanation), and
+the control is announced as unavailable. The second half was the one that mattered — had the reason
+been spoken without the unavailable state, the control would have read as actionable to assistive
+technology, which is worse than the defect being fixed, and `aria-describedby` (rejected in §3)
+would have needed reconsidering.
+
+As with I-1, the pass ran against a temporary harness page whose button markup was verified
+byte-identical to the shipped markup, because reaching the real church page in its disabled state
+requires a magic-link session. It therefore confirms the shipped attribute combination is announced
+correctly by a real screen reader, one step removed from observing the control in its production
+context.
+
+**What remains unproven.** VoiceOver on Safari is one AT/browser pairing. NVDA and JAWS render
+`aria-disabled` with their own wording and are untested here. This is a normal limit of a
+single-pass check rather than a known gap in the implementation.
