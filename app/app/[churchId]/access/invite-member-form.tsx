@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react'
 import { inviteMember, type InviteResult } from './actions'
+import { LiveStatus } from '@/components/live-status'
 
 const initial: InviteResult = { link: null, emailed: false, error: null }
 const inputClass =
@@ -32,7 +33,22 @@ export function InviteMemberForm({ churchId }: { churchId: string }) {
         {pending ? 'Inviting…' : 'Send invitation'}
       </button>
 
-      {state.error && <p className="font-body text-sm text-berry">{state.error}</p>}
+      <LiveStatus message={state.error} tone="error" className="font-body text-sm text-berry" />
+
+      {/* Announcement only — the visible sentence and the <code> below are unchanged. The URL is
+          deliberately excluded so a screen reader does not spell out a ~60-character token. */}
+      <LiveStatus
+        message={
+          state.link
+            ? state.emailed
+              ? 'Invitation emailed. The link is shown below.'
+              : 'Invitation created but not emailed. The link is shown below.'
+            : null
+        }
+        tone="status"
+        className="sr-only"
+      />
+
       {state.link && (
         <div className="flex flex-col gap-1 rounded-md border border-line bg-paper p-3">
           <p className="font-body text-sm text-ink">

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { acceptInvitation } from './actions'
+import { LiveStatus } from '@/components/live-status'
 
 export function AcceptButton({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null)
@@ -21,7 +22,7 @@ export function AcceptButton({ token }: { token: string }) {
       >
         {pending ? 'Accepting…' : 'Accept invitation'}
       </button>
-      {error && <p className="font-body text-sm text-berry">{error}</p>}
+      <LiveStatus message={error} tone="error" className="font-body text-sm text-berry" />
     </div>
   )
 }

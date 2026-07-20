@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react'
 import { createChurch, type CreateChurchState } from './actions'
+import { LiveStatus } from '@/components/live-status'
 
 const initial: CreateChurchState = { error: null }
 
@@ -85,7 +86,7 @@ export function GetStartedForm() {
         {pending ? 'Creating…' : 'Create church'}
       </button>
 
-      {state.error && <p className="font-body text-sm text-berry">{state.error}</p>}
+      <LiveStatus message={state.error} tone="error" className="font-body text-sm text-berry" />
     </form>
   )
 }

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { generateDiagnosis } from './actions'
+import { LiveStatus } from '@/components/live-status'
 
 export function GenerateButton({ churchId }: { churchId: string }) {
   const [pending, startTransition] = useTransition()
@@ -25,7 +26,7 @@ export function GenerateButton({ churchId }: { churchId: string }) {
       >
         {pending ? 'Generating…' : 'Generate diagnosis'}
       </button>
-      {error && <p className="font-body text-sm text-berry">{error}</p>}
+      <LiveStatus message={error} tone="error" className="font-body text-sm text-berry" />
     </div>
   )
 }
