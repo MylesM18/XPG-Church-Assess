@@ -1,9 +1,10 @@
 'use client'
 
 import { useActionState } from 'react'
+import { LiveStatus } from '@/components/live-status'
 import { shareReport, revokeShare, type ShareResult } from './actions'
 
-const EMPTY: ShareResult = { link: null, error: null }
+const EMPTY: ShareResult = { link: null, error: null, status: 'idle' }
 
 export function ShareControl({
   churchId, runId, existingLink,
@@ -21,6 +22,24 @@ export function ShareControl({
   // against it. The action results are consulted only for their error messages.
   const link = existingLink
   const error = minted.error ?? revoked.error
+
+  // Gate on `link` — the server's source of truth — so a mint-then-revoke sequence reads correctly:
+  // `minted.status` is still 'created' at that point, but `link` is null, so that branch is skipped
+  // and the region says "revoked".
+  //
+  // On first paint of a page that already has a share link both statuses are 'idle', so nothing is
+  // announced on load. The first-mount problem is solved by construction, with no guard.
+  //
+  // Why not a useRef previous-value guard: it fires on any re-render where the prop changes,
+  // including unrelated revalidations of the same path, and it would still need an explicit
+  // first-mount guard. The discriminator is exact — set by the action that actually ran.
+  const announcement = link
+    ? minted.status === 'created'
+      ? 'Share link created.'
+      : null
+    : revoked.status === 'revoked'
+      ? 'Share link revoked.'
+      : null
 
   return (
     <div className="flex flex-col gap-2">
@@ -58,7 +77,8 @@ export function ShareControl({
         </form>
       )}
 
-      {error && <p className="font-body text-sm text-ink">{error}</p>}
+      <LiveStatus tone="error" message={error} className="font-body text-sm text-ink" />
+      <LiveStatus tone="status" message={announcement} className="sr-only" />
     </div>
   )
 }
