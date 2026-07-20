@@ -21,7 +21,7 @@ export function GenerateButton({ churchId }: { churchId: string }) {
             if (res && !res.ok) setError(res.error ?? 'Something went wrong.')
           })
         }
-        className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
+        className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
       >
         {pending ? 'Generating…' : 'Generate diagnosis'}
       </button>
