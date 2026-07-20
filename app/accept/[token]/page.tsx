@@ -28,7 +28,7 @@ export default async function AcceptPage({ params }: { params: Promise<{ token: 
   if (state === 'accepted') {
     return <main className={shell}><h1 className="font-display text-2xl text-ink">Already accepted</h1>
       <p className="font-body text-ink-soft">You’ve already accepted this invitation.</p>
-      <Link href="/app" className="font-body text-sm text-ink underline underline-offset-2">Go to your churches</Link></main>
+      <Link href="/app" className="font-body text-sm text-ink underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">Go to your churches</Link></main>
   }
   if (state === 'expired') {
     return <main className={shell}><h1 className="font-display text-2xl text-ink">Invitation expired</h1>
@@ -47,7 +47,7 @@ export default async function AcceptPage({ params }: { params: Promise<{ token: 
         <h1 className="font-display text-2xl text-ink">Join {p.church_name}</h1>
         <p className="font-body text-ink-soft">You’ve been invited to help lead {p.church_name} as a {label}. Sign in as {p.invited_email} to accept.</p>
         <Link href={`/sign-in?next=${next}&email=${email}`}
-          className="rounded-md border border-line bg-ink px-4 py-2 text-center font-body text-paper transition-opacity hover:opacity-90">
+          className="rounded-md border border-line bg-ink px-4 py-2 text-center font-body text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
           Sign in to accept
         </Link>
       </main>
@@ -59,7 +59,7 @@ export default async function AcceptPage({ params }: { params: Promise<{ token: 
       <main className={shell}>
         <h1 className="font-display text-2xl text-ink">Wrong account</h1>
         <p className="font-body text-berry">You’re signed in as {user!.email}, but this invitation is for {p.invited_email}. Sign out and sign back in as {p.invited_email}.</p>
-        <Link href="/sign-in" className="font-body text-sm text-ink underline underline-offset-2">Go to sign in</Link>
+        <Link href="/sign-in" className="font-body text-sm text-ink underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">Go to sign in</Link>
       </main>
     )
   }
