@@ -44,6 +44,11 @@ were, and a screen reader reading from `<body>` has lost its place. The same pro
 
 Ten controls, nine files, eight of them carrying `disabled:opacity-50`.
 
+**Two guard shapes, not one.** Eight are `type="submit"` inside a form and have no existing
+`onClick`. The remaining two — `accept-button.tsx` and `generate-button.tsx` — are `type="button"`
+with an `onClick` handler already attached and no form submission at all. §3 gives each its own
+remedy; applying shape A to a shape-B site would overwrite its handler and break the control.
+
 Three succeed by redirect (`accept-button`, `generate-button`, `get-started/form`), where focus is
 moot once the navigation happens — but they still receive the change, so the codebase carries one
 pattern rather than two.
@@ -55,18 +60,35 @@ At every one of the ten controls:
 1. `disabled={…}` → `aria-disabled={…}`, **preserving each site's own variable name** — that is
    `pending` at eight sites, `revoking` and `minting` at the two in `share-control.tsx`. The
    variable is never renamed.
-2. Add a guard so a second submission cannot fire while the first is in flight, using the same
-   variable. At `share-control`'s revoke button this reads:
+2. Add a guard so a second activation cannot fire while the first is in flight. **The ten sites take
+   two different guard shapes, and using the wrong one silently breaks the control.**
 
-   ```tsx
-   onClick={(e) => { if (revoking) e.preventDefault() }}
-   ```
-
-   and at a site whose variable is `pending`:
+   **Shape A — eight `type="submit"` buttons with no existing `onClick`.** Add one:
 
    ```tsx
    onClick={(e) => { if (pending) e.preventDefault() }}
    ```
+
+   using that site's own variable — `revoking` and `minting` at the two in `share-control.tsx`.
+   Preventing default on a submit button's click prevents the form submission, which is what the
+   native `disabled` was doing.
+
+   **Shape B — two `type="button"` controls that already have an `onClick`**
+   (`app/accept/[token]/accept-button.tsx`, `app/app/[churchId]/generate-button.tsx`). These do not
+   submit a form, so `e.preventDefault()` guards nothing, and adding a second `onClick` would
+   **overwrite the existing handler**. Instead, add an early return as the first statement inside
+   the handler already there:
+
+   ```tsx
+   onClick={async () => {
+     if (pending) return
+     setError(null)
+     …
+   }}
+   ```
+
+   `generate-button.tsx`'s handler is currently a concise arrow returning `startTransition(…)`; it
+   must be converted to a block body to take the guard.
 3. Where present, `disabled:opacity-50` → `aria-disabled:opacity-50`. Tailwind ships `aria-disabled`
    as a built-in variant mapping to `&[aria-disabled="true"]`, so this is a direct swap; the project
    is on Tailwind 4.3.2.
@@ -112,8 +134,11 @@ asserting three things:
   after this change the correct count is zero. The test asserts on the `disabled={` *binding* form,
   not on a bare `disabled` attribute, because a static `disabled` on an input remains legitimate.
 - **Exactly ten `aria-disabled={` bindings**, one per §2 site, so the swap cannot silently drop one.
-- **Each file containing `aria-disabled={` also contains `e.preventDefault()`**, so a site cannot
-  keep the accessible semantics while losing its double-submit guard.
+- **Every file containing `aria-disabled={` also contains a guard** — either `e.preventDefault()`
+  (shape A) or an early `return` inside the existing handler (shape B) — so a site cannot keep the
+  accessible semantics while losing its double-activation guard. Because the two shapes differ, the
+  test checks for the presence of a guard token appropriate to the file rather than one fixed
+  string; the plan fixes the exact assertion.
 
 An anti-vacuity assertion on the number of files scanned, matching the pattern in
 `tests/a11y/live-regions-applied.test.ts`.
