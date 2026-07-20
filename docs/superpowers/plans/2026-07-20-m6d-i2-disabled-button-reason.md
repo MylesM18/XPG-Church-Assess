@@ -290,7 +290,11 @@ Evaluate in the page:
 
 Expected: `{"focusReachedButton":true,"tagName":"BUTTON","tabIndexProperty":0,"hasDisabledAttribute":false,"ariaDisabled":"true"}`
 
-`tabIndex` of `0` is the load-bearing value: a `disabled` button reports `-1` and cannot be focused at all. If `focusReachedButton` is `false` or `hasDisabledAttribute` is `true`, stop and report.
+⚠️ **Correction, measured 2026-07-20:** an earlier draft of this step claimed a `disabled` button
+reports `tabIndex` of `-1`. It does **not** — it reports `0` even while disabled. `tabIndex` is
+therefore not a discriminator between the two states. The load-bearing checks are
+`focusReachedButton` and `hasDisabledAttribute`, plus the real Tab press in the step below. If
+`focusReachedButton` is `false` or `hasDisabledAttribute` is `true`, stop and report.
 
 - [ ] **Step 4: Prove the focus ring renders and activation is inert**
 

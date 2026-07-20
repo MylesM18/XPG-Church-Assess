@@ -82,11 +82,13 @@ The reason renders in `text-ink-soft` inside a button carrying `opacity-60`. Com
 
 | | Colour | Contrast on `#FBF9F5` |
 |---|---|---|
-| Today (`text-ink-soft` + `opacity-60`) | ≈ `#98999D` | **≈ 2.7:1** |
-| After (`text-ink-soft`, no opacity) | `#565962` | **≈ 6.6:1** |
+| Today (`text-ink-soft` + `opacity-60`) | `rgb(152,153,157)` | **2.71:1** |
+| After (`text-ink-soft`, no opacity) | `rgb(86,89,98)` | **6.65:1** |
 
-Both figures are **computed, not measured**; §5 tier 3 replaces them with a real in-browser
-measurement, and the spec should be corrected if they disagree.
+**Both figures are MEASURED**, in a hydrated DOM on 2026-07-20, and both confirmed the computed
+estimates they replace (≈2.7:1 and ≈6.6:1 respectively — the estimates and the measurements agree).
+Backgrounds measured as `rgb(251,249,245)`. The "today" row was measured by compositing the span's
+colour over paper at the button's own `opacity: 0.6`, which is how the browser renders it.
 
 Today this is exempt: SC 1.4.3 does not apply to inactive user interface components, and `disabled`
 makes the control unambiguously inactive. After the change the control is still semantically
@@ -139,3 +141,43 @@ Carried forward, not addressed here:
 - The repeated-identical-error asymmetry at the five `useActionState` sites.
 - eng-spec §16 decision 10(c): no `app/error.tsx`. A branding gap, explicitly not an accessibility
   regression.
+
+---
+
+## Verification outcome (recorded post-implementation)
+
+All three tiers complete. Measured 2026-07-20 at commit `b9d8e9b`.
+
+**Tier 1 — source-reading tripwire.** `tests/a11y/disabled-control-reason.test.ts`, 5 tests. Proven
+non-vacuous on **all three** of its assertions, independently by implementer and controller: re-adding
+`disabled`, stripping the focus ring from the button, and re-adding `opacity-60` each turn it red
+with a distinct message, and the file restores byte-identical each time.
+
+**Tier 2 — browser proof, both directions.** Run against a probe route whose button markup was
+verified byte-identical (whitespace-normalised) to the shipped markup, because reaching the real
+church page in its disabled state requires a magic-link session an agent cannot complete.
+
+| | Original (`disabled` + `opacity-60`) | Shipped (`aria-disabled`, no opacity) |
+|---|---|---|
+| One Tab press from the preceding link | lands on the link **after** the button — skipped | lands on **the button** |
+| Focus ring | not reachable | `solid` `2px` `rgb(26, 28, 34)` |
+| Activation | n/a | inert: URL unchanged, no exception |
+
+The shipped result verbatim:
+`{"afterOneTab_tag":"BUTTON","isTheButton":true,"outlineStyle":"solid","outlineWidth":"2px","outlineColor":"rgb(26, 28, 34)"}`
+
+The original result verbatim:
+`{"afterOneTab_tag":"A","landedOnButton":false}` — Tab skipped the button entirely.
+
+**⚠️ A claim in the implementation plan was wrong and is corrected here.** The plan asserted that a
+`disabled` button "reports `tabIndex` of `-1`". Measured, it reports **`0`** even while `disabled`,
+in this browser. `tabIndex` is therefore **not** a valid discriminator between the two states; only
+observing where a real Tab press lands distinguishes them, which is what the evidence above does.
+
+**Tier 3 — measured contrast.** See §4. Both figures measured, both agreeing with the computed
+estimates they replaced.
+
+**What remains unproven.** No screen reader was run against this control. The tier-2 evidence shows
+the control is reachable, visibly focused, and inert; it does not show how a screen reader renders
+`aria-disabled="true"` in practice, which varies by AT. A VoiceOver pass covering this control would
+close that gap, as it did for I-1.
