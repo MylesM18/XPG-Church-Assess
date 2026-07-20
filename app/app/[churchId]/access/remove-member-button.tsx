@@ -12,8 +12,9 @@ export function RemoveMemberButton({ churchId, userId }: { churchId: string; use
     <form action={formAction} className="flex flex-col items-end gap-1">
       <input type="hidden" name="church_id" value={churchId} />
       <input type="hidden" name="user_id" value={userId} />
-      <button type="submit" disabled={pending}
-        className="py-2 font-body text-xs text-berry-deep underline underline-offset-2 hover:opacity-80 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
+      <button type="submit" aria-disabled={pending}
+        onClick={(e) => { if (pending) e.preventDefault() }}
+        className="py-2 font-body text-xs text-berry-deep underline underline-offset-2 hover:opacity-80 aria-disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
         {pending ? 'Removing…' : 'Remove'}
       </button>
       <LiveStatus message={state.error} tone="error" className="font-body text-xs text-berry" />

@@ -56,7 +56,8 @@ export function ShareControl({
             <input type="hidden" name="run_id" value={runId} />
             <button
               type="submit"
-              disabled={revoking}
+              aria-disabled={revoking}
+              onClick={(e) => { if (revoking) e.preventDefault() }}
               className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
             >
               {revoking ? 'Revoking…' : 'Revoke share link'}
@@ -69,7 +70,8 @@ export function ShareControl({
           <input type="hidden" name="run_id" value={runId} />
           <button
             type="submit"
-            disabled={minting}
+            aria-disabled={minting}
+            onClick={(e) => { if (minting) e.preventDefault() }}
             className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             {minting ? 'Creating…' : 'Create share link'}
@@ -77,7 +79,7 @@ export function ShareControl({
         </form>
       )}
 
-      <LiveStatus message={error} tone="error" className="font-body text-sm text-ink" />
+      <LiveStatus message={error} tone="error" className="font-body text-sm text-berry" />
       <LiveStatus message={announcement} tone="status" className="sr-only" />
     </div>
   )

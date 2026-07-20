@@ -28,8 +28,9 @@ export function InviteMemberForm({ churchId }: { churchId: string }) {
         </select>
       </label>
 
-      <button type="submit" disabled={pending}
-        className="mt-1 rounded-md border border-line bg-ink px-4 py-2 font-body text-paper transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
+      <button type="submit" aria-disabled={pending}
+        onClick={(e) => { if (pending) e.preventDefault() }}
+        className="mt-1 rounded-md border border-line bg-ink px-4 py-2 font-body text-paper transition-opacity hover:opacity-90 aria-disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
         {pending ? 'Inviting…' : 'Send invitation'}
       </button>
 

@@ -80,8 +80,9 @@ export function GetStartedForm() {
 
       <button
         type="submit"
-        disabled={pending}
-        className="mt-2 rounded-md border border-line bg-ink px-4 py-2 font-body text-paper transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        aria-disabled={pending}
+        onClick={(e) => { if (pending) e.preventDefault() }}
+        className="mt-2 rounded-md border border-line bg-ink px-4 py-2 font-body text-paper transition-opacity hover:opacity-90 aria-disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
       >
         {pending ? 'Creating…' : 'Create church'}
       </button>
