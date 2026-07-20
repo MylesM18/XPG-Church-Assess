@@ -80,7 +80,7 @@ export default async function DashboardPage({
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 px-6 py-10">
+    <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 px-6 py-10">
       <header className="flex items-center gap-4">
         <div
           className="flex h-14 w-14 items-center justify-center rounded-md font-display text-xl text-white"
@@ -138,7 +138,7 @@ export default async function DashboardPage({
             type="button"
             disabled
             aria-disabled="true"
-            className="cursor-not-allowed rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink-soft opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            className="cursor-not-allowed rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink-soft opacity-60"
           >
             Generate diagnosis{' '}
             <span className="text-xs">

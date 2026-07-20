@@ -14,7 +14,7 @@ export function confidenceBand(c: number): { label: string; low: boolean } {
 
 export function EmptyState({ churchId }: { churchId: string }) {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col items-start gap-4 px-6 py-16">
+    <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col items-start gap-4 px-6 py-16">
       <h1 className="font-display text-2xl text-ink">No diagnosis yet</h1>
       <p className="font-body text-ink-soft">This assessment hasn’t been diagnosed yet.</p>
       <Link

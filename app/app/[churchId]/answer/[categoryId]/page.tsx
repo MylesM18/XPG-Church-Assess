@@ -31,7 +31,7 @@ export default async function AnswerPage({
   const items = category.items.map((i) => ({ id: i.id, text: i.text }))
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-lg flex-col gap-6 px-6 py-12">
+    <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-lg flex-col gap-6 px-6 py-12">
       <SelfForm churchId={churchId} categoryId={categoryId} categoryName={category.name} items={items} />
     </main>
   )

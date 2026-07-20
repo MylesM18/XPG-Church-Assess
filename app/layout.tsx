@@ -20,9 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           Skip to content
         </a>
-        <div id="main-content" tabIndex={-1}>
-          {children}
-        </div>
+        {children}
       </body>
     </html>
   )

@@ -14,7 +14,7 @@ export default async function RespondPage({
   const ctx = Array.isArray(data) ? data[0] : null
 
   const invalid = (
-    <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-4 px-6 py-12">
+    <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-4 px-6 py-12">
       <h1 className="font-display text-2xl text-ink">This link isn’t valid</h1>
       <p className="font-body text-ink-soft">
         It may have expired, already been used, or been entered incorrectly. Please ask whoever
@@ -32,7 +32,7 @@ export default async function RespondPage({
   const items = category.items.map((i) => ({ id: i.id, text: i.text }))
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-lg flex-col gap-6 px-6 py-12">
+    <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-lg flex-col gap-6 px-6 py-12">
       <p className="font-body text-sm text-ink-soft">Helping {ctx.church_name}</p>
       <RespondForm token={token} categoryName={category.name} items={items} />
     </main>

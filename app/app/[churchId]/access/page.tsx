@@ -35,7 +35,7 @@ export default async function AccessPage({ params }: { params: Promise<{ churchI
   const disableRemoveFor = admins.length <= 1 ? (admins[0]?.user_id ?? null) : null
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 px-6 py-10">
+    <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 px-6 py-10">
       <header className="flex flex-col gap-1">
         <Link href={`/app/${churchId}`} className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-2 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">← Back to {church.name}</Link>
         <h1 className="font-display text-2xl text-ink">Manage access</h1>
