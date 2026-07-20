@@ -77,8 +77,8 @@ export function ShareControl({
         </form>
       )}
 
-      <LiveStatus tone="error" message={error} className="font-body text-sm text-ink" />
-      <LiveStatus tone="status" message={announcement} className="sr-only" />
+      <LiveStatus message={error} tone="error" className="font-body text-sm text-ink" />
+      <LiveStatus message={announcement} tone="status" className="sr-only" />
     </div>
   )
 }

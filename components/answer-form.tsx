@@ -34,9 +34,10 @@ export function AnswerForm({
   //
   // The submit button unmounts with the form, so without this focus falls to <body>. Moving focus
   // to the confirmation both announces it and leaves the keyboard somewhere sensible. It is an
-  // <h1> because the form's own <h1>{categoryName}</h1> unmounts with it and the route
-  // (app/respond/[token]/page.tsx) supplies a <main> but no heading — so the success page would
-  // otherwise have no <h1> at all.
+  // <h1> because the form's own <h1>{categoryName}</h1> unmounts with it, and neither of this
+  // component's two call sites — app/respond/[token]/page.tsx and
+  // app/app/[churchId]/answer/[categoryId]/self-form.tsx — nor any layout above them supplies a
+  // heading, so the success page would otherwise have no <h1> at all.
   useEffect(() => {
     if (done) doneRef.current?.focus()
   }, [done])
@@ -113,7 +114,7 @@ export function AnswerForm({
         {pending ? 'Submitting…' : 'Submit'}
       </button>
 
-      <LiveStatus tone="error" message={error} className="font-body text-sm text-berry" />
+      <LiveStatus message={error} tone="error" className="font-body text-sm text-berry" />
     </form>
   )
 }

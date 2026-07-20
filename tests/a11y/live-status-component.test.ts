@@ -14,22 +14,24 @@ import { describe, expect, it } from 'vitest'
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const SOURCE = fs.readFileSync(path.join(REPO_ROOT, 'components', 'live-status.tsx'), 'utf8')
-// The aria-live assertion below must judge CODE, not prose: the component's doc comment quotes
-// `aria-live="assertive"` verbatim while explaining why the attribute must never be set, and no
-// textual pattern can tell a JSX attribute from a comment quoting one. Strip line comments first.
-const CODE_ONLY = SOURCE.replace(/^\s*\/\/.*$/gm, '')
+// Every assertion below must judge CODE, not prose: the component's doc comment quotes
+// `aria-live="assertive"` verbatim (three times) while explaining why the attribute must never be
+// set, and no textual pattern can tell a JSX attribute from a comment quoting one. Strip comments —
+// both full-line and trailing — before every assertion; SOURCE itself is used only to build
+// CODE_ONLY, never for a `toContain`/`toMatch` check.
+const CODE_ONLY = SOURCE.replace(/\/\/.*$/gm, '')
 
 describe('LiveStatus component shape', () => {
   it('never conditionally mounts the region', () => {
     expect(
-      SOURCE,
+      CODE_ONLY,
       'live-status.tsx must not gate its <p> behind `message &&` — a conditionally mounted live ' +
         'region misses its first announcement. Render always; vary only the text content.',
     ).not.toMatch(/\{\s*message\s*&&/)
   })
 
   it('maps tone to an implicit-live role', () => {
-    expect(SOURCE).toContain("role={tone === 'error' ? 'alert' : 'status'}")
+    expect(CODE_ONLY).toContain("role={tone === 'error' ? 'alert' : 'status'}")
   })
 
   it('does not also set aria-live', () => {
@@ -42,7 +44,7 @@ describe('LiveStatus component shape', () => {
 
   it('falls back to sr-only when there is no message', () => {
     expect(
-      SOURCE,
+      CODE_ONLY,
       'An always-mounted empty <p> would add a phantom flex-gap row in every parent (they are all ' +
         'flex columns with a gap). sr-only is position:absolute so it is not a flex item, and ' +
         'unlike display:none it stays in the accessibility tree.',
@@ -50,11 +52,19 @@ describe('LiveStatus component shape', () => {
   })
 
   it('requires all three props', () => {
-    expect(SOURCE).toContain('message: string | null')
-    expect(SOURCE).toContain("tone: 'error' | 'status'")
-    expect(SOURCE).toContain('className: string')
-    expect(SOURCE, 'no prop may be optional — a missing className would render unstyled text').not.toMatch(
+    expect(CODE_ONLY).toContain('message: string | null')
+    expect(CODE_ONLY).toContain("tone: 'error' | 'status'")
+    expect(CODE_ONLY).toContain('className: string')
+    expect(CODE_ONLY, 'no prop may be optional — a missing className would render unstyled text').not.toMatch(
       /(message|tone|className)\?:/,
     )
+  })
+
+  it('renders the message as the element body', () => {
+    expect(
+      CODE_ONLY,
+      'the <p> must render {message} as its child — a region with an empty body announces nothing, ' +
+        'even if every other assertion in this file passes',
+    ).toContain('{message}')
   })
 })

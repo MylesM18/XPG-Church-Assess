@@ -41,7 +41,7 @@ const FILES = SCAN_DIRS.flatMap(tsxFilesUnder).map((file) => ({
 // The ten files that render a status message. All five success announcements land in files already
 // on this list, so it is also the complete set of LiveStatus consumers.
 const EXPECTED_CONSUMERS = [
-  'components/answer-form.tsx',
+  path.join('components', 'answer-form.tsx'),
   path.join('app', 'sign-in', 'page.tsx'),
   path.join('app', 'get-started', 'form.tsx'),
   path.join('app', 'app', '[churchId]', 'invite-panel.tsx'),
@@ -125,16 +125,17 @@ describe('live-region application', () => {
 
   it('has no conditionally mounted status element under another name, tag, or role', () => {
     // Tripwire (a): the guarding identifier itself looks like a status message — error, err,
-    // message, status, notice, warning — in any case and as any suffix (submitError, state.err,
-    // formStatus, …), not just the literal lowercase `error` the test above is keyed to. Requires
-    // the identifier to sit immediately against the operator, exactly the shape of every evasion
-    // demonstrated (`identifier && <Tag>` / `identifier ? <Tag> : null`), so it does not fire on
-    // unrelated compound conditions like `isDownstream && stage.isDoNotWorkOn && (…)` elsewhere in
-    // this tree. <LiveStatus> is excluded here — its own conditional mounting, under ANY guard
-    // name, is already asserted with a more specific message by the test above — so this test's
-    // offender list is only ever about a different element standing in for it.
+    // message, status, notice, warning, fail/failed, problem, alert, toast, banner — in any case
+    // and as any suffix (submitError, state.err, formStatus, …), not just the literal lowercase
+    // `error` the test above is keyed to. Requires the identifier to sit immediately against the
+    // operator, exactly the shape of every evasion demonstrated (`identifier && <Tag>` /
+    // `identifier ? <Tag> : null`), so it does not fire on unrelated compound conditions like
+    // `isDownstream && stage.isDoNotWorkOn && (…)` elsewhere in this tree. <LiveStatus> is excluded
+    // here — its own conditional mounting, under ANY guard name, is already asserted with a more
+    // specific message by the test above — so this test's offender list is only ever about a
+    // different element standing in for it.
     const namedStatusGuard =
-      /[\w$.]*(?:err(?:or)?|message|status|notice|warning)\s*(?:&&|\?)\s*\(?\s*<(?!LiveStatus\b)[A-Za-z]/i
+      /[\w$.]*(?:err(?:or)?|message|status|notice|warning|fail(?:ed)?|problem|alert|toast|banner)\s*(?:&&|\?)\s*\(?\s*<(?!LiveStatus\b)[A-Za-z]/i
 
     // Tripwire (b): element-and-identifier-agnostic. Whatever guards it and whatever it's called,
     // an element that is only conditionally mounted has no business wearing the accessibility
@@ -166,14 +167,45 @@ describe('live-region application', () => {
   })
 
   it('keeps the two focus-move sites focusable', () => {
-    const answerForm = FILES.find((f) => f.path === 'components/answer-form.tsx')!
+    const answerForm = FILES.find((f) => f.path === path.join('components', 'answer-form.tsx'))
     expect(
-      answerForm.source,
+      answerForm,
+      'expected components/answer-form.tsx to be present in the scanned file set — if it was ' +
+        'renamed or moved, update this test',
+    ).toBeDefined()
+    expect(
+      answerForm!.source,
       'answer-form must render its confirmation as a focusable <h1> — the form it replaces owns ' +
         'the page’s only <h1>, and the submit button unmounts with it',
     ).toMatch(/<h1 tabIndex=\{-1\}/)
 
-    const signIn = FILES.find((f) => f.path === path.join('app', 'sign-in', 'page.tsx'))!
-    expect(signIn.source, 'sign-in must keep a ref on the sent confirmation').toContain('ref={sentRef}')
+    const signIn = FILES.find((f) => f.path === path.join('app', 'sign-in', 'page.tsx'))
+    expect(
+      signIn,
+      'expected app/sign-in/page.tsx to be present in the scanned file set — if it was renamed or ' +
+        'moved, update this test',
+    ).toBeDefined()
+    expect(signIn!.source, 'sign-in must keep a ref on the sent confirmation').toContain('ref={sentRef}')
+  })
+
+  // --- ShareResult.status must stay required (Fix 5) -----------------------------------------
+  //
+  // Making `status` optional again would keep `tsc` green — `string | undefined` still satisfies
+  // a comparison against `'created'` — while silently restoring the exact unannounceable-revoke
+  // state the discriminator exists to prevent (revokeShare's success return would once again be
+  // indistinguishable from the client's EMPTY initial state). A type-level requirement needs a
+  // type-level pin, not just a runtime check.
+  it('keeps ShareResult.status required, not optional', () => {
+    const actionsSource = fs.readFileSync(
+      path.join(REPO_ROOT, 'app', 'app', '[churchId]', 'diagnosis', 'actions.ts'),
+      'utf8',
+    )
+    expect(actionsSource).toContain("status: 'idle' | 'created' | 'revoked'")
+    expect(
+      actionsSource,
+      'ShareResult.status must not become optional (`status?:`) — `string | undefined` still ' +
+        "compiles against `=== 'created'`, so tsc would stay green while silently reintroducing " +
+        'the unannounceable revoke state this discriminator exists to prevent',
+    ).not.toMatch(/status\?:/)
   })
 })

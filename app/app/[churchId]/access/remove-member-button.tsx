@@ -16,7 +16,7 @@ export function RemoveMemberButton({ churchId, userId }: { churchId: string; use
         className="py-2 font-body text-xs text-berry-deep underline underline-offset-2 hover:opacity-80 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
         {pending ? 'Removing…' : 'Remove'}
       </button>
-      <LiveStatus tone="error" message={state.error} className="font-body text-xs text-berry" />
+      <LiveStatus message={state.error} tone="error" className="font-body text-xs text-berry" />
     </form>
   )
 }

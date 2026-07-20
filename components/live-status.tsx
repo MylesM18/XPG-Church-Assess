@@ -16,6 +16,17 @@
 //
 // No 'use client' directive: no hooks, no handlers, so it compiles into whichever boundary imports
 // it. All current consumers are already client components.
+//
+// Two success-announcement mechanisms coexist in the app: a live region (this component, three
+// sites) and a focus-move (answer-form, sign-in). The rule that discriminates between them is NOT
+// "the submit control unmounts" — share-control's button unmounts on success too, and it correctly
+// uses a live region. The actual rule:
+//   - focus-move when success replaces the view with a static confirmation, leaving no successor
+//     control (answer-form's `done` heading, sign-in's `sent` confirmation).
+//   - live region when a successor control takes the old one's place (share-control's Create/Revoke
+//     swap, and the two invite panels' link confirmation).
+// Known gap, deferred as a later M6d follow-up: share-control drops focus to <body> on its success
+// transition. Recorded here so the next maintainer sees it was considered, not missed.
 export function LiveStatus({
   message,
   tone,

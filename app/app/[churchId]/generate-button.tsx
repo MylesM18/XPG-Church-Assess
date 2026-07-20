@@ -26,7 +26,7 @@ export function GenerateButton({ churchId }: { churchId: string }) {
       >
         {pending ? 'Generating…' : 'Generate diagnosis'}
       </button>
-      <LiveStatus tone="error" message={error} className="font-body text-sm text-berry" />
+      <LiveStatus message={error} tone="error" className="font-body text-sm text-berry" />
     </div>
   )
 }

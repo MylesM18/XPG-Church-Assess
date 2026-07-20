@@ -22,7 +22,7 @@ export function AcceptButton({ token }: { token: string }) {
       >
         {pending ? 'Accepting…' : 'Accept invitation'}
       </button>
-      <LiveStatus tone="error" message={error} className="font-body text-sm text-berry" />
+      <LiveStatus message={error} tone="error" className="font-body text-sm text-berry" />
     </div>
   )
 }

@@ -109,7 +109,7 @@ export default function SignInPage() {
         Continue with Google
       </button>
 
-      <LiveStatus tone="error" message={error} className="font-body text-sm text-berry" />
+      <LiveStatus message={error} tone="error" className="font-body text-sm text-berry" />
     </main>
   )
 }

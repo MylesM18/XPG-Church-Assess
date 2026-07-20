@@ -51,13 +51,11 @@ export function InvitePanel({
         {pending ? 'Creating…' : 'Create invitation'}
       </button>
 
-      <LiveStatus tone="error" message={state.error} className="font-body text-sm text-berry" />
+      <LiveStatus message={state.error} tone="error" className="font-body text-sm text-berry" />
 
       {/* Announcement only — the visible sentence and the <code> below are unchanged. The URL is
           deliberately excluded so a screen reader does not spell out a ~60-character token. */}
       <LiveStatus
-        tone="status"
-        className="sr-only"
         message={
           state.link
             ? state.emailed
@@ -65,6 +63,8 @@ export function InvitePanel({
               : 'Invitation created but not emailed. The link is shown below.'
             : null
         }
+        tone="status"
+        className="sr-only"
       />
 
       {state.link && (

@@ -86,7 +86,7 @@ export function GetStartedForm() {
         {pending ? 'Creating…' : 'Create church'}
       </button>
 
-      <LiveStatus tone="error" message={state.error} className="font-body text-sm text-berry" />
+      <LiveStatus message={state.error} tone="error" className="font-body text-sm text-berry" />
     </form>
   )
 }

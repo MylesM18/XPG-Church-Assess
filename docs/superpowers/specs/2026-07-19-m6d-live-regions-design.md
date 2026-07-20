@@ -444,3 +444,31 @@ When implementation starts:
 - **`superpowers:verification-before-completion`** — a fix that changes the mechanism is not proof
   it closed the harm. §8 tier 1's node-identity assertion is the crux; live regions are easy to
   *claim* and hard to *prove*.
+
+---
+
+## Known limitations (recorded post-implementation)
+
+**Recorded after the final whole-branch code review, as documentation only — no code changed as a
+result of this note.**
+
+At the five `useActionState` sites — `invite-panel`, `invite-member-form`, `remove-member-button`,
+`revoke-invite-button`, `share-control` — retrying an action and getting back the identical error
+message does not re-announce it. React holds the previous action state during the pending phase, so
+if the new result is textually the same as the old one, the `LiveStatus` element's text content
+never actually changes, and a screen reader has nothing new to read. The five `useState` sites
+(`answer-form`, `sign-in`, `get-started/form`, `generate-button`, `accept-button`) do not have this
+gap, because each of them nulls its error state before the retry begins, so the region always passes
+through an empty state on the way to the (possibly repeated) message.
+
+This is **not** an SC 4.1.3 failure. The success criterion requires that a status message be
+programmatically determinable when it appears; it does not require re-announcing a message whose
+text has not changed. It is also strictly better than the pre-branch behaviour, where none of these
+messages were announced even once.
+
+This was a **deliberate decision, not an oversight**: closing the gap would mean changing how all
+five `useActionState` sites hold and compare action-state error text (for example, folding in an
+attempt counter or a reset-on-submit step), and any such change would need fresh browser
+verification before it could be trusted. The project owner chose to record the asymmetry here rather
+than take on that additional behavioural change and its verification cost as part of this
+milestone.
