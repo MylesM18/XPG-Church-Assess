@@ -38,7 +38,7 @@ export function ShareControl({
             <button
               type="submit"
               disabled={revoking}
-              className="font-body text-sm text-ink-soft underline underline-offset-4"
+              className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
             >
               {revoking ? 'Revoking…' : 'Revoke share link'}
             </button>
@@ -51,7 +51,7 @@ export function ShareControl({
           <button
             type="submit"
             disabled={minting}
-            className="font-body text-sm text-ink-soft underline underline-offset-4"
+            className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             {minting ? 'Creating…' : 'Create share link'}
           </button>
