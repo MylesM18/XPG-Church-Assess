@@ -12,8 +12,9 @@ export function GenerateButton({ churchId }: { churchId: string }) {
     <div className="flex flex-col gap-1">
       <button
         type="button"
-        disabled={pending}
-        onClick={() =>
+        aria-disabled={pending}
+        onClick={() => {
+          if (pending) return
           startTransition(async () => {
             setError(null)
             const res = await generateDiagnosis(churchId)
@@ -21,8 +22,8 @@ export function GenerateButton({ churchId }: { churchId: string }) {
             // only the { ok:false } error path returns a value.
             if (res && !res.ok) setError(res.error ?? 'Something went wrong.')
           })
-        }
-        className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        }}
+        className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 aria-disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
       >
         {pending ? 'Generating…' : 'Generate diagnosis'}
       </button>
