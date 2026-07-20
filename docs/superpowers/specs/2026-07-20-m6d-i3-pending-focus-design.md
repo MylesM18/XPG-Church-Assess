@@ -216,7 +216,18 @@ wrong conclusion.
 
 **Gates at `f337c7b`:** typecheck 0 · lint 0 · **193 tests / 45 files** · build 0 · U+2019 15.
 
-**What remains unproven.** No screen reader was run against these controls, so how assistive
-technology announces `aria-disabled` on a *submit* control mid-action is untested. Separately, the
-second focus loss — when a control unmounts after success — is untouched here and is recorded as
-M6d I-4 in §6.
+**Tier 4 — observed announcement.** A human VoiceOver pass was run by the project owner against a
+harness built from the shipped markup. **All three checks confirmed:** focus stays on the button
+through the action rather than jumping away; the control announces as dimmed/unavailable when
+`aria-disabled` flips; and the label change to "Working…" is spoken.
+
+The second of those had a real failure mode. Had the control stayed announced as an ordinary
+actionable button while its action ran, it would have meant native `disabled`'s semantics were
+removed without ARIA replacing them — worse than the focus bug being fixed, and grounds to revisit
+the design rather than merely note it.
+
+**What remains unproven.** VoiceOver on Safari is one AT/browser pairing; NVDA and JAWS word
+`aria-disabled` differently and are untested. The pass ran against a harness rather than the ten
+production controls, most of which need an authenticated session to reach. Separately, the second
+focus loss — when a control unmounts after success — is untouched here and is recorded as M6d I-4
+in §6.
