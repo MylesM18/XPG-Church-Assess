@@ -115,11 +115,37 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
       // Cache-check: array-tolerant SELECT (RLS permits member SELECT on diagnoses).
       // Regenerate only when no 'ai' row exists for this hash; the hash changes iff the
       // answer set changes, so resubmitting identical answers is a no-op.
-      const { data: rows } = await supabase
-        .from('diagnoses')
-        .select('prose_source')
-        .eq('response_hash', hash)
-      const alreadyAi = (rows ?? []).some((r) => r.prose_source === 'ai')
+      //
+      // Scoped to THIS church's run. responseHash carries no church identifier
+      // (lib/report/response-hash.ts) and `diagnoses` has no church_id column — the church
+      // link is run_id → assessment_runs.church_id. Unscoped, an identically-answered sibling
+      // church's 'ai' row is visible under RLS to a shared admin and would suppress generation
+      // here permanently. The lookup is byte-identical to diagnosis/page.tsx's, so it resolves
+      // the run the report actually renders. (save_prose narrows server-side too, by
+      // church_id + response_hash; the two coincide while v1 keeps one run per church.)
+      // No status filter: save_diagnosis above just flipped this run to 'complete', so
+      // filtering on 'in_progress' would find nothing.
+      const { data: run } = await supabase
+        .from('assessment_runs')
+        .select('id')
+        .eq('church_id', churchId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      // An unresolvable run degrades to a cache MISS (generate), never a skip: generateDiagnosis
+      // is one-shot per church — save_diagnosis completes the run and get_run_coverage then
+      // reads nothing, so a second attempt never reaches this block. Forfeiting here on a
+      // transient read failure would reproduce the very harm this scoping fixes. save_prose
+      // resolves its own row from church_id + response_hash, so it needs no run id.
+      let alreadyAi = false
+      if (run) {
+        const { data: rows } = await supabase
+          .from('diagnoses')
+          .select('prose_source')
+          .eq('run_id', run.id)
+          .eq('response_hash', hash)
+        alreadyAi = (rows ?? []).some((r) => r.prose_source === 'ai')
+      }
       if (!alreadyAi) {
         const blocks = await generateProse(diagnosis, methodology) // never throws → ReportBlocks | null
         if (blocks) {
