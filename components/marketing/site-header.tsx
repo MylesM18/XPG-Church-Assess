@@ -5,6 +5,8 @@ export function SiteHeader() {
         <svg
           viewBox="0 0 32 32"
           fill="none"
+          aria-hidden="true"
+          focusable="false"
           className="h-[26px] w-[26px] shrink-0 text-ink"
         >
           <circle cx="6" cy="16" r="3.4" stroke="currentColor" strokeWidth="1.6" />

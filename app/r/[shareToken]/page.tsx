@@ -72,7 +72,7 @@ export default async function SharedReportPage({
   const view = buildReportView(diagnosis, blocks, methodology, { audience: 'shared' })
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
+    <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
       <VerdictHeader
         name={row.church_name}
         brandColor={row.brand_color}

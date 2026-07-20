@@ -11,7 +11,7 @@ export function Hero() {
         <h1 className="mt-[18px] font-display text-[44px] font-light leading-[1.02] tracking-[-.5px] min-[861px]:text-[60px]">
           Find the <em className="italic text-berry">one thing</em>
           <br className="hidden min-[861px]:block" />{' '}
-          that&rsquo;s actually stuck.
+          that’s actually stuck.
         </h1>
 
         <p className="mb-8 mt-6 max-w-[30em] font-body text-[18px] leading-[1.55] text-ink-soft">
@@ -50,7 +50,7 @@ export function Hero() {
             <rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
             <path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" strokeWidth="1.4" />
           </svg>
-          Results are private to your church&rsquo;s leadership. You control who sees them.
+          Results are private to your church’s leadership. You control who sees them.
         </p>
       </div>
       <ChainViz />

@@ -7,7 +7,7 @@ export default function Home() {
   return (
     <>
       <SiteHeader />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <div className="mx-auto max-w-[1080px] px-[26px]">
           <Hero />
           <HowItWorks />

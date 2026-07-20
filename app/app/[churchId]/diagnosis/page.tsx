@@ -91,7 +91,7 @@ export default async function DiagnosisPage({
   const view = buildReportView(diagnosis, blocks, methodology, { audience: 'screen' })
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
+    <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
       <VerdictHeader
         name={church.name}
         brandColor={church.brand_color}
@@ -104,7 +104,7 @@ export default async function DiagnosisPage({
       <div className="flex flex-col gap-4">
         <a
           href={`/api/report/${run!.id}/pdf`}
-          className="font-body text-sm text-ink-soft underline underline-offset-4"
+          className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
         >
           Download PDF
         </a>

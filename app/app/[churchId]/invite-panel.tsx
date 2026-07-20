@@ -38,14 +38,14 @@ export function InvitePanel({
       </label>
 
       <label className="flex flex-col gap-1 font-body text-sm text-ink-soft">
-        Their email (optional — we&apos;ll email the link)
+        Their email (optional — we’ll email the link)
         <input name="invited_contact" type="email" className={inputClass} />
       </label>
 
       <button
         type="submit"
         disabled={pending}
-        className="mt-1 rounded-md border border-line bg-ink px-4 py-2 font-body text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
+        className="mt-1 rounded-md border border-line bg-ink px-4 py-2 font-body text-paper transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
       >
         {pending ? 'Creating…' : 'Create invitation'}
       </button>
@@ -55,7 +55,7 @@ export function InvitePanel({
       {state.link && (
         <div className="flex flex-col gap-1 rounded-md border border-line bg-paper p-3">
           <p className="font-body text-sm text-ink">
-            {state.emailed ? 'Invitation emailed. Link:' : "Invitation created — we couldn't email it, so share this link:"}
+            {state.emailed ? 'Invitation emailed. Link:' : "Invitation created — we couldn’t email it, so share this link:"}
           </p>
           <code className="break-all font-body text-xs text-ink-soft">{state.link}</code>
         </div>

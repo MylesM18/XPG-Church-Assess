@@ -14,12 +14,12 @@ export function confidenceBand(c: number): { label: string; low: boolean } {
 
 export function EmptyState({ churchId }: { churchId: string }) {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col items-start gap-4 px-6 py-16">
+    <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col items-start gap-4 px-6 py-16">
       <h1 className="font-display text-2xl text-ink">No diagnosis yet</h1>
-      <p className="font-body text-ink-soft">This assessment hasn&apos;t been diagnosed yet.</p>
+      <p className="font-body text-ink-soft">This assessment hasn’t been diagnosed yet.</p>
       <Link
         href={`/app/${churchId}`}
-        className="font-body text-sm text-ink underline underline-offset-2 hover:opacity-80"
+        className="py-1.5 font-body text-sm text-ink underline underline-offset-2 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
       >
         ← Back to the dashboard
       </Link>
@@ -109,7 +109,7 @@ export function ChainWalk({ stages }: { stages: StageView[] }) {
         ))}
       </div>
       {anyDownstream && (
-        <p className="font-body text-sm text-ink-soft">Don&apos;t work on the faded stages yet.</p>
+        <p className="font-body text-sm text-ink-soft">Don’t work on the faded stages yet.</p>
       )}
     </section>
   )
@@ -145,7 +145,7 @@ export function BlindSpots({ text }: { text: string }) {
 export function CostSection({ cost, doNotWorkOn }: { cost: string; doNotWorkOn?: string }) {
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="font-display text-xl text-ink">What it&apos;s costing you</h2>
+      <h2 className="font-display text-xl text-ink">What it’s costing you</h2>
       <p className="font-body text-ink">{cost}</p>
       {doNotWorkOn && <p className="font-body text-sm text-ink-soft">{doNotWorkOn}</p>}
     </section>

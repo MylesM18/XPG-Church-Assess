@@ -10,10 +10,7 @@ const ENABLERS = ['Governance', 'Communication', 'Systems']
 
 export function ChainViz() {
   return (
-    <div
-      aria-hidden="true"
-      className="rounded-xl border border-line bg-white px-[26px] py-7 shadow-sm"
-    >
+    <div className="rounded-card border border-line bg-white px-[26px] py-7 shadow-sm">
       <h2 className="mb-5 font-body text-[10.5px] font-semibold uppercase tracking-[1.8px] text-ink-soft">
         How your church is read
       </h2>
@@ -22,6 +19,7 @@ export function ChainViz() {
         {STAGES.map((stage, i) => (
           <li key={stage.n} className="relative flex items-center gap-[13px] py-[9px]">
             <span
+              aria-hidden="true"
               className={
                 stage.broken
                   ? 'z-[2] flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-berry bg-berry font-body text-[11px] font-bold text-white'

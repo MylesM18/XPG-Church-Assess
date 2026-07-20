@@ -80,7 +80,7 @@ export default async function DashboardPage({
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 px-6 py-10">
+    <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 px-6 py-10">
       <header className="flex items-center gap-4">
         <div
           className="flex h-14 w-14 items-center justify-center rounded-md font-display text-xl text-white"
@@ -112,7 +112,7 @@ export default async function DashboardPage({
               <p className="mt-3 font-body text-sm text-ink-soft">{STATUS_LABEL[status]}</p>
               <Link
                 href={`/app/${churchId}/answer/${cat.id}`}
-                className="mt-2 inline-block font-body text-sm text-ink underline underline-offset-2 hover:opacity-80"
+                className="mt-2 inline-block py-1.5 font-body text-sm text-ink underline underline-offset-2 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
               >
                 Answer yourself
               </Link>
@@ -127,7 +127,7 @@ export default async function DashboardPage({
         {hasDiagnosis ? (
           <Link
             href={`/app/${churchId}/diagnosis`}
-            className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90"
+            className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             View diagnosis
           </Link>
@@ -154,7 +154,7 @@ export default async function DashboardPage({
         {role === 'admin' && (
           <Link
             href={`/app/${churchId}/access`}
-            className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90"
+            className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             Manage access
           </Link>

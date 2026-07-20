@@ -63,7 +63,7 @@ export function AnswerForm({
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            className="rounded-md border border-line bg-paper px-3 py-2 font-body text-ink"
+            className="rounded-md border border-line bg-paper px-3 py-2 font-body text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
           />
         </label>
       )}
@@ -79,7 +79,7 @@ export function AnswerForm({
               step={1}
               value={values[item.id]}
               onChange={(e) => setValues((v) => ({ ...v, [item.id]: Number(e.target.value) }))}
-              className="w-full"
+              className="w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
               aria-label={item.text}
             />
             <span className="w-6 text-right font-body text-sm text-ink">{values[item.id]}</span>
@@ -90,7 +90,7 @@ export function AnswerForm({
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md border border-line bg-ink px-4 py-2 font-body text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
+        className="rounded-md border border-line bg-ink px-4 py-2 font-body text-paper transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
       >
         {pending ? 'Submitting…' : 'Submit'}
       </button>

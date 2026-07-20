@@ -18,7 +18,7 @@ const STEPS = [
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="pb-[90px] pt-5">
+    <section id="how-it-works" tabIndex={-1} className="pb-[90px] pt-5">
       <div className="mx-auto mb-11 max-w-[40em] text-center">
         <p className="mb-3 font-body text-[11px] font-semibold uppercase tracking-[2.4px] text-ink-soft">
           The flow
@@ -30,7 +30,7 @@ export function HowItWorks() {
 
       <ol className="grid gap-[22px] min-[861px]:grid-cols-3">
         {STEPS.map((step) => (
-          <li key={step.n} className="rounded-xl border border-line bg-white px-6 py-[26px]">
+          <li key={step.n} className="rounded-card border border-line bg-white px-6 py-[26px]">
             <span
               aria-hidden="true"
               className="mb-4 flex h-[34px] w-[34px] items-center justify-center rounded-full border-[1.5px] border-ink font-display text-[15px] font-semibold text-ink"
