@@ -112,7 +112,7 @@ export default async function DashboardPage({
               <p className="mt-3 font-body text-sm text-ink-soft">{STATUS_LABEL[status]}</p>
               <Link
                 href={`/app/${churchId}/answer/${cat.id}`}
-                className="mt-2 inline-block font-body text-sm text-ink underline underline-offset-2 hover:opacity-80"
+                className="mt-2 inline-block py-1.5 font-body text-sm text-ink underline underline-offset-2 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
               >
                 Answer yourself
               </Link>
@@ -127,7 +127,7 @@ export default async function DashboardPage({
         {hasDiagnosis ? (
           <Link
             href={`/app/${churchId}/diagnosis`}
-            className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90"
+            className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             View diagnosis
           </Link>
@@ -138,7 +138,7 @@ export default async function DashboardPage({
             type="button"
             disabled
             aria-disabled="true"
-            className="cursor-not-allowed rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink-soft opacity-60"
+            className="cursor-not-allowed rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink-soft opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             Generate diagnosis{' '}
             <span className="text-xs">
@@ -154,7 +154,7 @@ export default async function DashboardPage({
         {role === 'admin' && (
           <Link
             href={`/app/${churchId}/access`}
-            className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90"
+            className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             Manage access
           </Link>
