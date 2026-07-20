@@ -51,9 +51,12 @@ const FILES = SCAN_DIRS.flatMap(tsxFilesUnder).map((file) => ({
 // The lookbehind is what makes this assertion mean "bare native disabled binding".
 const BARE_DISABLED = /(?<!aria-)disabled=\{/
 const ARIA_DISABLED = /aria-disabled=\{/
-// Shape A guards with e.preventDefault(); shape B guards with an early return inside the handler
-// it already had. Either satisfies the contract.
-const GUARD = /e\.preventDefault\(\)|if \(\w+\) return\b/
+// Shape A guards with e.preventDefault(); shape B guards with an early return inside the handler it
+// already had. Both must be CONDITIONAL ON THE PENDING VARIABLE — that is what distinguishes a guard
+// from ordinary application code. Matching a bare `e.preventDefault()` was tried and is wrong:
+// answer-form.tsx's own handleSubmit contains one for unrelated reasons, which gave that file a
+// spare guard token and let a good-faith deletion of the button's guard pass unnoticed.
+const GUARD = /if \(\w+\) (?:e\.preventDefault\(\)|return\b)/
 
 describe('pending controls', () => {
   it('scans enough files that the assertions below cannot pass vacuously', () => {
@@ -107,7 +110,9 @@ describe('pending controls', () => {
     expect(
       count,
       'expected exactly 10 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
-        'control in the spec’s scope table. A lower count means a site was missed or reverted.',
+        'control in the spec’s scope table. A LOWER count means a site was missed or reverted. A ' +
+        'HIGHER count is not a defect: a new pending control was added, which is fine — add it to ' +
+        '§2 of the design doc and bump this number.',
     ).toBe(10)
   })
 })

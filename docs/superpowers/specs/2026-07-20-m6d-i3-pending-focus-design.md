@@ -143,6 +143,18 @@ asserting three things:
 An anti-vacuity assertion on the number of files scanned, matching the pattern in
 `tests/a11y/live-regions-applied.test.ts`.
 
+⚠️ **What the census cannot check, recorded so it is not rediscovered.** It counts tokens per file,
+so it cannot verify that each guard reads its OWN control's variable. Two guards in `share-control.tsx`
+both reading `minting` would count 2 controls / 2 guards and pass. That pairing was verified by hand
+at all ten sites and by the final whole-branch review; the test protects the count, not the binding.
+
+The guard token must be **conditional on the pending variable**
+(`/if \(\w+\) (?:e\.preventDefault\(\)|return\b)/`), not a bare `e.preventDefault()`. Matching the
+bare call was tried and is wrong: `answer-form.tsx`'s own `handleSubmit` contains one for unrelated
+reasons, which gave that file a spare guard token and let a good-faith deletion of the button's guard
+pass unnoticed. Found by the final review, after an earlier fix had already generalised this
+assertion from presence to counting — the counting was right, the token was too loose.
+
 Proven non-vacuous by reintroducing `disabled={pending}` at one site and observing the failure name
 that file, then restoring it byte-identical. Its comment must carry §4's measurement, so the
 deviation reads as evidence-based rather than arbitrary — otherwise a future contributor restores
