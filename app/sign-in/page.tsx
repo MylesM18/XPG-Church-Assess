@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { LiveStatus } from '@/components/live-status'
 import { createClient } from '@/lib/supabase/client'
 import { resolveNext } from '@/lib/auth/resolve-next'
 
@@ -9,6 +10,15 @@ export default function SignInPage() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const sentRef = useRef<HTMLParagraphElement>(null)
+
+  // The whole sign-in form unmounts when `sent` flips, taking the focused submit button with it,
+  // so focus would otherwise fall to <body>. Moving it to the confirmation announces the text and
+  // leaves the keyboard in a sensible place. No heading change needed here — the <h1> already sits
+  // outside the `sent` ternary.
+  useEffect(() => {
+    if (sent) sentRef.current?.focus()
+  }, [sent])
 
   // Pre-fill the email when arriving from an accept link (/sign-in?email=…). Display convenience
   // only — the accept RPC still gates on the exact signed-in email server-side.
@@ -60,7 +70,7 @@ export default function SignInPage() {
       <h1 className="font-display text-3xl text-ink">Sign in to XP Gathering</h1>
 
       {sent ? (
-        <p className="font-body text-ink-soft">
+        <p ref={sentRef} tabIndex={-1} className="font-body text-ink-soft">
           Check your email for a magic link. You can close this tab.
         </p>
       ) : (
@@ -99,7 +109,7 @@ export default function SignInPage() {
         Continue with Google
       </button>
 
-      {error && <p className="font-body text-sm text-berry">{error}</p>}
+      <LiveStatus tone="error" message={error} className="font-body text-sm text-berry" />
     </main>
   )
 }
