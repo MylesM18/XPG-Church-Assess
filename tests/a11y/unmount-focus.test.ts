@@ -60,10 +60,27 @@ function stripComments(source: string): string {
 // overall length stay stable) so only real JSX markup remains for the counts and slices below to
 // scan. Applied AFTER stripComments -- order is load-bearing: stripping comments first is also
 // what keeps a `//` inside a string literal from being mistaken for the start of a line comment.
+// TEMPLATE LITERALS, round 16. The two branches below enumerate the two QUOTED forms, so the third
+// form -- the template literal -- was structurally invisible to every count in this file. A
+// data-decoy attribute holding nothing but the bare word pending between two backticks is not
+// markup, not a binding and not a read, yet it padded the whole-file pending total by one and so
+// PAID for deleting a real occurrence, with no scoping trick of any kind. That is what makes it
+// worth fixing here rather than carrying: every total-based bound in this file is an exact
+// equality, so one free +1 re-opens all of them at once.
+//
+// The whole literal is blanked, INTERPOLATIONS INCLUDED. An interpolation holds real code, so
+// blanking it can hide a genuine read of a tracked name -- but the totals are exact equalities, so
+// a hidden read counts LOW and fails loud, whereas preserving interpolations would leave the same
+// decoy working with the bare word wrapped in ${...}. Loud over silent, as with declarationsOf.
+//
+// Ordered LAST on purpose: the quote branches have already blanked the contents of every quoted
+// string, so a backtick that was sitting inside one is gone before this runs and cannot open a
+// spurious literal that swallows real code.
 function stripStringLiterals(source: string): string {
   return source
     .replace(/"(?:[^"\\]|\\.)*"/g, '""')
     .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+    .replace(/`(?:[^`\\]|\\.)*`/g, '``')
 }
 
 function read(rel: string): string {
