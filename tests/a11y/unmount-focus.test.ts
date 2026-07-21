@@ -133,6 +133,20 @@ describe('unmount focus', () => {
           'and focus recovery silently no-ops for every row.',
       ).toMatch(new RegExp(`if \\(pending\\) ${ref}\\.current = true`))
 
+      // COUNTING, not presence, for the arm. A presence check stays green when an unconditional
+      // `${ref}.current = true` is ADDED anywhere alongside the guarded one: the guarded line is
+      // still there to match, so the .toMatch above never notices the second, unguarded arm that
+      // defeats "only arm while pending". Require every occurrence of the bare assignment to be
+      // accounted for by the guarded form.
+      const bareArmCount = countOf(source, new RegExp(`${ref}\\.current = true`))
+      const guardedArmCount = countOf(source, new RegExp(`if \\(pending\\) ${ref}\\.current = true`))
+      expect(
+        guardedArmCount,
+        `${file} sets ${ref}.current = true in ${bareArmCount} place(s) but only ${guardedArmCount} ` +
+          'of those are gated behind `if (pending)`. An unconditional arm anywhere defeats the "only ' +
+          'arm while pending" guarantee even though the guarded arm line is still present.',
+      ).toBe(bareArmCount)
+
       expect(
         source,
         `${file} does not gate document.getElementById(headingId)?.focus() behind ` +
@@ -142,6 +156,23 @@ describe('unmount focus', () => {
       ).toMatch(
         new RegExp(`if \\(${ref}\\.current\\) document\\.getElementById\\(headingId\\)\\?\\.focus\\(\\)`),
       )
+
+      // COUNTING, not presence, for the guarded call. A presence check stays green when an
+      // unconditional document.getElementById(headingId)?.focus() is ADDED alongside the guarded
+      // one: the guarded call is still there to match, so the .toMatch above never notices the
+      // second, unguarded call that fires focus recovery on every unmount.
+      const bareFocusCount = countOf(source, /document\.getElementById\(headingId\)\?\.focus\(\)/)
+      const guardedFocusCount = countOf(
+        source,
+        new RegExp(`if \\(${ref}\\.current\\) document\\.getElementById\\(headingId\\)\\?\\.focus\\(\\)`),
+      )
+      expect(
+        guardedFocusCount,
+        `${file} calls document.getElementById(headingId)?.focus() in ${bareFocusCount} place(s) but ` +
+          `only ${guardedFocusCount} of those are gated behind \`if (${ref}.current)\`. An unconditional ` +
+          'call anywhere fires focus recovery on every unmount, including ones this control did not ' +
+          'cause, even though the guarded call is still present.',
+      ).toBe(bareFocusCount)
 
       expect(
         source,
@@ -186,6 +217,19 @@ describe('unmount focus', () => {
         'the swap, and focus recovery silently no-ops.',
     ).toMatch(new RegExp(`if \\(busy\\) ${ref}\\.current = true`))
 
+    // COUNTING, not presence, for the arm. A presence check stays green when an unconditional
+    // `${ref}.current = true` is ADDED anywhere alongside the guarded one -- same gap the row-button
+    // arm check above closes.
+    const bareActedArms = countOf(source, new RegExp(`${ref}\\.current = true`))
+    const guardedActedArms = countOf(source, new RegExp(`if \\(busy\\) ${ref}\\.current = true`))
+    expect(
+      guardedActedArms,
+      `share-control.tsx sets ${ref}.current = true in ${bareActedArms} place(s) but only ` +
+        `${guardedActedArms} of those are gated behind \`if (busy)\`. An unconditional arm anywhere ` +
+        'defeats the "only arm while pending" guarantee even though the guarded arm line is still ' +
+        'present.',
+    ).toBe(bareActedArms)
+
     expect(
       source,
       `share-control.tsx does not gate successorRef.current?.focus() behind ` +
@@ -193,6 +237,20 @@ describe('unmount focus', () => {
         'existingLink change, including an unrelated revalidation, and steals focus to the share ' +
         'button while the user is elsewhere.',
     ).toMatch(new RegExp(`if \\(!${ref}\\.current\\) return`))
+
+    // COUNTING, not presence, for the guarded call. The guard here is a separate line rather than a
+    // prefix, so the presence check above cannot pin the two together the way the row-button test
+    // does. Require the call to exist exactly once in the whole file instead: a second, unconditional
+    // successorRef.current?.focus() -- for example one prepended above the guard -- pushes this past
+    // 1 even though the guarded original is still present and still reads correctly on its own.
+    const successorFocusCalls = countOf(source, /successorRef\.current\?\.focus\(\)/)
+    expect(
+      successorFocusCalls,
+      `share-control.tsx calls successorRef.current?.focus() ${successorFocusCalls} time(s), this ` +
+        'test expects exactly 1. A second, unconditional call anywhere in the file fires focus ' +
+        "recovery on every existingLink change, including another admin's revalidation, regardless " +
+        'of whether the guarded call is also still present.',
+    ).toBe(1)
 
     expect(
       source,
