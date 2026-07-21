@@ -90,6 +90,31 @@ const declarationsOf = (source: string, name: string) =>
     ),
   )
 
+// PARAMETER SHADOWING, round 12. declarationsOf above enumerates the three DECLARATION KEYWORDS, so
+// a binding that uses none of them is structurally invisible to every count, ratio, bound and slice
+// in this file. Wrapping an effect's EXISTING body, unchanged, in `;[false].forEach((pending) => {
+// ...same body... })` rebinds `pending` to a literal for the whole body: the arm never runs, focus
+// recovery is dead on every unmount at both row-button sites, and census, lint AND typecheck were all
+// measured green on it. `;[null].forEach((error) => { ... })` does the same to share-control's disarm,
+// which is D-3 reintroduced. A parameter is not the only such form -- `catch (e)`, `import`, class
+// fields and `for (const x of ...)` heads all bind a name too.
+//
+// So this fix deliberately does NOT enumerate binding positions. Three rounds running, the next hole
+// has sat just outside whatever the previous fix enumerated: round 10 enumerated IDENTIFIERS, round
+// 11 widened to declaration SHAPES, round 12 walked round both with a construct carrying no
+// declaration keyword at all. A regex over parameter lists would be a fourth enumeration, and
+// parameter lists are syntactically unbounded anyway -- defaults, type annotations, rest params,
+// destructuring nested inside the parameter itself.
+//
+// Count the identifier's TOTAL textual footprint instead. Binding a name requires WRITING it, so
+// every binding form -- present or future, parameter or otherwise -- costs at least one extra
+// occurrence and shows up here without this file needing to know what form it took. The bound is an
+// exact equality, so it fails LOUD in both directions: an added binding reads high, a deleted use
+// reads low. Its residual is a mutation that ADDS a binding and DELETES an existing use of the same
+// name in one edit; for the row-button arm effect that means truncating `}, [pending, state.error])`,
+// which is documented-uncovered class 2 above and open by decision.
+const occurrencesOf = (source: string, name: string) => countOf(source, new RegExp(`\\b${name}\\b`))
+
 // file -> how many <h2> elements it renders. The count is asserted first, so that adding a branch
 // forces whoever adds it to come here and think about D-1 rather than silently re-breaking it.
 const LISTS: Record<string, number> = {
@@ -303,10 +328,12 @@ describe('unmount focus', () => {
       // The honest count differs per identifier: `pending` is bound exactly once, by the
       // useActionState array destructure; `headingId` arrives through the props PARAMETER, which
       // carries no const/let/var and so is never counted at all; the ref is declared exactly once.
-      for (const [shadowed, expected] of [
-        ['pending', 1],
-        ['headingId', 0],
-        [ref, 1],
+      // Round 12 added the third number: the identifier's TOTAL occurrence count, which catches every
+      // binding form including the ones that carry no declaration keyword at all. See occurrencesOf.
+      for (const [shadowed, expected, footprint] of [
+        ['pending', 1, 6],
+        ['headingId', 0, 4],
+        [ref, 1, 4],
       ] as const) {
         expect(
           declarationsOf(source, shadowed),
@@ -319,6 +346,21 @@ describe('unmount focus', () => {
             'green, because they all match on the NAME and a name does not pin which binding it ' +
             'resolves to.',
         ).toBe(expected)
+
+        expect(
+          occurrencesOf(source, shadowed),
+          `${file} writes the identifier \`${shadowed}\` ${occurrencesOf(source, shadowed)} time(s) ` +
+            `in all; this test expects exactly ${footprint}. This is a FOOTPRINT census, not a ` +
+            'declaration census: the check above enumerates const/let/var, and a binding that uses ' +
+            'none of those -- a function or arrow-callback PARAMETER, a `catch (e)`, a class field, ' +
+            'a `for (const x of ...)` head -- is invisible to it while shadowing the real value just ' +
+            'as completely. Wrapping an effect body unchanged in ' +
+            `\`;[false].forEach((${shadowed}) => { ...body... })\` was measured green against census, ` +
+            'lint AND typecheck, and it kills focus recovery outright. Because binding a name means ' +
+            'writing it, any such binding costs one occurrence and shows up here. If you legitimately ' +
+            'added or removed a USE of this identifier, update this number -- but only after checking ' +
+            'that what you added is not a new binding of the name.',
+        ).toBe(footprint)
       }
 
       expect(
@@ -568,7 +610,14 @@ describe('unmount focus', () => {
     // pinned line byte-identical while the hand-off is dead. Each of these four is legitimately
     // declared exactly once at component scope, so exactly 1 is the honest count and a second binding
     // of any of them, in any form, can only be a shadow.
-    for (const shadowed of ['busy', 'error', ref, 'successorRef'] as const) {
+    // Round 12 added the second number: the identifier's TOTAL occurrence count, which catches every
+    // binding form including the ones that carry no declaration keyword at all. See occurrencesOf.
+    for (const [shadowed, footprint] of [
+      ['busy', 3],
+      ['error', 7],
+      [ref, 5],
+      ['successorRef', 4],
+    ] as const) {
       expect(
         declarationsOf(source, shadowed),
         `share-control.tsx must bind \`${shadowed}\` exactly once, at component scope; it binds it ` +
@@ -578,6 +627,22 @@ describe('unmount focus', () => {
           'other assertion in this test green, because they all match on the NAME and a name does ' +
           'not pin which binding it resolves to.',
       ).toBe(1)
+
+      expect(
+        occurrencesOf(source, shadowed),
+        `share-control.tsx writes the identifier \`${shadowed}\` ` +
+          `${occurrencesOf(source, shadowed)} time(s) in all; this test expects exactly ` +
+          `${footprint}. This is a FOOTPRINT census, not a declaration census: the check above ` +
+          'enumerates const/let/var, and a binding that uses none of those -- a function or ' +
+          'arrow-callback PARAMETER, a `catch (e)`, a class field, a `for (const x of ...)` head -- ' +
+          'is invisible to it while shadowing the real value just as completely. Wrapping the arm ' +
+          `effect body unchanged in \`;[null].forEach((${shadowed}) => { ...body... })\` was measured ` +
+          'green against census, lint AND typecheck, and on `error` it silently reintroduces D-3: the ' +
+          'disarm can never run, so a later unrelated revalidation moves focus here while the user is ' +
+          'elsewhere. Because binding a name means writing it, any such binding costs one occurrence ' +
+          'and shows up here. If you legitimately added or removed a USE, update this number -- but ' +
+          'only after checking that what you added is not a new binding of the name.',
+      ).toBe(footprint)
     }
 
     expect(
