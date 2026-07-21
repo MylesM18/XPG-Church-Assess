@@ -111,8 +111,12 @@ const declarationsOf = (source: string, name: string) =>
 // occurrence and shows up here without this file needing to know what form it took. The bound is an
 // exact equality, so it fails LOUD in both directions: an added binding reads high, a deleted use
 // reads low. Its residual is a mutation that ADDS a binding and DELETES an existing use of the same
-// name in one edit; for the row-button arm effect that means truncating `}, [pending, state.error])`,
-// which is documented-uncovered class 2 above and open by decision.
+// name in ONE edit, keeping the total unchanged; for the row-button arm effect the cheapest such
+// deletion is dropping `pending` from `}, [pending, state.error])`. Round 13 measured that PAIR green
+// against census, lint AND typecheck, so the row-button block below now pins that dependency array by
+// its literal text. A BARE truncation to `}, [])` was measured ALREADY CAUGHT here -- `pending` reads
+// 5 against an expected 6 -- so what was open is narrower than documented-uncovered class 2 above,
+// which describes the bare form and therefore understates coverage.
 const occurrencesOf = (source: string, name: string) => countOf(source, new RegExp(`\\b${name}\\b`))
 
 // file -> how many <h2> elements it renders. The count is asserted first, so that adding a branch
@@ -330,17 +334,33 @@ describe('unmount focus', () => {
       // carries no const/let/var and so is never counted at all; the ref is declared exactly once.
       // Round 12 added the third number: the identifier's TOTAL occurrence count, which catches every
       // binding form including the ones that carry no declaration keyword at all. See occurrencesOf.
+      // Round 13 widened the LIST rather than the counting. Rounds 10, 11 and 12 each widened WHICH
+      // BINDING FORMS get counted; round 13 walked round all three by shadowing a name that was never
+      // on this list at all. The list is hand-written, and it omitted two names the mechanism reads
+      // inside the very effect bodies this file already slices. `const state = { error: null }` as the
+      // first line of the arm effect makes `state.error` read the shadow's null forever, so
+      // `else if (state.error)` can never run -- D-2 reintroduced at both row-button sites. `const
+      // document = { getElementById: (id: string): HTMLElement | null => null }` as the first line of
+      // the unmount cleanup makes the focus move resolve to null on EVERY unmount regardless of the
+      // flag -- the pre-I-4 defect restored on the happy path, at both sites, with no error condition
+      // needed at all. Both were measured green against census, lint AND typecheck. Typing that fake
+      // method is what makes it invisible: the bare `getElementById: () => null` form IS caught by
+      // typecheck, because `null` narrows to `never` across the optional chain. "A gate catches this
+      // class" has to be proven per SPELLING, not per class.
+      // `state` is bound exactly once, by the same useActionState array destructure that binds
+      // `pending`. `document` is a global and is pinned separately below, by footprint alone.
       for (const [shadowed, expected, footprint] of [
         ['pending', 1, 6],
         ['headingId', 0, 4],
         [ref, 1, 4],
+        ['state', 1, 4],
       ] as const) {
         expect(
           declarationsOf(source, shadowed),
           `${file} binds \`${shadowed}\` ${declarationsOf(source, shadowed)} time(s); this test ` +
-            `expects exactly ${expected}. \`pending\` is destructured once from useActionState, ` +
-            '`headingId` arrives as a prop with no declaration of its own, and the ref is declared ' +
-            'once. Any additional binding of one of these names -- in ANY form, including ' +
+            `expects exactly ${expected}. \`pending\` and \`state\` are destructured once from the ` +
+            'same useActionState call, `headingId` arrives as a prop with no declaration of its own, ' +
+            'and the ref is declared once. Any additional binding of one of these names -- in ANY form, including ' +
             '`const { name } = ...` -- can only shadow the real value. Placed inside either effect ' +
             'that silently kills focus recovery while leaving every other assertion in this test ' +
             'green, because they all match on the NAME and a name does not pin which binding it ' +
@@ -362,6 +382,48 @@ describe('unmount focus', () => {
             'that what you added is not a new binding of the name.',
         ).toBe(footprint)
       }
+
+      // `document` is tracked by FOOTPRINT ALONE, not by a declaration count. It is a global: nothing
+      // in this file declares it, and the one legitimate write is inside the guarded focus move. That
+      // makes the footprint bound the assertion that does the work here -- it fails on a shadow in ANY
+      // form, keyword or not, because binding a name means writing it. A declarationsOf bound of 0
+      // alongside it would catch strictly less: only the const/let/var spellings, all of which already
+      // read high here, and none of the keyword-free forms.
+      expect(
+        occurrencesOf(source, 'document'),
+        `${file} writes the identifier \`document\` ${occurrencesOf(source, 'document')} time(s) in ` +
+          'all; this test expects exactly 1, the guarded focus move itself. `document` is the focus ' +
+          'move: `const document = { getElementById: (id: string): HTMLElement | null => null }` as ' +
+          'the first line of the unmount cleanup leaves that line byte-identical while ' +
+          'getElementById resolves to the shadow and returns null on EVERY unmount, whatever the flag ' +
+          'says -- so every successful removal drops the screen-reader user to <body>, the pre-I-4 ' +
+          'defect, on the happy path with no error condition needed. Measured green against census, ' +
+          'lint AND typecheck before this bound existed. If you legitimately added or removed a USE ' +
+          'of `document`, update this number -- but only after checking that what you added is not a ' +
+          'new binding of the name.',
+      ).toBe(1)
+
+      // DEPENDENCY ARRAY, pinned by its LITERAL text. The footprint bound above fails loud in both
+      // directions, but its residual is a mutation that ADDS a binding and DELETES a use of the same
+      // name in ONE edit, leaving the total unchanged. For this arm effect the cheapest such deletion
+      // is dropping `pending` from its dependency array: wrapping the effect body unchanged in
+      // `;[false].forEach((pending) => { ...body... })` AND truncating `}, [pending, state.error])` to
+      // `}, [state.error])` costs one occurrence and refunds one, so the footprint still reads 6. That
+      // pair was measured green against census, lint AND typecheck, and it kills the arm outright at
+      // both row-button sites. A BARE truncation needs no anchor -- it was measured already caught by
+      // the footprint bound, at 5 against 6. The anchor is the LITERAL array, never a generic `}, [`,
+      // which pins nothing; it is the same idiom the cleanup slice below gets for free from its own
+      // `}, [headingId])` bound.
+      const armDeps = countOf(source, /\}, \[pending, state\.error\]\)/)
+      expect(
+        armDeps,
+        `${file} closes its arm effect with the literal \`}, [pending, state.error])\` ${armDeps} ` +
+          'time(s), this test expects exactly 1. Both dependencies are load-bearing: without ' +
+          '`state.error` the disarm never re-runs on an error settle, and without `pending` the arm ' +
+          'never re-runs after the first render, so the flag is never set and focus recovery no-ops ' +
+          'on every unmount. Dropping `pending` here is also the one deletion that lets a shadow ' +
+          'binding of `pending` slip past the footprint bound above by keeping its total unchanged.',
+      ).toBe(1)
 
       expect(
         source,
