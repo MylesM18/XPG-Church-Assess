@@ -591,6 +591,93 @@ describe('unmount focus', () => {
           'the real unmount runs no cleanup at all -- the pre-I-4 defect.',
       ).toBe(1)
 
+      // POSITIONAL PINNING, round 15. Every identifier count above is a WHOLE-FILE TOTAL, and round
+      // 14 proved a total is SPENDABLE: an edit that adds a parameter binding inside an effect body
+      // and deletes one unnamed use of the same name anywhere else keeps the total, the declaration
+      // count and every literal anchor unchanged. Round 14 answered that by NAMING one more
+      // occurrence. Round 15 then found two more wallets in a single round, which is what makes the
+      // shape diagnostic rather than incidental: `pending` -- the oldest tracked name here -- has
+      // three NON-EFFECT UI occurrences that were never once considered spendable
+      // (`aria-disabled={pending}`, the `onClick` guard `if (pending) e.preventDefault()`, and the
+      // label ternary), and wrapping the arm body unchanged in `;[true].forEach((pending) => {
+      // ...body... })` while paying for it out of the label ternary was measured green against
+      // census, lint AND typecheck at BOTH row-button sites. That pair is strictly worse than D-2:
+      // `pending` resolves to the constant true, so `if (pending) ${ref}.current = true` fires on
+      // EVERY run of the effect including first mount before any click, the `else if` disarm branch
+      // becomes unreachable dead code, and the flag is armed from mount and can never clear -- so ANY
+      // unmount, related or not, yanks focus to the list heading.
+      //
+      // Naming the label ternary would have closed that one wallet at the cost of coupling this
+      // focus census to the button's pending-indicator UI, which has nothing to do with focus
+      // recovery: the next legitimate change to that label would go red for an unrelated reason. So
+      // pin POSITION rather than TOTAL. Count each tracked identifier INSIDE the effect body that
+      // reads it, and pin THAT: a payment made at a different position cannot refund a slice-local
+      // count, so this closes the class for these two effects instead of one wallet at a time.
+      //
+      // The slice start anchor is the generic `useEffect(() => {` on purpose -- a shadow wrapper sits
+      // BEFORE the effect's first statement, so anchoring on the first statement would put the very
+      // thing this is looking for outside the slice. `useEffect(() => {` is NOT a substring of the
+      // cleanup's `useEffect(() => () => {` (the cleanup has `() => ()` before the brace), so this
+      // finds the arm effect. The zeros below are as load-bearing as the ones: `pending` and `state`
+      // are not read in the cleanup and `headingId` and `document` are not read in the arm effect, so
+      // a binding of any of them appearing there is a shadow whatever the whole-file total says.
+      const armStart = source.indexOf('useEffect(() => {')
+      const armEnd = source.indexOf('}, [pending, state.error])', armStart)
+      expect(
+        armStart >= 0 && armEnd > armStart,
+        `${file}: could not locate the arm effect (armStart=${armStart} for anchor ` +
+          `'useEffect(() => {', armEnd=${armEnd} for anchor '}, [pending, state.error])' searched ` +
+          'from armStart). Both anchors must be found and the closing one must come after the ' +
+          'opening one. This assertion is load-bearing, not defensive: indexOf returns -1 for a ' +
+          'missing anchor and String.slice treats -1 as an offset from the end, so an unchecked ' +
+          'slice would silently run backwards or come back empty and every count below it would read ' +
+          'as a passing measurement.',
+      ).toBe(true)
+      const armBody = source.slice(armStart, armEnd)
+
+      // The slice must cover ONE effect. If the two effects were ever reordered, the generic start
+      // anchor could open on one effect and the literal end anchor close on the other, and a slice
+      // spanning both would dilute every count below back into a total.
+      expect(
+        countOf(armBody, /useEffect\(/),
+        `${file}: the arm-effect slice (from 'useEffect(() => {' to '}, [pending, state.error])') ` +
+          `contains ${countOf(armBody, /useEffect\(/)} useEffect( openings, this test expects ` +
+          'exactly 1. More than one means the slice spans two effects -- its counts would then be a ' +
+          'total again, which is the exact property this block exists to stop relying on.',
+      ).toBe(1)
+
+      for (const [name, inArm, inCleanup] of [
+        ['pending', 1, 0],
+        ['state', 1, 0],
+        [ref, 2, 1],
+        ['headingId', 0, 1],
+        ['document', 0, 1],
+      ] as const) {
+        expect(
+          occurrencesOf(armBody, name),
+          `${file}: the arm effect body (from 'useEffect(() => {' to its closing ` +
+            `'}, [pending, state.error])') writes \`${name}\` ${occurrencesOf(armBody, name)} ` +
+            `time(s), this test expects exactly ${inArm}. Unlike the whole-file footprint above this ` +
+            'is a POSITIONAL count, and it cannot be paid for: wrapping this body in ' +
+            `\`;[x].forEach((${name}) => { ...body... })\` costs one occurrence HERE, and deleting ` +
+            'a use somewhere else in the file -- a dependency array, a JSX prop, a button label -- ' +
+            'refunds the total without refunding this. A shadow of a name this effect reads kills ' +
+            'the arm or the disarm outright; a shadow of one it does not read has no legitimate ' +
+            'reason to be here at all.',
+        ).toBe(inArm)
+
+        expect(
+          occurrencesOf(cleanupBody, name),
+          `${file}: the unmount-cleanup effect body (from 'useEffect(() => () => {' to its closing ` +
+            `'}, [headingId])') writes \`${name}\` ${occurrencesOf(cleanupBody, name)} time(s), this ` +
+            `test expects exactly ${inCleanup}. Same POSITIONAL argument as the arm effect above, ` +
+            'and this is the body where a shadow does the most damage: `const document = { ' +
+            'getElementById: (id: string): HTMLElement | null => null }` here makes the focus move ' +
+            'resolve to null on EVERY unmount whatever the flag says, and a shadow of `headingId` ' +
+            'sends it to an id that does not exist.',
+        ).toBe(inCleanup)
+      }
+
       expect(
         source,
         `${file} arms ${ref} but never disarms it. The action returns { error } WITHOUT ` +
@@ -804,6 +891,35 @@ describe('unmount focus', () => {
         'unchanged.',
     ).toBe(1)
 
+    // The THIRD wallet, round 15 -- and it is the SAME one the row-button block above closed at round
+    // 14, left open in this sibling file. Round 14 pinned `<LiveStatus message={state.error} tone=`
+    // in the row-button loop; share-control renders its own `<LiveStatus message={error} tone=` and
+    // nothing here named it. So `error`'s seventh occurrence was still free: wrapping the arm body
+    // unchanged in `;[null].forEach((error) => { ...body... })` AND changing that prop to
+    // `message={null}` costs one occurrence and refunds one, leaving the footprint at 7,
+    // declarationsOf at 1 and the derivation and dep-array anchors above untouched. Measured green
+    // against census, lint AND typecheck. It is D-3 reintroduced -- `error` in the body resolves to
+    // the shadow null, so `else if (error) ${ref}.current = false` can never run, the flag stays
+    // armed after an error settle, and a later unrelated revalidation of existingLink moves focus
+    // here while the user is somewhere else -- and the compensating half is a second, independent
+    // regression that stops the share/revoke error being announced at all.
+    //
+    // A CLOSURE WRITTEN FOR ONE OCCURRENCE, OR ONE FILE, IS NOT A CLOSURE OF THE CLASS: when a wallet
+    // is spent, sweep every file that has the same shape, not just the one the finding named.
+    // `message={announcement}` on the next line is a different prop and is not matched. The attribute
+    // VALUE cannot be pinned -- stripStringLiterals blanks quoted contents, so `tone="error"` reads as
+    // `tone=""` by the time this sees it -- which is why the anchor stops at `tone=`.
+    const shareLiveStatus = countOf(source, /<LiveStatus message=\{error\} tone=/)
+    expect(
+      shareLiveStatus,
+      `share-control.tsx renders the literal \`<LiveStatus message={error} tone=\` ` +
+        `${shareLiveStatus} time(s), this test expects exactly 1. That prop is the error ` +
+        'announcement itself -- with it changed the mint or revoke failure is never announced at ' +
+        'all -- and it is also the last occurrence of `error` that no other assertion names, which ' +
+        'makes it the one deletion that lets a shadow binding of `error` slip past the footprint ' +
+        'bound above by keeping its total unchanged.',
+    ).toBe(1)
+
     expect(
       source,
       `share-control.tsx never arms ${ref} while its action is pending (expected \`if (busy) ` +
@@ -913,6 +1029,76 @@ describe('unmount focus', () => {
         'is still 1, but the call now fires on every render, not just the branch swap this mechanism ' +
         'exists to catch.',
     ).toBe(1)
+
+    // POSITIONAL PINNING, round 15 -- the same instrument the row-button block above applies, for the
+    // same reason. Every identifier count in this block is a whole-file TOTAL, and a total is
+    // spendable: an edit that adds a parameter binding inside an effect body and deletes one unnamed
+    // use of the same name elsewhere leaves the total, the declaration count and every literal anchor
+    // reading exactly as they do on correct code. Naming each freed occurrence one at a time is what
+    // rounds 12, 13, 14 and 15 all did, and each time the next hole sat just outside what the
+    // previous fix enumerated. Counting each tracked identifier INSIDE the effect body that reads it
+    // closes the class for these two effects instead: a payment made at a different position cannot
+    // refund a slice-local count.
+    //
+    // The start anchor is the generic `useEffect(() => {` on purpose -- a shadow wrapper sits BEFORE
+    // the effect's first statement, so anchoring on the first statement would put the very thing this
+    // is looking for outside the slice. The zeros are as load-bearing as the ones: the consume effect
+    // reads neither `busy` nor `error`, and the arm effect does not touch `successorRef`, so a
+    // binding of one of those names appearing there is a shadow whatever the whole-file total says.
+    const armStart = source.indexOf('useEffect(() => {')
+    const armEnd = source.indexOf('}, [busy, error])', armStart)
+    expect(
+      armStart >= 0 && armEnd > armStart,
+      `share-control.tsx: could not locate the arm effect (armStart=${armStart} for anchor ` +
+        `'useEffect(() => {', armEnd=${armEnd} for anchor '}, [busy, error])' searched from ` +
+        'armStart). Both anchors must be found and the closing one must come after the opening one. ' +
+        'This assertion is load-bearing, not defensive: indexOf returns -1 for a missing anchor and ' +
+        'String.slice treats -1 as an offset from the end, so an unchecked slice would silently run ' +
+        'backwards or come back empty and every count below it would read as a passing measurement.',
+    ).toBe(true)
+    const armBody = source.slice(armStart, armEnd)
+
+    // The slice must cover ONE effect. This file has two `useEffect(() => {` openings -- the arm and
+    // the consume -- so if they were ever reordered the generic start anchor could open on one and
+    // the literal end anchor close on the other, and a slice spanning both would dilute every count
+    // below back into a total.
+    expect(
+      countOf(armBody, /useEffect\(/),
+      `share-control.tsx: the arm-effect slice (from 'useEffect(() => {' to '}, [busy, error])') ` +
+        `contains ${countOf(armBody, /useEffect\(/)} useEffect( openings, this test expects exactly ` +
+        '1. More than one means the slice spans the arm effect and the consume effect together -- ' +
+        'its counts would then be a total again, which is the exact property this block exists to ' +
+        'stop relying on.',
+    ).toBe(1)
+
+    for (const [name, inArm, inConsume] of [
+      ['busy', 1, 0],
+      ['error', 1, 0],
+      [ref, 2, 2],
+      ['successorRef', 0, 1],
+    ] as const) {
+      expect(
+        occurrencesOf(armBody, name),
+        `share-control.tsx: the arm effect body (from 'useEffect(() => {' to its closing ` +
+          `'}, [busy, error])') writes \`${name}\` ${occurrencesOf(armBody, name)} time(s), this ` +
+          `test expects exactly ${inArm}. Unlike the whole-file footprint above this is a POSITIONAL ` +
+          `count, and it cannot be paid for: wrapping this body in \`;[x].forEach((${name}) => { ` +
+          '...body... })` costs one occurrence HERE, and deleting a use somewhere else in the file ' +
+          '-- the derivation, the dependency array, a LiveStatus prop -- refunds the total without ' +
+          'refunding this. On `error` that shadow is D-3 reintroduced: the disarm can never run, so ' +
+          'a later unrelated revalidation moves focus here while the user is elsewhere.',
+      ).toBe(inArm)
+
+      expect(
+        occurrencesOf(consumeEffectBody, name),
+        `share-control.tsx: the consume effect body (from \`if (!${ref}.current) return\` to its ` +
+          `closing '}, [link])') writes \`${name}\` ${occurrencesOf(consumeEffectBody, name)} ` +
+          `time(s), this test expects exactly ${inConsume}. Same POSITIONAL argument as the arm ` +
+          'effect above: `const successorRef = { current: null }` here, or a parameter binding of ' +
+          'the same name, leaves every pinned line byte-identical while the focus hand-off calls ' +
+          'into a decoy and the successor button never receives focus on the branch swap.',
+      ).toBe(inConsume)
+    }
 
     // COUNTING, not presence, for the guarded call across the WHOLE file. The co-location check above
     // pins the call to inside the guarded effect body, but a second, unconditional
