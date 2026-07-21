@@ -383,12 +383,32 @@ describe('unmount focus', () => {
         ).toBe(footprint)
       }
 
-      // `document` is tracked by FOOTPRINT ALONE, not by a declaration count. It is a global: nothing
-      // in this file declares it, and the one legitimate write is inside the guarded focus move. That
-      // makes the footprint bound the assertion that does the work here -- it fails on a shadow in ANY
-      // form, keyword or not, because binding a name means writing it. A declarationsOf bound of 0
-      // alongside it would catch strictly less: only the const/let/var spellings, all of which already
-      // read high here, and none of the keyword-free forms.
+      // `document` is a global: nothing in this file declares it, and the one legitimate write is
+      // inside the guarded focus move. So the honest declaration count is 0 and the honest footprint
+      // is 1, and BOTH are pinned. The footprint bound does the wider work -- it fails on a shadow in
+      // ANY form, keyword or not, because binding a name means writing it -- but it is an equality on
+      // a TOTAL, and a total is spendable: the residual is an edit that adds a `const document = ...`
+      // and deletes the one real use in the same stroke. This 0-bound is not subsumed by that, for the
+      // same reason the `headingId` 0-bound above is not: an expected-0 declaration count fires the
+      // moment a const/let/var binding of the name appears, whatever else the edit does to the total.
+      // `document` is deliberately NOT folded into the tracked loop above: that loop asserts a
+      // declaration count AND a footprint per name from one table, and `document` is the only tracked
+      // name here whose honest declaration count is 0 while its footprint is 1. It is also the only
+      // one that is a global rather than a local binding, which is exactly why 0 is honest. The
+      // share-control block below does NOT get this bound: `document` occurs 0 times there -- that
+      // control recovers focus through `successorRef`, not getElementById -- so there is nothing to
+      // pin and a 0-bound would be vacuous.
+      expect(
+        declarationsOf(source, 'document'),
+        `${file} binds \`document\` with const/let/var ${declarationsOf(source, 'document')} ` +
+          'time(s); this test expects exactly 0. `document` is a global -- the file receives it from ' +
+          'the runtime, never declares it -- so ANY const/let/var binding of that name in this file ' +
+          'is a shadow, and `const document = { getElementById: (id: string): HTMLElement | null => ' +
+          'null }` as the first line of the unmount cleanup makes the focus move resolve to null on ' +
+          'EVERY unmount whatever the flag says, restoring the pre-I-4 defect on the happy path with ' +
+          'no error condition needed.',
+      ).toBe(0)
+
       expect(
         occurrencesOf(source, 'document'),
         `${file} writes the identifier \`document\` ${occurrencesOf(source, 'document')} time(s) in ` +
@@ -423,6 +443,37 @@ describe('unmount focus', () => {
           'never re-runs after the first render, so the flag is never set and focus recovery no-ops ' +
           'on every unmount. Dropping `pending` here is also the one deletion that lets a shadow ' +
           'binding of `pending` slip past the footprint bound above by keeping its total unchanged.',
+      ).toBe(1)
+
+      // COMPENSATED SHADOWING, round 14. The armDeps anchor immediately above closed the round-12
+      // residual -- add a binding, delete a use of the same name, total unchanged -- for exactly ONE
+      // occurrence of ONE identifier: `pending`'s slot in that dependency array. It closed nothing for
+      // any other occurrence of any other tracked name. `occurrencesOf` pins a TOTAL, and a total is
+      // SPENDABLE: every occurrence of a tracked name that no assertion names is a wallet the shadow
+      // can be paid out of. `state` has four occurrences and three of them were already spoken for --
+      // the useActionState destructure (declarationsOf), `else if (state.error)` (the disarm regex)
+      // and the armDeps literal. The fourth, the `message={state.error}` prop, was not. So wrapping
+      // the arm body unchanged in `;[{ error: null }].forEach((state) => { ...body... })` AND changing
+      // `message={state.error}` to `message={null}` costs one occurrence and refunds one: the
+      // footprint still reads 4, declarationsOf still reads 1 (a parameter carries no keyword), the
+      // armDeps literal is untouched, and the census reads 5 passed. That pair reintroduces D-2 at
+      // BOTH row-button sites -- `state` in the body resolves to the shadow, so the disarm branch can
+      // never run and the flag arms on click and never clears on an error settle -- while the
+      // compensating half is a SECOND, independent regression that kills the error announcement
+      // outright. Measured green against census, lint AND typecheck. Pinning this last occurrence by
+      // its literal text spends the wallet, so `state` now has no free occurrence left to pay with.
+      // The attribute VALUE cannot be pinned here: stripStringLiterals blanks quoted contents, so
+      // `tone="error"` is `tone=""` by the time this reads it. The prop expression is what carries the
+      // announcement, and it is outside the quotes.
+      const liveStatusBinding = countOf(source, /<LiveStatus message=\{state\.error\} tone=/)
+      expect(
+        liveStatusBinding,
+        `${file} renders the literal \`<LiveStatus message={state.error} tone=\` ` +
+          `${liveStatusBinding} time(s), this test expects exactly 1. That prop is the error ` +
+          'announcement itself -- with it changed the failure is never announced at all -- and it is ' +
+          'also the last occurrence of `state` that no other assertion names, which makes it the ' +
+          'one deletion that lets a shadow binding of `state` slip past the footprint bound above by ' +
+          'keeping its total unchanged.',
       ).toBe(1)
 
       expect(
@@ -706,6 +757,52 @@ describe('unmount focus', () => {
           'only after checking that what you added is not a new binding of the name.',
       ).toBe(footprint)
     }
+
+    // COMPENSATED SHADOWING, round 14 -- the same class the row-button block above closes, reached
+    // through two different wallets here. `occurrencesOf` pins a TOTAL, and every occurrence of a
+    // tracked name that no assertion names is spendable: an edit that ADDS a parameter binding and
+    // DELETES one unnamed use of the same name leaves the total, the declaration count and every
+    // other assertion in this test unchanged.
+    //
+    // `error` has seven occurrences, and the one nothing named was its own derivation. Wrapping the
+    // arm body unchanged in `;[null].forEach((error) => { ...body... })` AND narrowing
+    // `const error = minted.error ?? revoked.error` to `const error = minted.error` costs one and
+    // refunds one, so the footprint still reads 7 and declarationsOf still reads 1. That pair is D-3
+    // reintroduced -- `error` in the body resolves to the shadow null, so `acted.current` never
+    // disarms and a later unrelated revalidation moves focus here while the user is elsewhere -- and
+    // its compensating half silently drops the revoke path's error message entirely. Pinning the
+    // derivation by its literal text also states the invariant the arm effect depends on: the disarm
+    // must see EITHER action's error, not just the mint path's.
+    const errorDerivation = countOf(source, /const error = minted\.error \?\? revoked\.error/)
+    expect(
+      errorDerivation,
+      'share-control.tsx derives the disarm input with the literal ' +
+        `\`const error = minted.error ?? revoked.error\` ${errorDerivation} time(s), this test ` +
+        'expects exactly 1. Both operands are load-bearing: narrowing it to one action leaves the ' +
+        'other path with no error to settle on, so `else if (error) acted.current = false` can never ' +
+        'run there and the flag stays armed. It is also the one deletion that lets a shadow binding ' +
+        'of `error` slip past the footprint bound above by keeping its total unchanged.',
+    ).toBe(1)
+
+    // The second wallet: `busy` has three occurrences, and the one nothing named was its slot in the
+    // arm effect's dependency array. Wrapping the arm body in `;[true].forEach((busy) => { ...body...
+    // })` AND truncating `}, [busy, error])` to `}, [error])` keeps the footprint at 3 -- `busy`
+    // shadowed to true then arms unconditionally, on first paint and on every unrelated revalidation
+    // alike. Its lone lint warning does not block: `npm run lint` is a bare `eslint .` and the run
+    // exits 0. The anchor is the LITERAL array, never a generic `}, [`, which pins nothing -- the
+    // same idiom as the row-button arm effect's `}, [pending, state.error])` and the consume effect's
+    // `}, [link])` bound below.
+    const shareArmDeps = countOf(source, /\}, \[busy, error\]\)/)
+    expect(
+      shareArmDeps,
+      `share-control.tsx closes its arm effect with the literal \`}, [busy, error])\` ` +
+        `${shareArmDeps} time(s), this test expects exactly 1. Both dependencies are load-bearing: ` +
+        'without `error` the disarm never re-runs on an error settle, and without `busy` the arm ' +
+        'never re-runs after the first render, so the flag is never set and the successor never ' +
+        'receives focus on the branch swap. Dropping `busy` here is also the one deletion that lets ' +
+        'a shadow binding of `busy` slip past the footprint bound above by keeping its total ' +
+        'unchanged.',
+    ).toBe(1)
 
     expect(
       source,
