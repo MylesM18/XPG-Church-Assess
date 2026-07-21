@@ -566,6 +566,35 @@ describe('unmount focus', () => {
           'keeping its total unchanged.',
       ).toBe(1)
 
+      // FOOTPRINT WALLET IN THE BUTTON MARKUP, round 18. The armDeps and liveStatusBinding anchors
+      // above spent the effect-adjacent free occurrences of `pending` and `state`, but `pending` still
+      // had THREE occurrences in the button JSX that no assertion named -- `aria-disabled={pending}`,
+      // the onClick guard `if (pending) e.preventDefault()`, and the label ternary -- each a footprint
+      // wallet: an edit that DELETES one of them and pads the whole-file `pending` total back to 6 with
+      // a counterfeit occurrence elsewhere (a data-pending markup fragment, a bare `pending` in JSX
+      // text, or a `pending` leaked out of a mis-paired template literal) keeps occurrencesOf at 6,
+      // declarationsOf at 1, and every positional and literal anchor above untouched. SIX such
+      // decoy+deletion pairs -- data-pending, bare-text, two brace-balance and two backtick-repair
+      // template-literal decoys -- were each measured GREEN against census, full suite, typecheck, lint
+      // AND build, all six paying for the deletion of this one occurrence, `aria-disabled={pending}`.
+      // Its twin share-control has NONE of these because its own payment occurrence -- the `error`
+      // derivation -- is pinned by literal at round 14 (`const error = minted.error ?? revoked.error`).
+      // This is that same instrument applied to the row button's payment occurrence. `aria-disabled` is
+      // the button's own in-flight state exposed to assistive tech, so pinning it states a real
+      // invariant rather than coupling to unrelated UI: without it a pending button still reads as
+      // enabled to a screen reader. The onClick guard and the label ternary remain footprint-only and
+      // are carried (see handoff) -- round 15 deliberately declined to pin the label ternary.
+      const ariaDisabledBinding = countOf(source, /aria-disabled=\{pending\}/)
+      expect(
+        ariaDisabledBinding,
+        `${file} renders the literal \`aria-disabled={pending}\` ${ariaDisabledBinding} time(s), this ` +
+          'test expects exactly 1. That binding exposes the in-flight state to assistive tech, and it ' +
+          'is one of the button-markup occurrences of `pending` that no other assertion names -- the ' +
+          'one deletion each of six measured decoy+payment pairs used to slip a shadow past the ' +
+          'whole-file footprint bound above by padding the total back to 6 with a counterfeit ' +
+          'occurrence elsewhere.',
+      ).toBe(1)
+
       expect(
         source,
         `${file} never arms ${ref} while its action is pending (expected \`if (pending) ${ref}.current` +
