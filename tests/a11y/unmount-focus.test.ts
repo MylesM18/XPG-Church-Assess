@@ -16,6 +16,31 @@
 // document.getElementById returns null at exactly the moment focus needs to move, the optional chain
 // swallows it, and focus stays on <body>. The I-3 census was defeated three times by variations of
 // this same gap; see the header of pending-controls.test.ts.
+//
+// WHAT THIS FILE CAN AND CANNOT PIN. This is a source-text census: every assertion below matches
+// substrings and counts occurrences in the file text. It can pin that specific lines exist, that they
+// are not duplicated or removed, and (via indexOf comparisons) that some of them appear in the right
+// relative order. It CANNOT pin runtime semantics that the text alone does not carry. A green run here
+// means the mechanism has not been silently gutted by any mutation this file was written to catch --
+// it does NOT mean the mechanism works. Four known-uncovered mutation classes, each measured real and
+// each left open on purpose because closing them needs fragile multi-line contextual regexes:
+//
+//   1. Lifecycle re-scoping. Changing `useEffect(() => () => {` to `useEffect(() => {` turns an
+//      unmount-cleanup effect into a mount/dependency-change effect. The pinned line
+//      `if (submitted.current) document.getElementById(headingId)?.focus()` is byte-identical either
+//      way, so no assertion here notices the effect firing at the wrong lifecycle point entirely.
+//   2. Dependency arrays. Truncating the arm effect from `}, [pending, state.error])` to `}, [])`
+//      means the flag never re-arms after its first render. The pinned line
+//      `if (pending) submitted.current = true` is untouched, so no assertion here notices.
+//   3. Derived inputs the census never inspects. Narrowing `const busy = minting || revoking` to
+//      `const busy = minting` disables focus recovery on the revoke path only -- a partial regression,
+//      the hardest kind to notice by reading a diff. The census only checks the literal
+//      `if (busy) acted.current = true`; it has no notion of what `busy` is actually made of.
+//   4. Hook identity. No assertion here distinguishes `useEffect` from `useLayoutEffect`, and the two
+//      have different timing guarantees against paint.
+//
+// The real verification for these four classes is the controller-run browser proof and the VoiceOver
+// pass, not this file. Treat a green run here as "not silently gutted," not as "verified working."
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -180,6 +205,33 @@ describe('unmount focus', () => {
           'revalidatePath, so on failure the row stays mounted with the flag set and a later ' +
           'unrelated unmount steals focus. Needs an else-if branch clearing it on an error settle.',
       ).toMatch(new RegExp(`else if \\(state\\.error\\) ${ref}\\.current = false`))
+
+      // COUNTING, not presence, for the reset. The disarm branch just checked above is the ONLY
+      // legitimate place that resets ${ref} to false. A presence check stays green when an
+      // unconditional `${ref}.current = false` is ADDED as the first line of the unmount cleanup
+      // itself: the guard then reads false before the cleanup ever gets a chance to see it true, so
+      // document.getElementById(headingId)?.focus() never fires on any unmount, even though the
+      // guarded call, the guarded arm, and this disarm branch are all still present and each
+      // individually match their own assertion above.
+      const bareResetCount = countOf(source, new RegExp(`${ref}\\.current = false`))
+      const disarmResetCount = countOf(
+        source,
+        new RegExp(`else if \\(state\\.error\\) ${ref}\\.current = false`),
+      )
+      expect(
+        bareResetCount,
+        `${file} resets ${ref}.current = false in ${bareResetCount} place(s) but the disarm branch ` +
+          `else if (state.error) ${ref}.current = false only accounts for ${disarmResetCount} of ` +
+          'them. An unaccounted-for reset anywhere -- most dangerously one prepended inside the ' +
+          'unmount cleanup itself -- makes the guard read false before the cleanup ever checks it, so ' +
+          'focus recovery silently no-ops on every unmount even though the guarded call is still ' +
+          'present.',
+      ).toBe(disarmResetCount)
+      expect(
+        disarmResetCount,
+        `${file} has the disarm branch else if (state.error) ${ref}.current = false in ` +
+          `${disarmResetCount} place(s), this test expects exactly 1.`,
+      ).toBe(1)
     }
   })
 
@@ -258,5 +310,43 @@ describe('unmount focus', () => {
         'existingLink does not change, the consume effect never runs, and the flag stays armed -- so ' +
         'a later unrelated revalidation moves focus to the share button while the user is elsewhere.',
     ).toMatch(new RegExp(`else if \\(error\\) ${ref}\\.current = false`))
+
+    // COUNTING, not presence, for the resets. There are exactly TWO legitimate resets of ${ref}: the
+    // disarm branch just checked above, and the consume effect's own reset, which must sit AFTER the
+    // consume guard `if (!${ref}.current) return`. A presence check stays green when a third reset is
+    // ADDED before that guard: the guard then reads false before the effect ever gets a chance to see
+    // it true, so successorRef.current?.focus() never fires, even though the guarded call, the
+    // guarded arm, and the disarm branch are all still present and each individually match their own
+    // assertion above.
+    const totalResetCount = countOf(source, new RegExp(`${ref}\\.current = false`))
+    expect(
+      totalResetCount,
+      `share-control.tsx resets ${ref}.current = false in ${totalResetCount} place(s), this test ` +
+        'expects exactly 2: the disarm branch and the reset inside the consume effect. A third reset ' +
+        'anywhere defeats the mechanism even though every line this test checks elsewhere is still ' +
+        'present.',
+    ).toBe(2)
+
+    const disarmResetCount = countOf(source, new RegExp(`else if \\(error\\) ${ref}\\.current = false`))
+    expect(
+      disarmResetCount,
+      `share-control.tsx has the disarm branch else if (error) ${ref}.current = false in ` +
+        `${disarmResetCount} place(s), this test expects exactly 1.`,
+    ).toBe(1)
+
+    const guardIndex = source.indexOf(`if (!${ref}.current) return`)
+    const resetsBeforeGuard = countOf(
+      source.slice(0, guardIndex),
+      new RegExp(`${ref}\\.current = false`),
+    )
+    expect(
+      resetsBeforeGuard,
+      `share-control.tsx resets ${ref}.current = false ${resetsBeforeGuard} time(s) before the ` +
+        `consume guard if (!${ref}.current) return, this test expects exactly 1 (the disarm branch, ` +
+        'which runs in the earlier arm effect). A reset placed before the guard inside the consume ' +
+        'effect itself -- for example one prepended above the guard -- makes the guard permanently ' +
+        'true, so the effect always early-returns and successorRef.current?.focus() never fires on ' +
+        'the branch swap it is meant to catch.',
+    ).toBe(1)
   })
 })
