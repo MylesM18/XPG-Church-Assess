@@ -73,14 +73,87 @@ function stripComments(source: string): string {
 // a hidden read counts LOW and fails loud, whereas preserving interpolations would leave the same
 // decoy working with the bare word wrapped in ${...}. Loud over silent, as with declarationsOf.
 //
+// NESTING DEPTH, round 17 (hole #38). Round 16 blanked template literals with the same paired-
+// delimiter regex shape the two quote branches use. That shape has no nesting depth: on
+// `a ${`${pending}`} c` it closes on the INNER opening backtick and reopens on the inner closing
+// one, so the two backticks it pairs are the wrong two and the interpolation between them survives
+// unblanked -- the round-16 decoy again, one level below the round-16 fix. Measured, not predicted:
+// that decoy plus the deletion of a real occurrence passed the census, the full suite, typecheck,
+// lint AND build. The surviving-read parity is even-depth, so depth 4 is a SECOND independent
+// wallet, and iterating the regex to a fixed point does NOT close either one -- the first pass
+// leaves empty backtick pairs that re-consume themselves, so the text stops changing with the read
+// still in it. A closure written for one nesting depth is not a closure of the class, so the branch
+// below is a nesting-AWARE scan rather than a regex: it walks a literal to its TRUE matching
+// backtick, descending through every ${...} span and through any literal nested inside one, and
+// blanks the whole span at any depth. An unterminated backtick consumes to end of file, which
+// zeroes every count in it -- loud, and not reachable in TSX that compiles.
+//
 // Ordered LAST on purpose: the quote branches have already blanked the contents of every quoted
 // string, so a backtick that was sitting inside one is gone before this runs and cannot open a
-// spurious literal that swallows real code.
+// spurious literal that swallows real code. That is also why the scan below need not track quotes.
+/** Index just past the template literal that opens at `start`. */
+function endOfTemplateLiteral(source: string, start: number): number {
+  let i = start + 1
+  while (i < source.length) {
+    const ch = source[i]
+    if (ch === '\\') {
+      i += 2
+      continue
+    }
+    if (ch === '`') return i + 1
+    if (ch === '$' && source[i + 1] === '{') {
+      i = endOfInterpolation(source, i + 2)
+      continue
+    }
+    i += 1
+  }
+  return source.length
+}
+
+/** Index just past the `${...}` span whose CONTENTS begin at `start`. */
+function endOfInterpolation(source: string, start: number): number {
+  let depth = 1
+  let i = start
+  while (i < source.length) {
+    const ch = source[i]
+    if (ch === '\\') {
+      i += 2
+      continue
+    }
+    if (ch === '`') {
+      i = endOfTemplateLiteral(source, i)
+      continue
+    }
+    if (ch === '{') {
+      depth += 1
+    } else if (ch === '}') {
+      depth -= 1
+      if (depth === 0) return i + 1
+    }
+    i += 1
+  }
+  return source.length
+}
+
+function blankTemplateLiterals(source: string): string {
+  let out = ''
+  let i = 0
+  while (i < source.length) {
+    if (source[i] === '`') {
+      out += '``'
+      i = endOfTemplateLiteral(source, i)
+      continue
+    }
+    out += source[i]
+    i += 1
+  }
+  return out
+}
+
 function stripStringLiterals(source: string): string {
-  return source
-    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
-    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
-    .replace(/`(?:[^`\\]|\\.)*`/g, '``')
+  return blankTemplateLiterals(
+    source.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\]|\\.)*'/g, "''"),
+  )
 }
 
 function read(rel: string): string {
