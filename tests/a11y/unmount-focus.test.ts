@@ -569,22 +569,35 @@ describe('unmount focus', () => {
     // below still reads exactly 1. But the call is no longer reachable through the guard at all; it
     // now fires on every render, stealing focus to the successor button continuously instead of only
     // on the branch swap this mechanism exists to catch. Slice the consume effect from the guard to
-    // its own closing `}, [` and require the call to occur inside that slice.
+    // its own closing `}, [link])` and require the call to occur inside that slice.
+    //
+    // The slice end is the LITERAL `}, [link])`, not a generic `}, [`. This mirrors the row-button
+    // cleanup slice above, whose `}, [headingId])` anchor pins that effect's dependency array as a
+    // side effect of the anchor's own text. A generic `}, [` pins nothing, and truncating this
+    // effect's deps to `}, [])` was measured GREEN against the whole gate chain -- census, lint and
+    // typecheck alike. That mutation is a silent total kill: the consume effect then runs once on
+    // mount and never again, so successorRef.current?.focus() stops firing for EVERY mint/revoke
+    // swap after first paint and focus falls to <body>. react-hooks/exhaustive-deps cannot catch it
+    // either, because the effect body never names `link` -- it is a re-run trigger only. With the
+    // literal anchor, dropping `link` makes indexOf return -1 and the bounds assertion below fires.
     const guardIndex = source.indexOf(`if (!${ref}.current) return`)
-    const consumeEffectEnd = source.indexOf('}, [', guardIndex)
+    const consumeEffectEnd = source.indexOf('}, [link])', guardIndex)
     expect(
       guardIndex >= 0 && consumeEffectEnd > guardIndex,
       `share-control.tsx: could not locate the consume effect body (guardIndex=${guardIndex}, ` +
-        `consumeEffectEnd=${consumeEffectEnd}). Both must be found and the effect's closing \`}, [\` ` +
-        'must come after the guard, or slicing would silently run backwards and make the co-location ' +
-        'check below meaningless.',
+        `consumeEffectEnd=${consumeEffectEnd}). Both must be found and the effect's closing ` +
+        '`}, [link])` must come after the guard. A -1 here means the consume effect is no longer ' +
+        'keyed on `[link]` -- if its deps were truncated it runs only on mount, so the focus move ' +
+        'never fires on any later branch swap. It also means slicing would silently run backwards ' +
+        'from 0 and make the co-location check below meaningless.',
     ).toBe(true)
     const consumeEffectBody = source.slice(guardIndex, consumeEffectEnd)
     const callsInsideConsumeEffect = countOf(consumeEffectBody, /successorRef\.current\?\.focus\(\)/)
     expect(
       callsInsideConsumeEffect,
       `share-control.tsx's consume effect body (from \`if (!${ref}.current) return\` to its closing ` +
-        `\`}, [\`) contains successorRef.current?.focus() ${callsInsideConsumeEffect} time(s), this ` +
+        `\`}, [link])\`) contains successorRef.current?.focus() ${callsInsideConsumeEffect} time(s), ` +
+        'this ' +
         'test expects exactly 1. If the call was moved into a separate dep-less effect instead of ' +
         'staying behind this guard, the guard is still present as text and the whole-file count below ' +
         'is still 1, but the call now fires on every render, not just the branch swap this mechanism ' +
