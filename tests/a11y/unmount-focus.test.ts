@@ -53,8 +53,21 @@ function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
 }
 
+// HOLE I2 fix: a string literal counts as markup to a naive scan. A quoted attribute value can
+// carry a decoy like `data-a11y-note="<h2 id={...} tabIndex={-1}>"` -- every check below sees
+// `<h2`, `id={` and `tabIndex={-1}` as real matches even though they sit inside quotes, not at a
+// real tag position. Blank out string-literal CONTENTS (keeping the quotes, so positions and
+// overall length stay stable) so only real JSX markup remains for the counts and slices below to
+// scan. Applied AFTER stripComments -- order is load-bearing: stripping comments first is also
+// what keeps a `//` inside a string literal from being mistaken for the start of a line comment.
+function stripStringLiterals(source: string): string {
+  return source
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+}
+
 function read(rel: string): string {
-  return stripComments(fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8'))
+  return stripStringLiterals(stripComments(fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8')))
 }
 
 const countOf = (source: string, re: RegExp) => (source.match(new RegExp(re, 'g')) ?? []).length
@@ -525,6 +538,29 @@ describe('unmount focus', () => {
         'existingLink change, including an unrelated revalidation, and steals focus to the share ' +
         'button while the user is elsewhere.',
     ).toMatch(new RegExp(`if \\(!${ref}\\.current\\) return`))
+
+    // HOLE I1 fix: the guard-presence check above and the co-location slice below are each
+    // satisfiable by production code that MERGES the arm effect and the consume effect into ONE
+    // effect keyed by `[busy, error, link]`. The merged body still contains
+    // `if (!${ref}.current) return` immediately before the guarded call, so the co-location slice
+    // (which runs from that guard forward to the next `}, [`) still finds the call inside it -- it
+    // proves guard and call share A block, never that the block is the one uniquely owned by the
+    // `[link]` effect. On click, `busy` flips false -> true in the SAME effect run that arms the
+    // flag, so the guard falls straight through, resets ${ref}.current to false, and focuses the
+    // already-focused button as a no-op; when `link` later actually changes the flag already reads
+    // false, the guard trips, and successorRef.current?.focus() never fires -- focus falls to
+    // <body>, the exact V4 status-quo defect this mechanism exists to fix. Require the guard to be
+    // the FIRST statement after the consume effect's own opening `useEffect(() => {`, keyed off the
+    // SAME captured ref identifier so a rename of the ref cannot vacuously defeat this anchor.
+    expect(
+      source,
+      `share-control.tsx: the consume effect does not open with \`useEffect(() => {\` immediately ` +
+        `followed by its own guard \`if (!${ref}.current) return\` as its first statement -- if the ` +
+        'arm effect was merged into this one (e.g. dep array `[busy, error, link]`), the guard can ' +
+        'fall through on the SAME render that arms the flag, resetting it before the real link ' +
+        'change is ever consumed, so successorRef.current?.focus() never fires on the branch swap ' +
+        'and focus falls to <body>.',
+    ).toMatch(new RegExp(`useEffect\\(\\(\\) => \\{\\s*if \\(!${ref}\\.current\\) return`))
 
     // CO-LOCATION, not two independent facts. The guard above (presence) and the call count below
     // (whole-file total) are each satisfiable on their own by production code that MOVES
