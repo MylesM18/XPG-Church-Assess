@@ -66,6 +66,17 @@ const LISTS: Record<string, number> = {
   'app/app/[churchId]/access/pending-invites-list.tsx': 2,
 }
 
+// file -> the name of the row-button component this list mounts once per row, used ONLY to anchor
+// the Hole-2 call-site check below to the real JSX invocation rather than a whole-file substring. A
+// parallel explicit map, not a field folded into LISTS, so every existing use of LISTS (the <h2>-count
+// assertions and the per-<section> branch slices above) keeps working completely unchanged. Hand
+// written on purpose: deriving the name by regexing the file's own `import` line would let an
+// attacker-controlled string spoof the component name, exactly the class of hole this map closes.
+const ROW_BUTTON_FOR: Record<string, string> = {
+  'app/app/[churchId]/access/members-list.tsx': 'RemoveMemberButton',
+  'app/app/[churchId]/access/pending-invites-list.tsx': 'RevokeInviteButton',
+}
+
 const ROW_BUTTONS = [
   'app/app/[churchId]/access/remove-member-button.tsx',
   'app/app/[churchId]/access/revoke-invite-button.tsx',
@@ -174,6 +185,44 @@ describe('unmount focus', () => {
         source,
         `${file} never passes ${ids[0]} to its row button, so the button cannot resolve the heading.`,
       ).toContain(`headingId={${ids[0]}}`)
+
+      // HOLE 2 fix: the toContain check above is a bare whole-file PRESENCE check -- it never verifies
+      // that the string it found is attached to the actual row-button JSX call site. A decoy
+      // substring anywhere else in the file (e.g. tucked into an unrelated attribute) satisfies it
+      // while the real call site passes a completely different, or no, headingId. Anchor to the real
+      // invocation of this list's row-button component and compare the id captured AT THAT CALL SITE
+      // against ids[0], the id already captured from this list's own <h2> above.
+      const rowButton = ROW_BUTTON_FOR[file]
+      expect(
+        rowButton,
+        `${file} has no entry in ROW_BUTTON_FOR -- add one naming the row-button component this list ` +
+          'mounts once per row, or the call-site check below has nothing to anchor to.',
+      ).toBeTruthy()
+
+      // Today both real call sites pass headingId as {IDENT}, matching the row button's own
+      // `headingId: string` prop pinned in test 4. If a future edit legitimately switched to a string
+      // literal, this regex would not match it and the count check below would fail over-strictly --
+      // an honest failure, not a silent pass, and acceptable for that reason.
+      const callSiteRe = new RegExp(`<${rowButton}\\b[^>]*\\bheadingId=\\{(\\w+)\\}`, 'g')
+      const callSites = [...source.matchAll(callSiteRe)]
+      expect(
+        callSites.length,
+        `${file} has ${callSites.length} <${rowButton} ...> call site(s) passing headingId={${ids[0]}} ` +
+          '(the {IDENT} form) at the JSX invocation itself, this test expects exactly 1. Zero means the ' +
+          `real call site either dropped headingId or no longer passes the identifier ${ids[0]} that ` +
+          "this list's own <h2> declares -- e.g. a different identifier, a string literal, or a decoy " +
+          'match elsewhere in the file inflating the whole-file check above -- so ' +
+          'document.getElementById cannot resolve the heading for any row in this list. More than 1 ' +
+          'means a decoy invocation is padding the count.',
+      ).toBe(1)
+      const callSiteId = callSites[0]![1]
+      expect(
+        callSiteId,
+        `${file}: the <${rowButton}> call site passes headingId={${callSiteId}}, this test expects ` +
+          `headingId={${ids[0]}} to match this list's own <h2> id. A mismatch means ` +
+          'document.getElementById(headingId) resolves to no element (or the wrong one) on every row ' +
+          'of this list, so focus recovery silently no-ops on every removal or revoke.',
+      ).toBe(ids[0])
     }
   })
 
@@ -366,6 +415,59 @@ describe('unmount focus', () => {
         'rather than checking presence is deliberate: with the ref on only one branch, that ' +
         'direction of the swap still drops focus to <body> and a presence check stays green.',
     ).toBe(buttons)
+
+    // HOLE 1 fix: the whole-file count above is necessary but not sufficient -- it never verifies
+    // WHICH button carries the ref. A ref removed from one button and padded back to the same total
+    // with a same-length decoy elsewhere in the file (e.g. a data attribute on an unrelated element)
+    // reads as "2 of 2" without either real button being individually bound. Slice each button's own
+    // opening tag and require ref={successorRef} to appear inside it.
+    const buttonIndices: number[] = []
+    let buttonIdx = source.indexOf('<button')
+    while (buttonIdx !== -1) {
+      buttonIndices.push(buttonIdx)
+      buttonIdx = source.indexOf('<button', buttonIdx + 1)
+    }
+    expect(
+      buttonIndices.length,
+      `share-control.tsx: indexOf found ${buttonIndices.length} <button occurrence(s), this test ` +
+        'expects 2, matching the buttons count above. A missing anchor here would make the per-button ' +
+        'ref check below vacuous rather than a real check.',
+    ).toBe(2)
+
+    buttonIndices.forEach((start, i) => {
+      // TRAP: the opening tag contains `onClick={(e) => { if (...) e.preventDefault() }}`, and `=>`
+      // itself contains a `>`. A naive "slice to the next >" stops at the arrow, well short of the
+      // real tag close, and would silently under-slice every check below. Terminate the opening tag
+      // at the first `>` that is NOT immediately preceded by `=`, skipping past any `=>` first.
+      let searchFrom = start
+      let tagEnd = -1
+      while (searchFrom < source.length) {
+        const gt = source.indexOf('>', searchFrom)
+        if (gt === -1) break
+        if (source[gt - 1] !== '=') {
+          tagEnd = gt + 1
+          break
+        }
+        searchFrom = gt + 1
+      }
+      expect(
+        tagEnd > start,
+        `share-control.tsx: button #${i + 1}'s opening tag (starts at index ${start}) has no closing ` +
+          `'>' that survives the '=>' trap (tagEnd=${tagEnd}). A missing or backwards bound would make ` +
+          'the per-button ref check below meaningless rather than a real check.',
+      ).toBe(true)
+      const tag = source.slice(start, tagEnd)
+      const tagRefs = countOf(tag, /ref=\{successorRef\}/)
+      expect(
+        tagRefs,
+        `share-control.tsx: button #${i + 1}'s own opening tag (index ${start}) carries ` +
+          `ref={successorRef} ${tagRefs} time(s), this test expects exactly 1. The whole-file count ` +
+          'above can stay satisfied by a decoy elsewhere in the file even when THIS button lost its ' +
+          'ref -- on the branch swap that mounts this button, successorRef.current is then null, ' +
+          'successorRef.current?.focus() silently no-ops through the optional chain, and focus falls ' +
+          'to <body>.',
+      ).toBe(1)
+    })
 
     // Same idiom as the row-button test above: capture the flag identifier once and hold the arm,
     // the guard and the disarm to that SAME ref, so the mechanism cannot be gutted piecemeal while
