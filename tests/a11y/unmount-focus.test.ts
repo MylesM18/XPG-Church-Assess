@@ -172,6 +172,19 @@ describe('unmount focus', () => {
           'arm while pending" guarantee even though the guarded arm line is still present.',
       ).toBe(bareArmCount)
 
+      // UPPER BOUND, not just a ratio. bareArmCount === guardedArmCount alone still passes when a
+      // SECOND copy of the fused guarded string is ADDED alongside the real one -- e.g. a duplicate
+      // dep-less effect containing `if (pending) ${ref}.current = true` -- because both counts become
+      // 2 and 2 === 2 reads as satisfied. Pin the guarded count to exactly 1, the same idiom this file
+      // already applies to disarmResetCount and successorFocusCalls below.
+      expect(
+        guardedArmCount,
+        `${file} has the guarded arm if (pending) ${ref}.current = true in ${guardedArmCount} ` +
+          'place(s), this test expects exactly 1. A second guarded arm anywhere -- for example a ' +
+          'duplicate dep-less effect containing the same fused string -- still satisfies the ratio ' +
+          'check above but adds a second arm this mechanism was not written to run.',
+      ).toBe(1)
+
       expect(
         source,
         `${file} does not gate document.getElementById(headingId)?.focus() behind ` +
@@ -198,6 +211,21 @@ describe('unmount focus', () => {
           'call anywhere fires focus recovery on every unmount, including ones this control did not ' +
           'cause, even though the guarded call is still present.',
       ).toBe(bareFocusCount)
+
+      // UPPER BOUND, not just a ratio. bareFocusCount === guardedFocusCount alone still passes when a
+      // SECOND copy of the fused guarded string is ADDED alongside the real one -- e.g. a new
+      // dep-less effect containing `if (${ref}.current) document.getElementById(headingId)?.focus()`
+      // -- because both counts become 2 and 2 === 2 reads as satisfied. At runtime that extra effect
+      // fires after EVERY render while this row's own action is in flight, yanking focus off the
+      // button the user is mid-interaction with. Pin the guarded count to exactly 1.
+      expect(
+        guardedFocusCount,
+        `${file} has the guarded call if (${ref}.current) document.getElementById(headingId)?.focus() ` +
+          `in ${guardedFocusCount} place(s), this test expects exactly 1. A second guarded call ` +
+          'anywhere -- for example a duplicate dep-less effect containing the same fused string -- ' +
+          'still satisfies the ratio check above but fires focus recovery after every render, not ' +
+          'just on the unmount this mechanism exists to catch.',
+      ).toBe(1)
 
       expect(
         source,
@@ -290,11 +318,40 @@ describe('unmount focus', () => {
         'button while the user is elsewhere.',
     ).toMatch(new RegExp(`if \\(!${ref}\\.current\\) return`))
 
-    // COUNTING, not presence, for the guarded call. The guard here is a separate line rather than a
-    // prefix, so the presence check above cannot pin the two together the way the row-button test
-    // does. Require the call to exist exactly once in the whole file instead: a second, unconditional
-    // successorRef.current?.focus() -- for example one prepended above the guard -- pushes this past
-    // 1 even though the guarded original is still present and still reads correctly on its own.
+    // CO-LOCATION, not two independent facts. The guard above (presence) and the call count below
+    // (whole-file total) are each satisfiable on their own by production code that MOVES
+    // successorRef.current?.focus() out of this guarded effect into a new dep-less effect: the guard
+    // text is still present, and -- because the call was moved, not duplicated -- the whole-file total
+    // below still reads exactly 1. But the call is no longer reachable through the guard at all; it
+    // now fires on every render, stealing focus to the successor button continuously instead of only
+    // on the branch swap this mechanism exists to catch. Slice the consume effect from the guard to
+    // its own closing `}, [` and require the call to occur inside that slice.
+    const guardIndex = source.indexOf(`if (!${ref}.current) return`)
+    const consumeEffectEnd = source.indexOf('}, [', guardIndex)
+    expect(
+      guardIndex >= 0 && consumeEffectEnd > guardIndex,
+      `share-control.tsx: could not locate the consume effect body (guardIndex=${guardIndex}, ` +
+        `consumeEffectEnd=${consumeEffectEnd}). Both must be found and the effect's closing \`}, [\` ` +
+        'must come after the guard, or slicing would silently run backwards and make the co-location ' +
+        'check below meaningless.',
+    ).toBe(true)
+    const consumeEffectBody = source.slice(guardIndex, consumeEffectEnd)
+    const callsInsideConsumeEffect = countOf(consumeEffectBody, /successorRef\.current\?\.focus\(\)/)
+    expect(
+      callsInsideConsumeEffect,
+      `share-control.tsx's consume effect body (from \`if (!${ref}.current) return\` to its closing ` +
+        `\`}, [\`) contains successorRef.current?.focus() ${callsInsideConsumeEffect} time(s), this ` +
+        'test expects exactly 1. If the call was moved into a separate dep-less effect instead of ' +
+        'staying behind this guard, the guard is still present as text and the whole-file count below ' +
+        'is still 1, but the call now fires on every render, not just the branch swap this mechanism ' +
+        'exists to catch.',
+    ).toBe(1)
+
+    // COUNTING, not presence, for the guarded call across the WHOLE file. The co-location check above
+    // pins the call to inside the guarded effect body, but a second, unconditional
+    // successorRef.current?.focus() could still be ADDED elsewhere in the file -- for example
+    // duplicated rather than moved -- while the co-located original stays intact and the check above
+    // still reads exactly 1. Require the call to occur exactly once in the whole file too.
     const successorFocusCalls = countOf(source, /successorRef\.current\?\.focus\(\)/)
     expect(
       successorFocusCalls,
@@ -334,7 +391,8 @@ describe('unmount focus', () => {
         `${disarmResetCount} place(s), this test expects exactly 1.`,
     ).toBe(1)
 
-    const guardIndex = source.indexOf(`if (!${ref}.current) return`)
+    // guardIndex was already computed above, for the co-location check; reuse it rather than
+    // re-running indexOf a second time.
     const resetsBeforeGuard = countOf(
       source.slice(0, guardIndex),
       new RegExp(`${ref}\\.current = false`),
