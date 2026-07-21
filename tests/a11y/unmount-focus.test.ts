@@ -277,6 +277,45 @@ describe('unmount focus', () => {
           'just on the unmount this mechanism exists to catch.',
       ).toBe(1)
 
+      // CO-LOCATION, not two independent facts. The guard-and-call match and the whole-file upper
+      // bound above are each satisfiable on their own by production code that MERGES the
+      // unmount-cleanup effect into the arm effect: the fused guarded string
+      // `if (${ref}.current) document.getElementById(headingId)?.focus()` is still present, and still
+      // exactly once in the whole file, but it no longer runs inside its own
+      // `useEffect(() => () => { ... }, [headingId])` -- an unmount cleanup -- it runs inside the SAME
+      // effect that arms the flag, on every render where pending or state.error change. On click,
+      // pending flips false -> true, that render arms the flag and immediately steals focus from the
+      // button the user just pressed, and because no effect returns a cleanup any more, the real
+      // unmount runs nothing and focus falls to <body> -- the exact pre-I-4 defect. Slice from the
+      // cleanup effect's double-arrow open to its own closing `}, [headingId])` and require the
+      // guarded call to occur inside that slice.
+      const cleanupStart = source.indexOf('useEffect(() => () => {')
+      const cleanupEnd = source.indexOf('}, [headingId])', cleanupStart)
+      expect(
+        cleanupStart >= 0 && cleanupEnd > cleanupStart,
+        `${file}: could not locate the unmount-cleanup effect (cleanupStart=${cleanupStart} for ` +
+          `anchor 'useEffect(() => () => {', cleanupEnd=${cleanupEnd} for anchor '}, [headingId])' ` +
+          'searched from cleanupStart). Both anchors must be found and the closing one must come ' +
+          'after the opening one, or slicing would silently run backwards or come back empty and make ' +
+          'the co-location check below meaningless.',
+      ).toBe(true)
+      const cleanupBody = source.slice(cleanupStart, cleanupEnd)
+      const guardedFocusInCleanup = countOf(
+        cleanupBody,
+        new RegExp(`if \\(${ref}\\.current\\) document\\.getElementById\\(headingId\\)\\?\\.focus\\(\\)`),
+      )
+      expect(
+        guardedFocusInCleanup,
+        `${file}: the unmount-cleanup effect body (from 'useEffect(() => () => {' to its closing ` +
+          `'}, [headingId])') contains the guarded call if (${ref}.current) ` +
+          `document.getElementById(headingId)?.focus() ${guardedFocusInCleanup} time(s), this test ` +
+          'expects exactly 1. If the two effects were merged -- moving this call into the arm effect ' +
+          'instead of leaving it inside its own unmount cleanup -- the guarded call is still present ' +
+          'exactly once in the whole file (see the check above), but it now fires on every render ' +
+          'while this action is pending, stealing focus from the button the user just pressed, and ' +
+          'the real unmount runs no cleanup at all -- the pre-I-4 defect.',
+      ).toBe(1)
+
       expect(
         source,
         `${file} arms ${ref} but never disarms it. The action returns { error } WITHOUT ` +
