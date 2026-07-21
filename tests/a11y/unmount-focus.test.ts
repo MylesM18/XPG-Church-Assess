@@ -76,7 +76,8 @@ const SHARE_CONTROL = 'app/app/[churchId]/diagnosis/share-control.tsx'
 describe('unmount focus', () => {
   it('renders the number of list headings this test was written against', () => {
     for (const [file, expected] of Object.entries(LISTS)) {
-      const found = countOf(read(file), /<h2\b/)
+      const source = read(file)
+      const found = countOf(source, /<h2\b/)
       expect(
         found,
         `${file} renders ${found} <h2> elements, this test expects ${expected}. If a branch was ` +
@@ -84,6 +85,55 @@ describe('unmount focus', () => {
           'silently no-ops whenever that branch is the one that mounts. Update this number only ' +
           'after checking that.',
       ).toBe(expected)
+
+      // COUNTING PER BRANCH, not just per file. The check above scans the WHOLE file text and has no
+      // notion of which render branch a <h2> sits in. pending-invites-list.tsx has TWO render
+      // branches -- the invites.length === 0 early return and the populated return -- each rendering
+      // its own <section> containing its own <h2>. A mutation that demotes the empty-state <h2> to a
+      // <p> (dropping id and tabIndex) while adding a second, redundant
+      // <h2 id={PENDING_HEADING_ID} tabIndex={-1}> inside the POPULATED branch keeps the file-wide
+      // <h2> total at 2 and keeps every remaining <h2> carrying both attributes, so the check above
+      // stays green. This reproduces D-1 exactly (see spec 6.1): when invites.length === 0 renders,
+      // no element in the DOM carries access-pending-invites-heading, document.getElementById returns
+      // null, the optional chain swallows it, and focus stays on <body> -- on revoking the LAST
+      // pending invite, the single most common revoke there is. Slice the file at each <section>
+      // boundary and require exactly one qualifying <h2> INSIDE each branch, not just present
+      // somewhere in the file.
+      const sectionIndices: number[] = []
+      let sectionIdx = source.indexOf('<section')
+      while (sectionIdx !== -1) {
+        sectionIndices.push(sectionIdx)
+        sectionIdx = source.indexOf('<section', sectionIdx + 1)
+      }
+      expect(
+        sectionIndices.length,
+        `${file} has ${sectionIndices.length} <section> element(s), this test expects ${expected} -- ` +
+          'one per render branch, the same number as the <h2> count above, because every render ' +
+          'branch is one <section> carrying exactly one heading. If a branch was added or removed, ' +
+          'come back and think about D-1 rather than just bumping this number.',
+      ).toBe(expected)
+
+      sectionIndices.forEach((start, i) => {
+        const end = i + 1 < sectionIndices.length ? sectionIndices[i + 1]! : source.length
+        expect(
+          end > start,
+          `${file}: branch slice #${i + 1} has bounds [${start}, ${end}) that do not run forward. A ` +
+            'slice that silently runs backwards or comes back empty would make the per-branch check ' +
+            'below meaningless.',
+        ).toBe(true)
+        const branchTags = source.slice(start, end).match(/<h2\b[^>]*>/g) ?? []
+        const qualifying = branchTags.filter(
+          (tag) => tag.includes('id={') && tag.includes('tabIndex={-1}'),
+        ).length
+        expect(
+          qualifying,
+          `${file}: render branch #${i + 1} (its <section> starts at index ${start}) contains ` +
+            `${qualifying} <h2> element(s) carrying BOTH id={...} and tabIndex={-1}, this test ` +
+            'expects exactly 1 (D-1). A branch whose heading lost either attribute -- or never had ' +
+            'one -- leaves document.getElementById unable to resolve a target when THAT branch is ' +
+            'the one that mounts, and focus silently stays on <body>.',
+        ).toBe(1)
+      })
     }
   })
 
@@ -309,6 +359,23 @@ describe('unmount focus', () => {
         'defeats the "only arm while pending" guarantee even though the guarded arm line is still ' +
         'present.',
     ).toBe(bareActedArms)
+
+    // UPPER BOUND, not just a ratio. bareActedArms === guardedActedArms alone still passes when a
+    // SECOND copy of the fused guarded string is ADDED alongside the real one -- e.g. a duplicate
+    // dep-less effect containing `if (busy) ${ref}.current = true` -- because both counts become 2
+    // and 2 === 2 reads as satisfied. Pin the guarded count to exactly 1, the same idiom this file
+    // already applies to guardedArmCount and guardedFocusCount above. Be plain about what this
+    // closes: the controller traced the runtime and found no demonstrated harm from that duplicate --
+    // it only arms under the same `busy` condition the real effect uses, so it cannot arm at an
+    // illegitimate moment, and a bare unguarded arm is still caught by the ratio check above. This
+    // closes a consistency gap with the row-button side above, not a demonstrated runtime defect.
+    expect(
+      guardedActedArms,
+      `share-control.tsx has the guarded arm if (busy) ${ref}.current = true in ${guardedActedArms} ` +
+        'place(s), this test expects exactly 1. A second guarded arm anywhere -- for example a ' +
+        'duplicate dep-less effect containing the same fused string -- still satisfies the ratio ' +
+        'check above but adds a second arm this mechanism was not written to run.',
+    ).toBe(1)
 
     expect(
       source,
