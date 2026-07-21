@@ -263,6 +263,28 @@ describe('unmount focus', () => {
       ).not.toBeNull()
       const ref = refMatch![1]
 
+      // SHADOWING. Every assertion below matches on the NAMES `pending` and `headingId`, and a name
+      // says nothing about which binding it resolves to. Declaring either one afresh INSIDE the
+      // effect body -- `const pending = false` as the first line of the arm effect, or
+      // `const headingId = 'decoy'` as the first line of the unmount cleanup -- leaves every pinned
+      // line byte-identical, so every count, ratio, bound and slice below reads exactly as it does on
+      // correct code, while the effect evaluates against the shadow and the mechanism is dead. Neither
+      // typecheck nor lint objects: shadowing is legal TypeScript, and react-hooks/immutability fires
+      // only on reassigning an existing binding, never on a new declaration. Both identifiers reach
+      // this component WITHOUT a declaration of their own -- `pending` via array destructuring from
+      // useActionState, `headingId` via the props parameter -- so any `const`/`let`/`var` binding of
+      // either name in this file is a shadow, and zero is the honest count.
+      for (const shadowed of ['pending', 'headingId'] as const) {
+        expect(
+          countOf(source, new RegExp(`\\b(?:const|let|var)\\s+${shadowed}\\b`)),
+          `${file} declares a local \`${shadowed}\` binding. This file must not: \`pending\` arrives ` +
+            'by destructuring useActionState and `headingId` arrives as a prop, so a fresh ' +
+            `declaration of \`${shadowed}\` can only shadow the real value. Inside either effect that ` +
+            'silently kills focus recovery while leaving every assertion in this test green, because ' +
+            'they all match on the NAME and a name does not pin which binding it resolves to.',
+        ).toBe(0)
+      }
+
       expect(
         source,
         `${file} never arms ${ref} while its action is pending (expected \`if (pending) ${ref}.current` +
@@ -493,6 +515,25 @@ describe('unmount focus', () => {
         'settle, so an unrelated revalidation never steals or drops focus from the successor button.',
     ).not.toBeNull()
     const ref = refMatch![1]
+
+    // SHADOWING -- the same class the row-button loop above pins, with one difference: here `busy`
+    // and `error` are LOCAL derived values, each legitimately declared exactly once at component
+    // scope (`const busy = minting || revoking`, `const error = minted.error ?? revoked.error`). So
+    // the honest count is 1, not 0, and pinning it to exactly 1 forbids the SECOND declaration --
+    // `const busy = false` as the first line of the arm effect leaves `if (busy) acted.current = true`
+    // byte-identical, so every assertion below still passes while the arm never fires and the
+    // successor never receives focus, in both the mint and the revoke direction. Legal TypeScript,
+    // and no lint rule fires on a new declaration.
+    for (const shadowed of ['busy', 'error'] as const) {
+      expect(
+        countOf(source, new RegExp(`\\b(?:const|let|var)\\s+${shadowed}\\b`)),
+        `share-control.tsx must declare \`${shadowed}\` exactly once, at component scope. A second ` +
+          `declaration of \`${shadowed}\` shadows the real derived value; placed inside the arm ` +
+          'effect it silently kills the successor focus hand-off while leaving every assertion in ' +
+          'this test green, because they all match on the NAME and a name does not pin which binding ' +
+          'it resolves to.',
+      ).toBe(1)
+    }
 
     expect(
       source,
