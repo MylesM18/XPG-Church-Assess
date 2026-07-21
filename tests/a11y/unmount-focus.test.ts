@@ -72,6 +72,24 @@ function read(rel: string): string {
 
 const countOf = (source: string, re: RegExp) => (source.match(new RegExp(re, 'g')) ?? []).length
 
+// SHADOWING, round 11. Round 10 pinned declaration counts with `\b(?:const|let|var)\s+NAME\b`,
+// which only ever matches the PLAIN form. `const { pending } = { pending: false }` binds the same
+// name just as completely and that regex never sees it, so the count read exactly as it does on
+// correct code while the effect evaluated against the shadow. Count every binding FORM: plain,
+// object-destructured and array-destructured. `NAME(?!\s*:)` in the object form is deliberate --
+// `const { pending: other }` binds `other`, not `pending`, so it is not a shadow and must not
+// count. If this pattern ever over-matches it fails LOUD, which is the safe direction: an honest
+// red, never a silent green.
+const declarationsOf = (source: string, name: string) =>
+  countOf(
+    source,
+    new RegExp(
+      `\\b(?:const|let|var)\\s+(?:${name}\\b(?!\\s*:)` +
+        `|\\{[^}]*\\b${name}\\b(?!\\s*:)[^}]*\\}` +
+        `|\\[[^\\]]*\\b${name}\\b[^\\]]*\\])`,
+    ),
+  )
+
 // file -> how many <h2> elements it renders. The count is asserted first, so that adding a branch
 // forces whoever adds it to come here and think about D-1 rather than silently re-breaking it.
 const LISTS: Record<string, number> = {
@@ -261,7 +279,7 @@ describe('unmount focus', () => {
           'Focus recovery needs one ref to arm while its own action is in flight and disarm on an ' +
           'error settle, so an unrelated unmount never steals or drops focus.',
       ).not.toBeNull()
-      const ref = refMatch![1]
+      const ref = refMatch![1]!
 
       // SHADOWING. Every assertion below matches on the NAMES `pending` and `headingId`, and a name
       // says nothing about which binding it resolves to. Declaring either one afresh INSIDE the
@@ -274,15 +292,33 @@ describe('unmount focus', () => {
       // this component WITHOUT a declaration of their own -- `pending` via array destructuring from
       // useActionState, `headingId` via the props parameter -- so any `const`/`let`/`var` binding of
       // either name in this file is a shadow, and zero is the honest count.
-      for (const shadowed of ['pending', 'headingId'] as const) {
+      // Round 11 widened this in two directions at once, because round 10's version was too narrow
+      // in two independent ways. (1) It counted only the PLAIN declaration form, so the
+      // object-destructured shadow `const { pending } = { pending: false }` walked straight past it.
+      // (2) It tracked `pending` and `headingId` but NOT the flag ref itself -- the one identifier
+      // every other assertion in this block interpolates. `const submitted = { current: false }` as
+      // the first line of the arm effect leaves every pinned line byte-identical while the REAL ref
+      // never arms, so the cleanup guard reads false forever and focus recovery no-ops on every
+      // unmount. Both were measured green against census, lint AND typecheck before this fix.
+      // The honest count differs per identifier: `pending` is bound exactly once, by the
+      // useActionState array destructure; `headingId` arrives through the props PARAMETER, which
+      // carries no const/let/var and so is never counted at all; the ref is declared exactly once.
+      for (const [shadowed, expected] of [
+        ['pending', 1],
+        ['headingId', 0],
+        [ref, 1],
+      ] as const) {
         expect(
-          countOf(source, new RegExp(`\\b(?:const|let|var)\\s+${shadowed}\\b`)),
-          `${file} declares a local \`${shadowed}\` binding. This file must not: \`pending\` arrives ` +
-            'by destructuring useActionState and `headingId` arrives as a prop, so a fresh ' +
-            `declaration of \`${shadowed}\` can only shadow the real value. Inside either effect that ` +
-            'silently kills focus recovery while leaving every assertion in this test green, because ' +
-            'they all match on the NAME and a name does not pin which binding it resolves to.',
-        ).toBe(0)
+          declarationsOf(source, shadowed),
+          `${file} binds \`${shadowed}\` ${declarationsOf(source, shadowed)} time(s); this test ` +
+            `expects exactly ${expected}. \`pending\` is destructured once from useActionState, ` +
+            '`headingId` arrives as a prop with no declaration of its own, and the ref is declared ' +
+            'once. Any additional binding of one of these names -- in ANY form, including ' +
+            '`const { name } = ...` -- can only shadow the real value. Placed inside either effect ' +
+            'that silently kills focus recovery while leaving every other assertion in this test ' +
+            'green, because they all match on the NAME and a name does not pin which binding it ' +
+            'resolves to.',
+        ).toBe(expected)
       }
 
       expect(
@@ -514,7 +550,7 @@ describe('unmount focus', () => {
         'Focus recovery needs one ref to arm while its own action is pending and disarm on an error ' +
         'settle, so an unrelated revalidation never steals or drops focus from the successor button.',
     ).not.toBeNull()
-    const ref = refMatch![1]
+    const ref = refMatch![1]!
 
     // SHADOWING -- the same class the row-button loop above pins, with one difference: here `busy`
     // and `error` are LOCAL derived values, each legitimately declared exactly once at component
@@ -524,14 +560,23 @@ describe('unmount focus', () => {
     // byte-identical, so every assertion below still passes while the arm never fires and the
     // successor never receives focus, in both the mint and the revoke direction. Legal TypeScript,
     // and no lint rule fires on a new declaration.
-    for (const shadowed of ['busy', 'error'] as const) {
+    // Round 11 widened this the same two ways as the row-button block: count EVERY binding form
+    // (`const { busy, error } = { busy: false, error: null }` slipped past round 10's plain-form-only
+    // regex), and track the two REFS as well -- `acted`, which every assertion here interpolates, and
+    // `successorRef`, which is the focus target itself. `const acted = { current: false }` inside the
+    // arm effect, or `const successorRef = { current: null }` inside the consume effect, leaves every
+    // pinned line byte-identical while the hand-off is dead. Each of these four is legitimately
+    // declared exactly once at component scope, so exactly 1 is the honest count and a second binding
+    // of any of them, in any form, can only be a shadow.
+    for (const shadowed of ['busy', 'error', ref, 'successorRef'] as const) {
       expect(
-        countOf(source, new RegExp(`\\b(?:const|let|var)\\s+${shadowed}\\b`)),
-        `share-control.tsx must declare \`${shadowed}\` exactly once, at component scope. A second ` +
-          `declaration of \`${shadowed}\` shadows the real derived value; placed inside the arm ` +
-          'effect it silently kills the successor focus hand-off while leaving every assertion in ' +
-          'this test green, because they all match on the NAME and a name does not pin which binding ' +
-          'it resolves to.',
+        declarationsOf(source, shadowed),
+        `share-control.tsx must bind \`${shadowed}\` exactly once, at component scope; it binds it ` +
+          `${declarationsOf(source, shadowed)} time(s). A second declaration of \`${shadowed}\` -- in ` +
+          'ANY form, including `const { name } = ...` -- shadows the real value; placed inside the ' +
+          'arm or consume effect it silently kills the successor focus hand-off while leaving every ' +
+          'other assertion in this test green, because they all match on the NAME and a name does ' +
+          'not pin which binding it resolves to.',
       ).toBe(1)
     }
 
