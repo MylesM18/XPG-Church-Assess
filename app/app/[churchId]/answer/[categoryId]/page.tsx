@@ -28,7 +28,7 @@ export default async function AnswerPage({
   const category = methodology.questions.categories.find((c) => c.id === categoryId)
   if (!category) notFound()
 
-  const items = category.items.map((i) => ({ id: i.id, text: i.text }))
+  const items = category.items.map((i) => ({ id: i.id, text: i.text, anchors: i.anchors }))
 
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-lg flex-col gap-6 px-6 py-12">

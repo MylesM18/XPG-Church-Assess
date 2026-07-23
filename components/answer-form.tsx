@@ -7,6 +7,7 @@ import type { AnswerInput } from '@/lib/answers/validate'
 export interface AnswerFormItem {
   id: string
   text: string
+  anchors: { lo: string; mid: string; hi: string }
 }
 
 export function AnswerForm({
