@@ -52,11 +52,15 @@ const FILES = SCAN_DIRS.flatMap(tsxFilesUnder).map((file) => ({
 const BARE_DISABLED = /(?<!aria-)disabled=\{/
 const ARIA_DISABLED = /aria-disabled=\{/
 // Shape A guards with e.preventDefault(); shape B guards with an early return inside the handler it
-// already had. Both must be CONDITIONAL ON THE PENDING VARIABLE — that is what distinguishes a guard
-// from ordinary application code. Matching a bare `e.preventDefault()` was tried and is wrong:
+// already had. Both must be CONDITIONAL — an `if (<condition>) …` — that is what distinguishes a
+// guard from ordinary application code. Matching a bare `e.preventDefault()` was tried and is wrong:
 // answer-form.tsx's own handleSubmit contains one for unrelated reasons, which gave that file a
 // spare guard token and let a good-faith deletion of the button's guard pass unnoticed.
-const GUARD = /if \(\w+\) (?:e\.preventDefault\(\)|return\b)/
+// The condition may be COMPOUND: the answer-form wizard's Submit/Next guards on
+// `if (((isLastStep && pending) || !currentAnswered)) e.preventDefault()`, so the condition group is
+// `[^\n]*?` rather than a bare identifier — still anchored to `if (…)`, so a conditionless
+// preventDefault still never counts. Widening only ADDS matches, so no file's guard count can drop.
+const GUARD = /if \([^\n]*?\) (?:e\.preventDefault\(\)|return\b)/
 
 describe('pending controls', () => {
   it('scans enough files that the assertions below cannot pass vacuously', () => {
@@ -102,17 +106,18 @@ describe('pending controls', () => {
     ).toEqual([])
   })
 
-  it('covers all eleven known pending controls', () => {
+  it('covers all twelve known pending controls', () => {
     const count = FILES.reduce(
       (n, f) => n + (f.source.match(new RegExp(ARIA_DISABLED, 'g'))?.length ?? 0),
       0,
     )
     expect(
       count,
-      'expected exactly 11 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
+      'expected exactly 12 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
         'control in the spec’s scope table. A LOWER count means a site was missed or reverted. A ' +
         'HIGHER count is not a defect: a new pending control was added, which is fine — add it to ' +
-        '§2 of the design doc and bump this number.',
-    ).toBe(11)
+        '§2 of the design doc and bump this number. The answer-form wizard contributes two: the ' +
+        'Submit/Next control and the Back navigation boundary (aria-disabled={step === 0}).',
+    ).toBe(12)
   })
 })
