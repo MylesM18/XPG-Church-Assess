@@ -5,7 +5,7 @@ import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { coverage, type CoverageRow, type CoverageStatus } from '@/lib/coverage/coverage'
 import { ChainGlyph } from './chain-glyph'
-import { InvitePanel } from './invite-panel'
+import { CategoryInvite, type ChurchInvitee } from './category-invite'
 import { GenerateButton } from './generate-button'
 
 function gatesLabel(gates: 'all' | string[] | undefined): string {
@@ -61,6 +61,19 @@ export default async function DashboardPage({
     .maybeSingle()
   const role = membership?.role ?? null
 
+  let invitees: ChurchInvitee[] = []
+  let inviteesUnavailable = false
+  if (role === 'admin') {
+    const { data: inviteeData, error: inviteeError } = await supabase.rpc('list_church_invitees', {
+      p_church_id: churchId,
+    })
+    if (inviteeError) {
+      inviteesUnavailable = true
+    } else {
+      invitees = (inviteeData ?? []) as ChurchInvitee[]
+    }
+  }
+
   const { data: run } = await supabase
     .from('assessment_runs')
     .select('id')
@@ -94,6 +107,12 @@ export default async function DashboardPage({
         </div>
       </header>
 
+      {inviteesUnavailable && (
+        <p className="font-body text-sm text-ink-soft">
+          The invitee list couldn&apos;t be loaded, so pending invitations aren&apos;t shown here. You can still send invitation links below.
+        </p>
+      )}
+
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {categories.map((cat) => {
           const status = statusById.get(cat.id) ?? 'not_started'
@@ -116,12 +135,18 @@ export default async function DashboardPage({
               >
                 Answer yourself
               </Link>
+              {role === 'admin' && (
+                <CategoryInvite
+                  churchId={churchId}
+                  categoryId={cat.id}
+                  categoryName={cat.name}
+                  invitees={invitees}
+                />
+              )}
             </article>
           )
         })}
       </section>
-
-      <InvitePanel churchId={churchId} categories={categories.map((c) => ({ id: c.id, name: c.name }))} />
 
       <section className="flex flex-wrap items-start gap-2">
         {hasDiagnosis ? (

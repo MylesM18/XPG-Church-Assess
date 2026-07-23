@@ -52,11 +52,23 @@ const FILES = SCAN_DIRS.flatMap(tsxFilesUnder).map((file) => ({
 const BARE_DISABLED = /(?<!aria-)disabled=\{/
 const ARIA_DISABLED = /aria-disabled=\{/
 // Shape A guards with e.preventDefault(); shape B guards with an early return inside the handler it
-// already had. Both must be CONDITIONAL ON THE PENDING VARIABLE — that is what distinguishes a guard
-// from ordinary application code. Matching a bare `e.preventDefault()` was tried and is wrong:
+// already had. Both must be CONDITIONAL — an `if (<condition>) …` — that is what distinguishes a
+// guard from ordinary application code. Matching a bare `e.preventDefault()` was tried and is wrong:
 // answer-form.tsx's own handleSubmit contains one for unrelated reasons, which gave that file a
 // spare guard token and let a good-faith deletion of the button's guard pass unnoticed.
-const GUARD = /if \(\w+\) (?:e\.preventDefault\(\)|return\b)/
+// The e.preventDefault() branch allows a COMPOUND condition — the answer-form wizard's Submit/Next
+// guards on `if (((isLastStep && pending) || !currentAnswered)) e.preventDefault()`, so its condition
+// group is `[^\n]*?`, not a bare identifier, but stays anchored to `if (…) e.preventDefault()` so a
+// conditionless preventDefault still never counts. The `return` branch DELIBERATELY stays a bare
+// identifier (`\w+`): widening it too would collaterally match unrelated early-returns such as
+// `if (!state.link) return null` (category-invite.tsx), backfilling a spare guard token — the exact
+// masking failure this file's design already guards against.
+const GUARD = /if \([^\n]*?\) e\.preventDefault\(\)|if \(\w+\) return\b/
+
+// A control disabled by a NAVIGATION BOUNDARY (the wizard's Back at `step === 0`) has no async
+// window, so it needs no pending-guard — exclude it from the per-file guard requirement below. This
+// is the only such control in the tree; adding another means listing it here.
+const BOUNDARY = /aria-disabled=\{step === 0\}/
 
 describe('pending controls', () => {
   it('scans enough files that the assertions below cannot pass vacuously', () => {
@@ -85,7 +97,7 @@ describe('pending controls', () => {
 
     const underGuarded = FILES.map((f) => ({
       path: f.path,
-      controls: countOf(f.source, ARIA_DISABLED),
+      controls: countOf(f.source, ARIA_DISABLED) - countOf(f.source, BOUNDARY),
       guards: countOf(f.source, GUARD),
     }))
       .filter((f) => f.controls > f.guards)
@@ -102,17 +114,18 @@ describe('pending controls', () => {
     ).toEqual([])
   })
 
-  it('covers all ten known pending controls', () => {
+  it('covers all twelve known pending controls', () => {
     const count = FILES.reduce(
       (n, f) => n + (f.source.match(new RegExp(ARIA_DISABLED, 'g'))?.length ?? 0),
       0,
     )
     expect(
       count,
-      'expected exactly 10 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
+      'expected exactly 12 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
         'control in the spec’s scope table. A LOWER count means a site was missed or reverted. A ' +
         'HIGHER count is not a defect: a new pending control was added, which is fine — add it to ' +
-        '§2 of the design doc and bump this number.',
-    ).toBe(10)
+        '§2 of the design doc and bump this number. The answer-form wizard contributes two: the ' +
+        'Submit/Next control and the Back navigation boundary (aria-disabled={step === 0}).',
+    ).toBe(12)
   })
 })
