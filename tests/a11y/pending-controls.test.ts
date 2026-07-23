@@ -102,17 +102,17 @@ describe('pending controls', () => {
     ).toEqual([])
   })
 
-  it('covers all ten known pending controls', () => {
+  it('covers all eleven known pending controls', () => {
     const count = FILES.reduce(
       (n, f) => n + (f.source.match(new RegExp(ARIA_DISABLED, 'g'))?.length ?? 0),
       0,
     )
     expect(
       count,
-      'expected exactly 10 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
+      'expected exactly 11 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
         'control in the spec’s scope table. A LOWER count means a site was missed or reverted. A ' +
         'HIGHER count is not a defect: a new pending control was added, which is fine — add it to ' +
         '§2 of the design doc and bump this number.',
-    ).toBe(10)
+    ).toBe(11)
   })
 })

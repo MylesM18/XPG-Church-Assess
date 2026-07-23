@@ -44,7 +44,7 @@ const EXPECTED_CONSUMERS = [
   path.join('components', 'answer-form.tsx'),
   path.join('app', 'sign-in', 'page.tsx'),
   path.join('app', 'get-started', 'form.tsx'),
-  path.join('app', 'app', '[churchId]', 'invite-panel.tsx'),
+  path.join('app', 'app', '[churchId]', 'category-invite.tsx'),
   path.join('app', 'app', '[churchId]', 'generate-button.tsx'),
   path.join('app', 'app', '[churchId]', 'access', 'invite-member-form.tsx'),
   path.join('app', 'app', '[churchId]', 'access', 'remove-member-button.tsx'),

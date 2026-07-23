@@ -5,7 +5,7 @@ import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { coverage, type CoverageRow, type CoverageStatus } from '@/lib/coverage/coverage'
 import { ChainGlyph } from './chain-glyph'
-import { InvitePanel } from './invite-panel'
+import { CategoryInvite, type ChurchInvitee } from './category-invite'
 import { GenerateButton } from './generate-button'
 
 function gatesLabel(gates: 'all' | string[] | undefined): string {
@@ -60,6 +60,15 @@ export default async function DashboardPage({
     .eq('user_id', user?.id ?? '')
     .maybeSingle()
   const role = membership?.role ?? null
+
+  let invitees: ChurchInvitee[] = []
+  if (role === 'admin') {
+    const { data: inviteeData, error: inviteeError } = await supabase.rpc('list_church_invitees', {
+      p_church_id: churchId,
+    })
+    if (inviteeError) throw inviteeError
+    invitees = (inviteeData ?? []) as ChurchInvitee[]
+  }
 
   const { data: run } = await supabase
     .from('assessment_runs')
@@ -116,12 +125,18 @@ export default async function DashboardPage({
               >
                 Answer yourself
               </Link>
+              {role === 'admin' && (
+                <CategoryInvite
+                  churchId={churchId}
+                  categoryId={cat.id}
+                  categoryName={cat.name}
+                  invitees={invitees}
+                />
+              )}
             </article>
           )
         })}
       </section>
-
-      <InvitePanel churchId={churchId} categories={categories.map((c) => ({ id: c.id, name: c.name }))} />
 
       <section className="flex flex-wrap items-start gap-2">
         {hasDiagnosis ? (
