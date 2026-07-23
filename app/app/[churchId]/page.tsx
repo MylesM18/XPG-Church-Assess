@@ -7,6 +7,7 @@ import { coverage, type CoverageRow, type CoverageStatus } from '@/lib/coverage/
 import { ChainGlyph } from './chain-glyph'
 import { CategoryInvite, type ChurchInvitee } from './category-invite'
 import { GenerateButton } from './generate-button'
+import { RefreshOnFocus } from './refresh-on-focus'
 
 function gatesLabel(gates: 'all' | string[] | undefined): string {
   if (gates === 'all') return 'all stages'
@@ -17,7 +18,7 @@ function gatesLabel(gates: 'all' | string[] | undefined): string {
 const STATUS_LABEL: Record<CoverageStatus, string> = {
   not_started: 'Not started',
   partial: 'In progress',
-  covered: 'Covered',
+  covered: 'Completed',
 }
 
 export default async function DashboardPage({
@@ -94,6 +95,7 @@ export default async function DashboardPage({
 
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 px-6 py-10">
+      <RefreshOnFocus />
       <header className="flex items-center gap-4">
         <div
           className="flex h-14 w-14 items-center justify-center rounded-md font-display text-xl text-white"
@@ -131,6 +133,8 @@ export default async function DashboardPage({
               <p className="mt-3 font-body text-sm text-ink-soft">{STATUS_LABEL[status]}</p>
               <Link
                 href={`/app/${churchId}/answer/${cat.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="mt-2 inline-block py-1.5 font-body text-sm text-ink underline underline-offset-2 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
               >
                 Answer yourself
