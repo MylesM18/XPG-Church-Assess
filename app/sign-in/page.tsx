@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { LiveStatus } from '@/components/live-status'
 import { createClient } from '@/lib/supabase/client'
 import { resolveNext } from '@/lib/auth/resolve-next'
+import { parseAuthError } from '@/lib/auth/parse-auth-error'
 
 export default function SignInPage() {
   const supabase = createClient()
@@ -29,6 +30,24 @@ export default function SignInPage() {
     // from props/state.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (hint) setEmail(hint)
+  }, [])
+
+  // Surface WHY a magic-link / OAuth round-trip failed instead of bouncing here
+  // silently. Supabase rejects a dead/expired token by redirecting to the Site URL
+  // with the reason in the URL *fragment* (`#…error_code=otp_expired…`), which never
+  // reaches the server — so /auth/callback can only redirect back with a reasonless
+  // `?error=auth`. Read both channels client-side, then strip the signal from the URL
+  // so a refresh (or the next magic-link send) doesn't resurrect a stale error.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const message = parseAuthError(window.location.search, window.location.hash)
+    if (!message) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setError(message)
+    const url = new URL(window.location.href)
+    url.hash = ''
+    url.searchParams.delete('error')
+    window.history.replaceState(null, '', url.toString())
   }, [])
 
   // Forward the `?next=` the sign-in page was loaded with (e.g. the answer page
