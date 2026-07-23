@@ -62,12 +62,16 @@ export default async function DashboardPage({
   const role = membership?.role ?? null
 
   let invitees: ChurchInvitee[] = []
+  let inviteesUnavailable = false
   if (role === 'admin') {
     const { data: inviteeData, error: inviteeError } = await supabase.rpc('list_church_invitees', {
       p_church_id: churchId,
     })
-    if (inviteeError) throw inviteeError
-    invitees = (inviteeData ?? []) as ChurchInvitee[]
+    if (inviteeError) {
+      inviteesUnavailable = true
+    } else {
+      invitees = (inviteeData ?? []) as ChurchInvitee[]
+    }
   }
 
   const { data: run } = await supabase
@@ -102,6 +106,12 @@ export default async function DashboardPage({
           <p className="font-body text-sm text-ink-soft">{header}</p>
         </div>
       </header>
+
+      {inviteesUnavailable && (
+        <p className="font-body text-sm text-ink-soft">
+          The invitee list couldn&apos;t be loaded, so pending invitations aren&apos;t shown here. You can still send invitation links below.
+        </p>
+      )}
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {categories.map((cat) => {
