@@ -53,6 +53,7 @@ export async function createInvitation(_prev: InviteResult, formData: FormData):
     emailed = sent.ok
   }
 
+  revalidatePath(`/app/${churchId}`)
   return { link, emailed, error: null }
 }
 
