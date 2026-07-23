@@ -103,6 +103,7 @@ export function CategoryInvite({
               })}
             </ul>
             <LinkNote state={reState} />
+            <LiveStatus message={reState.error} tone="error" className="font-body text-sm text-ink" />
             <p className="font-body text-xs text-ink-soft">or invite someone new</p>
           </div>
         )}
