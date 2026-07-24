@@ -10,22 +10,14 @@ set local request.jwt.claims to '{"sub":"b1111111-1111-1111-1111-111111111111","
 select create_church_with_admin('Coverage Test Church', '#bbbbbb', '0.1.0');
 reset role;
 
--- seed one real invitation row directly (superuser) so the responses below share a genuine
--- invitation_id — mirrors how submit_invited_response() always populates it in production
--- (it is never NULL for an 'invited' row), so respondent identity aggregates correctly.
-insert into invitations (run_id, church_id, category_id, created_by)
+-- seed responses directly (as superuser): guest category, G1..G3 answered by one member
+-- respondent (post-invitations-drop: 'member' rows carry respondent_user_id, not invitation_id;
+-- coalesce(respondent_user_id, invitation_id) in get_run_coverage counts them the same way)
+insert into responses (run_id, church_id, category_id, item_id, value, respondent_kind, respondent_user_id, respondent_label)
 select (select id from assessment_runs where status = 'in_progress'),
        (select id from churches where name = 'Coverage Test Church'),
-       'guest', 'b1111111-1111-1111-1111-111111111111';
-
--- seed responses directly (as superuser): guest category, G1..G3 answered by one invited respondent
-insert into responses (run_id, church_id, category_id, item_id, value, respondent_kind, invitation_id, respondent_label)
-select (select id from assessment_runs where status = 'in_progress'),
-       (select id from churches where name = 'Coverage Test Church'),
-       'guest', v.item, 5, 'invited',
-       (select id from invitations
-        where church_id = (select id from churches where name = 'Coverage Test Church')
-          and category_id = 'guest'),
+       'guest', v.item, 5, 'member',
+       'b1111111-1111-1111-1111-111111111111',
        'Someone'
 from (values ('G1'),('G2'),('G3')) as v(item);
 

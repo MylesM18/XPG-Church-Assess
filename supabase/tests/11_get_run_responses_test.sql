@@ -10,20 +10,14 @@ set local request.jwt.claims to '{"sub":"c1111111-1111-1111-1111-111111111111","
 select create_church_with_admin('Responses Test Church', '#bbbbbb', '0.1.0');
 reset role;
 
--- seed one invitation + three responses on the in_progress run (mirrors 10_get_run_coverage_test)
-insert into invitations (run_id, church_id, category_id, created_by)
+-- seed three responses on the in_progress run (mirrors 10_get_run_coverage_test): guest
+-- category, G1..G3 answered by one member respondent (no invitations table post-drop)
+insert into responses (run_id, church_id, category_id, item_id, value, respondent_kind, respondent_user_id, respondent_label)
 select (select id from assessment_runs
         where church_id = (select id from churches where name = 'Responses Test Church') and status = 'in_progress'),
        (select id from churches where name = 'Responses Test Church'),
-       'guest', 'c1111111-1111-1111-1111-111111111111';
-
-insert into responses (run_id, church_id, category_id, item_id, value, respondent_kind, invitation_id, respondent_label)
-select (select id from assessment_runs
-        where church_id = (select id from churches where name = 'Responses Test Church') and status = 'in_progress'),
-       (select id from churches where name = 'Responses Test Church'),
-       'guest', v.item, 5, 'invited',
-       (select id from invitations
-        where church_id = (select id from churches where name = 'Responses Test Church') and category_id = 'guest'),
+       'guest', v.item, 5, 'member',
+       'c1111111-1111-1111-1111-111111111111',
        'Someone'
 from (values ('G1'),('G2'),('G3')) as v(item);
 
@@ -44,18 +38,12 @@ select is((select respondent_label from get_run_responses(
 reset role;
 insert into assessment_runs (church_id, methodology_version, status, completed_at)
 values ((select id from churches where name = 'Responses Test Church'), '0.1.0', 'complete', now());
-insert into invitations (run_id, church_id, category_id, created_by)
-select (select id from assessment_runs
-        where church_id = (select id from churches where name = 'Responses Test Church') and status = 'complete'),
-       (select id from churches where name = 'Responses Test Church'),
-       'conn', 'c1111111-1111-1111-1111-111111111111';
-insert into responses (run_id, church_id, category_id, item_id, value, respondent_kind, invitation_id, respondent_label)
+insert into responses (run_id, church_id, category_id, item_id, value, respondent_kind, respondent_user_id, respondent_label)
 values ((select id from assessment_runs
          where church_id = (select id from churches where name = 'Responses Test Church') and status = 'complete'),
         (select id from churches where name = 'Responses Test Church'),
-        'conn', 'C1', 9, 'invited',
-        (select id from invitations
-         where church_id = (select id from churches where name = 'Responses Test Church') and category_id = 'conn'),
+        'conn', 'C1', 9, 'member',
+        'c1111111-1111-1111-1111-111111111111',
         'Elder');
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"c1111111-1111-1111-1111-111111111111","email":"respadmin@test.com","role":"authenticated"}';
