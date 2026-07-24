@@ -21,6 +21,14 @@ const STATUS_LABEL: Record<CoverageStatus, string> = {
   covered: 'Completed',
 }
 
+// Traffic-light dot beside each status word. Decorative (aria-hidden) — STATUS_LABEL carries
+// the meaning, so colour is never the sole signal. Tokens live in app/globals.css @theme.
+const STATUS_DOT: Record<CoverageStatus, string> = {
+  not_started: 'bg-status-red',
+  partial: 'bg-status-amber',
+  covered: 'bg-status-green',
+}
+
 export default async function DashboardPage({
   params,
 }: {
@@ -130,7 +138,13 @@ export default async function DashboardPage({
                   </span>
                 )}
               </div>
-              <p className="mt-3 font-body text-sm text-ink-soft">{STATUS_LABEL[status]}</p>
+              <p className="mt-3 flex items-center gap-2 font-body text-sm text-ink-soft">
+                <span
+                  aria-hidden="true"
+                  className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_DOT[status]}`}
+                />
+                {STATUS_LABEL[status]}
+              </p>
               <Link
                 href={`/app/${churchId}/answer/${cat.id}`}
                 target="_blank"

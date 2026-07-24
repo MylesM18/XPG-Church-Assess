@@ -10,6 +10,10 @@
   --color-sage: #4E6B60;         /* healthy / enabler */
   --color-sand: #EEE8DD;
 
+  --color-status-red: #B4453C;    /* assessment status: not started */
+  --color-status-amber: #B87D1E;  /* assessment status: in progress */
+  --color-status-green: #4E6B60;  /* assessment status: completed (matches sage / healthy) */
+
   --font-display: var(--font-fraunces), Georgia, serif;
   --font-body: var(--font-hanken), system-ui, sans-serif;
 
