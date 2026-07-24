@@ -31,7 +31,7 @@ The owner wants invitations to **not** be per-category: an invited person takes 
 ### 2. Viewer answers all 8 — reuse cards, personal progress
 - After accepting, a Viewer lands on `/app/<churchId>` and answers each area via the existing "Answer yourself" links (`submit_self_response`, `respondent_kind='member'`, keyed by `respondent_user_id`, UPSERT so re-answering overwrites).
 - **Per-user progress:** `get_run_coverage` currently aggregates across ALL respondents, so an area could show "Completed" because *someone else* answered it. Add a **per-user coverage path** so a Viewer's status dots reflect only their own answers. Approach (resolve exact mechanism in planning): either extend `get_run_coverage` with an optional `p_respondent_user_id`, or add `get_member_run_coverage`. The dashboard uses the **aggregate for admins** (needed to gate diagnosis generation on all-8-covered) and **per-user for viewers**.
-- Header/label wording: viewers see personal completion (e.g. "You've completed N of 8"); admins keep the church-wide "N of 8 areas".
+- **Header/label + dots (owner-approved 2026-07-24):** viewers see a **personal** completion header — "You've completed N of 8" — **plus** the per-card status dots, both reflecting only their own answers. Admins keep the church-wide "N of 8 areas" header and aggregate dots.
 
 ### 3. Results = admins only (UI + RLS)
 - **UI:** hide the "View diagnosis" link for viewers on the dashboard; block `/app/<churchId>/diagnosis` for viewers (redirect to the dashboard). Generation stays admin-only (already is).
@@ -63,4 +63,7 @@ Add migrations (following repo conventions/ordering):
 
 ## Open implementation questions (resolve during planning)
 - Exact per-user coverage mechanism (optional param on `get_run_coverage` vs a new RPC).
-- Whether viewers see a personal "N of 8" header or no aggregate header at all.
+
+## Resolved during spec review (2026-07-24)
+- **Spec approved as-is** by the owner — proceed to implementation plan.
+- **Viewer progress display:** personal "You've completed N of 8" header **plus** per-card status dots, scoped to the viewer's own answers.
