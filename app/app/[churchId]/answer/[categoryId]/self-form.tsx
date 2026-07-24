@@ -1,22 +1,37 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { AnswerForm, type AnswerFormItem } from '@/components/answer-form'
 import type { AnswerInput } from '@/lib/answers/validate'
-import { submitSelfResponse } from './actions'
+import { saveSelfAnswer } from './actions'
 
 export function SelfForm({
   churchId,
   categoryId,
   categoryName,
   items,
+  initialValues,
 }: {
   churchId: string
   categoryId: string
   categoryName: string
   items: AnswerFormItem[]
+  initialValues: Record<string, number>
 }) {
-  async function onSubmit(answers: AnswerInput[]) {
-    return submitSelfResponse(churchId, categoryId, answers)
+  const router = useRouter()
+  async function onSaveAnswer(answer: AnswerInput) {
+    return saveSelfAnswer(churchId, categoryId, answer)
   }
-  return <AnswerForm categoryName={categoryName} items={items} requireName={false} onSubmit={onSubmit} />
+  function onComplete() {
+    router.push(`/app/${churchId}`)
+  }
+  return (
+    <AnswerForm
+      categoryName={categoryName}
+      items={items}
+      initialValues={initialValues}
+      onSaveAnswer={onSaveAnswer}
+      onComplete={onComplete}
+    />
+  )
 }

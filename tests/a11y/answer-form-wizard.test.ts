@@ -9,13 +9,17 @@ const SOURCE = fs.readFileSync(path.join(REPO_ROOT, 'components', 'answer-form.t
 const CODE_ONLY = SOURCE.replace(/\/\/.*$/gm, '')
 
 describe('answer-form wizard', () => {
-  it('seeds every slider UNSET (null), never pre-filling 5', () => {
+  it('seeds every slider from the caller’s saved value, else null — never pre-filling 5', () => {
+    // Task 4 (resumable-assessment-progress) seeds resumed sliders from `initialValues` (the
+    // caller's own previously-saved answers); unanswered items still seed null, never a literal 5.
     expect(CODE_ONLY).toMatch(/Record<string, number \| null>/)
-    expect(CODE_ONLY).toContain('[i.id, null]')
-    expect(CODE_ONLY, 'sliders must start unset').not.toMatch(/\[i\.id, 5\]/)
+    expect(CODE_ONLY).toContain('[i.id, initialValues[i.id] ?? null]')
+    expect(CODE_ONLY, 'sliders must never hardcode-prefill the midpoint').not.toMatch(/\[i\.id, 5\]/)
   })
-  it('submits all answers in exactly one onSubmit call', () => {
-    expect((CODE_ONLY.match(/onSubmit\(/g) ?? []).length).toBe(1)
+  it('saves the current answer via exactly one onSaveAnswer call site', () => {
+    // Task 4 (resumable-assessment-progress) replaced bulk onSubmit with save-on-advance: a single
+    // onSaveAnswer(...) call site inside saveCurrent(), invoked from both goNext() and finish().
+    expect((CODE_ONLY.match(/onSaveAnswer\(/g) ?? []).length).toBe(1)
   })
   it('shows a progressbar', () => {
     expect(CODE_ONLY).toContain('role="progressbar"')
@@ -28,9 +32,13 @@ describe('answer-form wizard', () => {
     expect(CODE_ONLY).toContain('headingRef.current?.focus()')
     expect(CODE_ONLY).toContain('tabIndex={-1}')
   })
-  it('adds the name intro step only when requireName', () => {
-    expect(CODE_ONLY).toContain('hasNameStep')
-    expect(CODE_ONLY).toContain('requireName')
+  it('never reintroduces the requireName name-step (self-form is the sole caller)', () => {
+    // Task 4 (resumable-assessment-progress) confirmed via `rg -l "AnswerForm" app components` that
+    // the member self-form is AnswerForm's only caller, and dropped the unused requireName name-step
+    // in favor of save-on-advance. Pin its absence so nobody silently reintroduces the old
+    // two-purpose (invited + member) shape.
+    expect(CODE_ONLY).not.toContain('requireName')
+    expect(CODE_ONLY).not.toContain('hasNameStep')
   })
   it('renders the three bands via band()/BANDS, never berry', () => {
     expect(CODE_ONLY).toContain("from '@/lib/answers/band'")

@@ -172,11 +172,17 @@ describe('live-region application', () => {
       'expected components/answer-form.tsx to be present in the scanned file set — if it was ' +
         'renamed or moved, update this test',
     ).toBeDefined()
+    // Task 4 (resumable-assessment-progress) replaced the inline "done" confirmation screen with a
+    // full navigation back to the dashboard on completion (onComplete → router.push), so there is no
+    // longer a second in-page view to move focus into. The remaining — and now only — focus-move
+    // site in this component is the per-question heading, focused on every step change
+    // (headingRef.current?.focus(), asserted separately in tests/a11y/answer-form-wizard.test.ts).
     expect(
       answerForm!.source,
-      'answer-form must render its confirmation as a focusable <h1> — the form it replaces owns ' +
-        'the page’s only <h1>, and the submit button unmounts with it',
-    ).toMatch(/<h1 tabIndex=\{-1\}/)
+      'answer-form must keep the per-question heading focusable — it is the target of the ' +
+        'programmatic focus-on-step-change call',
+    ).toContain('ref={headingRef}')
+    expect(answerForm!.source, 'the focused heading must carry tabIndex={-1}').toContain('tabIndex={-1}')
 
     const signIn = FILES.find((f) => f.path === path.join('app', 'sign-in', 'page.tsx'))
     expect(
