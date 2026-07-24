@@ -45,9 +45,22 @@ export default async function DashboardPage({
   if (error) throw error
   if (!church) notFound()
 
-  const { data: coverageData, error: coverageError } = await supabase.rpc('get_run_coverage', {
-    p_church_id: churchId,
-  })
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: membership } = await supabase
+    .from('church_members')
+    .select('role')
+    .eq('church_id', churchId)
+    .eq('user_id', user?.id ?? '')
+    .maybeSingle()
+  const role = membership?.role ?? null
+  const isAdmin = role === 'admin'
+
+  // Admins read the church-wide aggregate (needed to gate diagnosis generation on all-8-covered);
+  // viewers read their OWN coverage so status dots + the header reflect only their own answers.
+  const { data: coverageData, error: coverageError } = await supabase.rpc(
+    isAdmin ? 'get_run_coverage' : 'get_member_run_coverage',
+    { p_church_id: churchId },
+  )
   if (coverageError) throw coverageError
   const rows = (coverageData ?? []) as CoverageRow[]
 
@@ -59,16 +72,10 @@ export default async function DashboardPage({
   const result = coverage(rows, categories)
   const statusById = new Map(result.categories.map((c) => [c.category_id, c.status]))
   const anyStarted = result.categories.some((c) => c.status !== 'not_started')
-  const header = `${anyStarted ? 'Assessment in progress' : 'Assessment not started'} · ${result.coveredCount} of ${categories.length} areas`
-
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: membership } = await supabase
-    .from('church_members')
-    .select('role')
-    .eq('church_id', churchId)
-    .eq('user_id', user?.id ?? '')
-    .maybeSingle()
-  const role = membership?.role ?? null
+  const progressState = anyStarted ? 'Assessment in progress' : 'Assessment not started'
+  const header = isAdmin
+    ? `${progressState} · ${result.coveredCount} of ${categories.length} areas`
+    : `${progressState} · You've completed ${result.coveredCount} of ${categories.length} areas`
 
   let invitees: ChurchInvitee[] = []
   let inviteesUnavailable = false
