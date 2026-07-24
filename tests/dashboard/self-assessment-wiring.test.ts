@@ -20,8 +20,9 @@ describe('dashboard self-assessment wiring', () => {
   it('opens the per-area self-assessment link in a new window', () => {
     expect(
       CODE,
-      'the "Answer yourself" Link must carry target="_blank" (Bug 2) — without it, answering ' +
-        'navigates away from the dashboard tab instead of opening a new window',
+      'the per-area "Answer yourself" card Link must carry target="_blank" (Bug 2) — without it, ' +
+        'answering navigates away from the dashboard tab instead of opening a new window. ' +
+        '(The whole-assessment primary button is a separate, same-tab control.)',
     ).toContain('target="_blank"')
   })
 
@@ -45,5 +46,14 @@ describe('dashboard self-assessment wiring', () => {
       '<RefreshOnFocus',
     )
     expect(CODE).toContain("from './refresh-on-focus'")
+  })
+
+  it('renders the whole-assessment primary CTA from assessmentCta()', () => {
+    expect(
+      CODE,
+      'the dashboard must derive its single primary button from assessmentCta() (Start/Continue/Take Again)',
+    ).toContain('assessmentCta(')
+    expect(CODE).toContain('cta.label')
+    expect(CODE).toContain('cta.targetCategoryId')
   })
 })
