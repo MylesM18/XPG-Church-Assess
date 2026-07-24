@@ -90,22 +90,23 @@ export default async function DashboardPage({
     }
   }
 
-  const { data: run } = await supabase
-    .from('assessment_runs')
-    .select('id')
-    .eq('church_id', churchId)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-
   let hasDiagnosis = false
-  if (run) {
-    const { data: diagRows } = await supabase
-      .from('diagnoses')
+  if (isAdmin) {
+    const { data: run } = await supabase
+      .from('assessment_runs')
       .select('id')
-      .eq('run_id', run.id)
+      .eq('church_id', churchId)
+      .order('created_at', { ascending: true })
       .limit(1)
-    hasDiagnosis = (diagRows?.length ?? 0) > 0
+      .maybeSingle()
+    if (run) {
+      const { data: diagRows } = await supabase
+        .from('diagnoses')
+        .select('id')
+        .eq('run_id', run.id)
+        .limit(1)
+      hasDiagnosis = (diagRows?.length ?? 0) > 0
+    }
   }
 
   return (
@@ -174,30 +175,32 @@ export default async function DashboardPage({
       </section>
 
       <section className="flex flex-wrap items-start gap-2">
-        {hasDiagnosis ? (
-          <Link
-            href={`/app/${churchId}/diagnosis`}
-            className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-          >
-            View diagnosis
-          </Link>
-        ) : result.coveredCount === categories.length && role === 'admin' ? (
-          <GenerateButton churchId={churchId} />
-        ) : (
-          <button
-            type="button"
-            aria-disabled="true"
-            className="cursor-not-allowed rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-          >
-            Generate diagnosis{' '}
-            <span className="text-xs">
-              (
-              {result.coveredCount < categories.length
-                ? `Answer all 8 areas first — ${result.coveredCount} of ${categories.length}`
-                : 'Admins can generate the diagnosis'}
-              )
-            </span>
-          </button>
+        {isAdmin && (
+          hasDiagnosis ? (
+            <Link
+              href={`/app/${churchId}/diagnosis`}
+              className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              View diagnosis
+            </Link>
+          ) : result.coveredCount === categories.length ? (
+            <GenerateButton churchId={churchId} />
+          ) : (
+            <button
+              type="button"
+              aria-disabled="true"
+              className="cursor-not-allowed rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              Generate diagnosis{' '}
+              <span className="text-xs">
+                (
+                {result.coveredCount < categories.length
+                  ? `Answer all 8 areas first — ${result.coveredCount} of ${categories.length}`
+                  : 'Admins can generate the diagnosis'}
+                )
+              </span>
+            </button>
+          )
         )}
 
         {role === 'admin' && (
