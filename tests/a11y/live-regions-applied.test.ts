@@ -4,7 +4,7 @@
 // Why it exists: the old `{error && <p className="…">{error}</p>}` form renders identically to the
 // LiveStatus form on screen. If someone reintroduces it, nothing looks wrong, no other test fails,
 // and the announcement is silently lost for screen-reader users. This test is the tripwire for
-// regressions across all ten sites at once.
+// regressions across all nine sites at once.
 //
 // The companion tests/a11y/live-status-component.test.ts pins the component's own shape; this file
 // pins its APPLICATION. Runtime node-identity — that the region element is never remounted — is
@@ -38,7 +38,7 @@ const FILES = SCAN_DIRS.flatMap(tsxFilesUnder).map((file) => ({
   source: stripComments(fs.readFileSync(file, 'utf8')),
 }))
 
-// The ten files that render a status message. All five success announcements land in files already
+// The nine files that render a status message. All five success announcements land in files already
 // on this list, so it is also the complete set of LiveStatus consumers.
 const EXPECTED_CONSUMERS = [
   path.join('components', 'answer-form.tsx'),

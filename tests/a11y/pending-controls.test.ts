@@ -61,7 +61,7 @@ const ARIA_DISABLED = /aria-disabled=\{/
 // group is `[^\n]*?`, not a bare identifier, but stays anchored to `if (…) e.preventDefault()` so a
 // conditionless preventDefault still never counts. The `return` branch DELIBERATELY stays a bare
 // identifier (`\w+`): widening it too would collaterally match unrelated early-returns such as
-// `if (!state.link) return null` (category-invite.tsx), backfilling a spare guard token — the exact
+// `if (!state.link) return null`, backfilling a spare guard token — the exact
 // masking failure this file's design already guards against.
 const GUARD = /if \([^\n]*?\) e\.preventDefault\(\)|if \(\w+\) return\b/
 

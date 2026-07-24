@@ -1,7 +1,7 @@
 begin;
 select plan(25);
 
--- all nine tables exist
+-- the eight surviving tables exist; invitations was dropped (asserted absent below)
 select has_table('public','churches','churches exists');
 select has_table('public','church_members','church_members exists');
 select has_table('public','assessment_runs','assessment_runs exists');

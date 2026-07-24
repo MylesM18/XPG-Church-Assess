@@ -9,7 +9,7 @@ export interface SendMemberInvitationArgs {
 }
 
 /**
- * Decoupled send (mirrors sendInvitationEmail). The invitation is already persisted before this
+ * Decoupled send. The invitation is already persisted before this
  * is called, so any failure here is soft: log and return { ok: false }; the caller surfaces the
  * copyable link. From-address onboarding@resend.dev only delivers to the Resend account owner
  * locally — everyone else relies on the copyable-link fallback.
