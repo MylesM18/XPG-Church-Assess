@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { coverage, type CoverageRow, type CoverageStatus } from '@/lib/coverage/coverage'
+import { assessmentCta } from '@/lib/coverage/assessment-cta'
 import { ChainGlyph } from './chain-glyph'
 import { GenerateButton } from './generate-button'
 import { RefreshOnFocus } from './refresh-on-focus'
@@ -69,6 +70,7 @@ export default async function DashboardPage({
   const enablers = methodology.rules.enablers
 
   const result = coverage(rows, categories)
+  const cta = assessmentCta(result, categories)
   const statusById = new Map(result.categories.map((c) => [c.category_id, c.status]))
   const anyStarted = result.categories.some((c) => c.status !== 'not_started')
   const progressState = anyStarted ? 'Assessment in progress' : 'Assessment not started'
@@ -110,6 +112,15 @@ export default async function DashboardPage({
           <p className="font-body text-sm text-ink-soft">{header}</p>
         </div>
       </header>
+
+      <section>
+        <Link
+          href={`/app/${churchId}/answer/${cta.targetCategoryId}`}
+          className="inline-block rounded-md border border-line bg-ink px-4 py-2 font-body text-sm text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        >
+          {cta.label}
+        </Link>
+      </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {categories.map((cat) => {
