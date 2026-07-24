@@ -5,7 +5,6 @@ import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { coverage, type CoverageRow, type CoverageStatus } from '@/lib/coverage/coverage'
 import { ChainGlyph } from './chain-glyph'
-import { CategoryInvite, type ChurchInvitee } from './category-invite'
 import { GenerateButton } from './generate-button'
 import { RefreshOnFocus } from './refresh-on-focus'
 
@@ -45,9 +44,22 @@ export default async function DashboardPage({
   if (error) throw error
   if (!church) notFound()
 
-  const { data: coverageData, error: coverageError } = await supabase.rpc('get_run_coverage', {
-    p_church_id: churchId,
-  })
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: membership } = await supabase
+    .from('church_members')
+    .select('role')
+    .eq('church_id', churchId)
+    .eq('user_id', user?.id ?? '')
+    .maybeSingle()
+  const role = membership?.role ?? null
+  const isAdmin = role === 'admin'
+
+  // Admins read the church-wide aggregate (needed to gate diagnosis generation on all-8-covered);
+  // viewers read their OWN coverage so status dots + the header reflect only their own answers.
+  const { data: coverageData, error: coverageError } = await supabase.rpc(
+    isAdmin ? 'get_run_coverage' : 'get_member_run_coverage',
+    { p_church_id: churchId },
+  )
   if (coverageError) throw coverageError
   const rows = (coverageData ?? []) as CoverageRow[]
 
@@ -59,46 +71,28 @@ export default async function DashboardPage({
   const result = coverage(rows, categories)
   const statusById = new Map(result.categories.map((c) => [c.category_id, c.status]))
   const anyStarted = result.categories.some((c) => c.status !== 'not_started')
-  const header = `${anyStarted ? 'Assessment in progress' : 'Assessment not started'} · ${result.coveredCount} of ${categories.length} areas`
-
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: membership } = await supabase
-    .from('church_members')
-    .select('role')
-    .eq('church_id', churchId)
-    .eq('user_id', user?.id ?? '')
-    .maybeSingle()
-  const role = membership?.role ?? null
-
-  let invitees: ChurchInvitee[] = []
-  let inviteesUnavailable = false
-  if (role === 'admin') {
-    const { data: inviteeData, error: inviteeError } = await supabase.rpc('list_church_invitees', {
-      p_church_id: churchId,
-    })
-    if (inviteeError) {
-      inviteesUnavailable = true
-    } else {
-      invitees = (inviteeData ?? []) as ChurchInvitee[]
-    }
-  }
-
-  const { data: run } = await supabase
-    .from('assessment_runs')
-    .select('id')
-    .eq('church_id', churchId)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
+  const progressState = anyStarted ? 'Assessment in progress' : 'Assessment not started'
+  const header = isAdmin
+    ? `${progressState} · ${result.coveredCount} of ${categories.length} areas`
+    : `${progressState} · You've completed ${result.coveredCount} of ${categories.length} areas`
 
   let hasDiagnosis = false
-  if (run) {
-    const { data: diagRows } = await supabase
-      .from('diagnoses')
+  if (isAdmin) {
+    const { data: run } = await supabase
+      .from('assessment_runs')
       .select('id')
-      .eq('run_id', run.id)
+      .eq('church_id', churchId)
+      .order('created_at', { ascending: true })
       .limit(1)
-    hasDiagnosis = (diagRows?.length ?? 0) > 0
+      .maybeSingle()
+    if (run) {
+      const { data: diagRows } = await supabase
+        .from('diagnoses')
+        .select('id')
+        .eq('run_id', run.id)
+        .limit(1)
+      hasDiagnosis = (diagRows?.length ?? 0) > 0
+    }
   }
 
   return (
@@ -116,12 +110,6 @@ export default async function DashboardPage({
           <p className="font-body text-sm text-ink-soft">{header}</p>
         </div>
       </header>
-
-      {inviteesUnavailable && (
-        <p className="font-body text-sm text-ink-soft">
-          The invitee list couldn&apos;t be loaded, so pending invitations aren&apos;t shown here. You can still send invitation links below.
-        </p>
-      )}
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {categories.map((cat) => {
@@ -153,44 +141,38 @@ export default async function DashboardPage({
               >
                 Answer yourself
               </Link>
-              {role === 'admin' && (
-                <CategoryInvite
-                  churchId={churchId}
-                  categoryId={cat.id}
-                  categoryName={cat.name}
-                  invitees={invitees}
-                />
-              )}
             </article>
           )
         })}
       </section>
 
       <section className="flex flex-wrap items-start gap-2">
-        {hasDiagnosis ? (
-          <Link
-            href={`/app/${churchId}/diagnosis`}
-            className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-          >
-            View diagnosis
-          </Link>
-        ) : result.coveredCount === categories.length && role === 'admin' ? (
-          <GenerateButton churchId={churchId} />
-        ) : (
-          <button
-            type="button"
-            aria-disabled="true"
-            className="cursor-not-allowed rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-          >
-            Generate diagnosis{' '}
-            <span className="text-xs">
-              (
-              {result.coveredCount < categories.length
-                ? `Answer all 8 areas first — ${result.coveredCount} of ${categories.length}`
-                : 'Admins can generate the diagnosis'}
-              )
-            </span>
-          </button>
+        {isAdmin && (
+          hasDiagnosis ? (
+            <Link
+              href={`/app/${churchId}/diagnosis`}
+              className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              View diagnosis
+            </Link>
+          ) : result.coveredCount === categories.length ? (
+            <GenerateButton churchId={churchId} />
+          ) : (
+            <button
+              type="button"
+              aria-disabled="true"
+              className="cursor-not-allowed rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              Generate diagnosis{' '}
+              <span className="text-xs">
+                (
+                {result.coveredCount < categories.length
+                  ? `Answer all 8 areas first — ${result.coveredCount} of ${categories.length}`
+                  : 'Admins can generate the diagnosis'}
+                )
+              </span>
+            </button>
+          )
         )}
 
         {role === 'admin' && (

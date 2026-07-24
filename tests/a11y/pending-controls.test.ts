@@ -61,7 +61,7 @@ const ARIA_DISABLED = /aria-disabled=\{/
 // group is `[^\n]*?`, not a bare identifier, but stays anchored to `if (…) e.preventDefault()` so a
 // conditionless preventDefault still never counts. The `return` branch DELIBERATELY stays a bare
 // identifier (`\w+`): widening it too would collaterally match unrelated early-returns such as
-// `if (!state.link) return null` (category-invite.tsx), backfilling a spare guard token — the exact
+// `if (!state.link) return null`, backfilling a spare guard token — the exact
 // masking failure this file's design already guards against.
 const GUARD = /if \([^\n]*?\) e\.preventDefault\(\)|if \(\w+\) return\b/
 
@@ -114,18 +114,24 @@ describe('pending controls', () => {
     ).toEqual([])
   })
 
-  it('covers all twelve known pending controls', () => {
+  // Baseline dropped from 12 to 10 when the invite -> Viewer whole-assessment redesign's Task 5
+  // deleted the anonymous per-category invite surface. Both dropped bindings lived in
+  // category-invite.tsx, which defined two pending controls — aria-disabled={rePending} and
+  // aria-disabled={newPending}, both driven by useActionState(createInvitation) in that same file.
+  // respond-form.tsx was deleted in the same task but carried no aria-disabled binding, so it
+  // contributed nothing. Verified: the entire 12 -> 10 drop is category-invite.tsx's two controls.
+  it('covers all ten known pending controls', () => {
     const count = FILES.reduce(
       (n, f) => n + (f.source.match(new RegExp(ARIA_DISABLED, 'g'))?.length ?? 0),
       0,
     )
     expect(
       count,
-      'expected exactly 12 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
+      'expected exactly 10 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
         'control in the spec’s scope table. A LOWER count means a site was missed or reverted. A ' +
         'HIGHER count is not a defect: a new pending control was added, which is fine — add it to ' +
         '§2 of the design doc and bump this number. The answer-form wizard contributes two: the ' +
         'Submit/Next control and the Back navigation boundary (aria-disabled={step === 0}).',
-    ).toBe(12)
+    ).toBe(10)
   })
 })

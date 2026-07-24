@@ -1,10 +1,11 @@
 begin;
-select plan(16);
+select plan(18);
 
 -- two users: a member (admin) and a non-member
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
  ('44444444-4444-4444-4444-444444444444','authenticated','authenticated','member@test.com','x',now(),now()),
- ('55555555-5555-5555-5555-555555555555','authenticated','authenticated','stranger@test.com','x',now(),now());
+ ('55555555-5555-5555-5555-555555555555','authenticated','authenticated','stranger@test.com','x',now(),now()),
+ ('99999999-9999-9999-9999-999999999999','authenticated','authenticated','viewer@test.com','x',now(),now());
 
 -- member creates a church (seeds church + admin membership + run)
 set local role authenticated;
@@ -16,6 +17,11 @@ reset role;
 insert into diagnoses (run_id, response_hash, methodology_version, payload)
 select id, 'hash1', '0.1.0', '{"ok":true}'::jsonb from assessment_runs
  where church_id = (select id from churches where name = 'RLS Test Church');
+
+-- seed a VIEWER member of RLS Test Church (church_members has no write policy → superuser seed)
+insert into public.church_members (church_id, user_id, role)
+select id, '99999999-9999-9999-9999-999999999999', 'viewer'
+from churches where name = 'RLS Test Church';
 
 -- MEMBER can read own church, run, diagnosis
 set local role authenticated;
@@ -46,6 +52,13 @@ select is((select count(*)::int from churches), 0, 'non-member selects no church
 select is((select count(*)::int from assessment_runs), 0, 'non-member selects no run');
 select is((select count(*)::int from diagnoses), 0, 'non-member selects no diagnosis');
 select is((select count(*)::int from church_members), 0, 'non-member selects no membership');
+
+-- VIEWER member: sees own church (positive control) but is DENIED the diagnosis (admin-only)
+set local request.jwt.claims to '{"sub":"99999999-9999-9999-9999-999999999999","email":"viewer@test.com","role":"authenticated"}';
+select is((select count(*)::int from churches where name = 'RLS Test Church'), 1,
+          'viewer member: sees own church');
+select is((select count(*)::int from diagnoses), 0,
+          'viewer member: denied diagnosis read (admin-only)');
 
 -- profiles own-row: each user sees only their own auto-created profile row
 set local request.jwt.claims to '{"sub":"44444444-4444-4444-4444-444444444444","email":"member@test.com","role":"authenticated"}';

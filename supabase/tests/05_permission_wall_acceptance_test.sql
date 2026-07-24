@@ -12,14 +12,11 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"66666666-6666-6666-6666-666666666666","email":"founder@ac.com","role":"authenticated"}';
 select create_church_with_admin('Acceptance Church', '#556677', '0.1.0');
 
--- seed a diagnosis, an invited invitation, invited responses, and a member_invitation (superuser)
+-- seed a diagnosis, invited responses, and a member_invitation (superuser)
 reset role;
 insert into diagnoses (run_id, response_hash, methodology_version, payload)
 select id,'h','0.1.0','{}'::jsonb from assessment_runs
  where church_id = (select id from churches where name='Acceptance Church');
-insert into invitations (run_id, church_id, category_id, created_by)
-select r.id, r.church_id, 'guest', '66666666-6666-6666-6666-666666666666'
- from assessment_runs r where r.church_id = (select id from churches where name='Acceptance Church');
 insert into responses (run_id, church_id, category_id, item_id, value, respondent_kind, respondent_label)
 select r.id, r.church_id, 'guest', 'G1', 7, 'invited', 'Pastor'
  from assessment_runs r where r.church_id = (select id from churches where name='Acceptance Church');
@@ -39,7 +36,6 @@ set local request.jwt.claims to '{"sub":"77777777-7777-7777-7777-777777777777","
 select is((select count(*)::int from churches),        0, 'AC1 non-member: no churches');
 select is((select count(*)::int from assessment_runs), 0, 'AC1 non-member: no runs');
 select is((select count(*)::int from diagnoses),       0, 'AC1 non-member: no diagnoses');
-select is((select count(*)::int from invitations),     0, 'AC1 non-member: no invitations');
 select is((select count(*)::int from responses),       0, 'AC1 non-member: no responses');
 select is((select count(*)::int from member_invitations), 0, 'AC1 non-member: no member_invitations');
 
@@ -57,7 +53,6 @@ select throws_ok(
 -- ── AC3: ANON can select nothing ────────────────────────────────────────
 set local role anon;
 set local request.jwt.claims to '{"role":"anon"}';
-select is((select count(*)::int from invitations),        0, 'AC3 anon: no invitations');
 select is((select count(*)::int from member_invitations), 0, 'AC3 anon: no member_invitations');
 select is((select count(*)::int from responses),          0, 'AC3 anon: no responses');
 select is((select count(*)::int from churches),           0, 'AC3 anon: no churches');
@@ -87,6 +82,7 @@ select lives_ok(
 
 -- viewer cannot read member_invitations (minv_select is admin-only)
 select is((select count(*)::int from member_invitations), 0, 'minv viewer: cannot read invitations');
+select is((select count(*)::int from diagnoses), 0, 'AC viewer: cannot read diagnosis');
 
 -- viewer cannot create an invitation (church_id resolves non-null since viewer sees own
 -- church via churches_select — this is a clean RLS 42501 throw, not a not-null collision)
@@ -103,6 +99,7 @@ select throws_ok(
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"66666666-6666-6666-6666-666666666666","email":"founder@ac.com","role":"authenticated"}';
 select is((select count(*)::int from member_invitations), 1, 'minv admin: reads own church invitations');
+select is((select count(*)::int from diagnoses), 1, 'AC admin: can read diagnosis');
 
 -- admin can create an invitation
 select lives_ok(

@@ -1,11 +1,11 @@
 begin;
 select plan(25);
 
--- all nine tables exist
+-- the eight surviving tables exist; invitations was dropped (asserted absent below)
 select has_table('public','churches','churches exists');
 select has_table('public','church_members','church_members exists');
 select has_table('public','assessment_runs','assessment_runs exists');
-select has_table('public','invitations','invitations exists');
+select hasnt_table('public', 'invitations', 'invitations table dropped');
 select has_table('public','responses','responses exists');
 select has_table('public','diagnoses','diagnoses exists');
 select has_table('public','report_shares','report_shares exists');
@@ -33,7 +33,7 @@ select throws_ok(
 select is(relrowsecurity, true, 'churches RLS enabled')  from pg_class where oid = 'public.churches'::regclass;
 select is(relrowsecurity, true, 'church_members RLS enabled') from pg_class where oid = 'public.church_members'::regclass;
 select is(relrowsecurity, true, 'assessment_runs RLS enabled') from pg_class where oid = 'public.assessment_runs'::regclass;
-select is(relrowsecurity, true, 'invitations RLS enabled') from pg_class where oid = 'public.invitations'::regclass;
+select has_column('public', 'responses', 'invitation_id', 'responses.invitation_id preserved after invitations drop');
 select is(relrowsecurity, true, 'responses RLS enabled') from pg_class where oid = 'public.responses'::regclass;
 select is(relrowsecurity, true, 'diagnoses RLS enabled') from pg_class where oid = 'public.diagnoses'::regclass;
 select is(relrowsecurity, true, 'report_shares RLS enabled') from pg_class where oid = 'public.report_shares'::regclass;

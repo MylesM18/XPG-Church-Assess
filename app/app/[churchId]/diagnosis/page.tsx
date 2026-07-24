@@ -1,5 +1,5 @@
 // app/app/[churchId]/diagnosis/page.tsx
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
@@ -39,6 +39,15 @@ export default async function DiagnosisPage({
     .maybeSingle()
   if (!church) notFound()
 
+  // Results = admins only (Decision 5). A viewer cannot read the diagnoses row (RLS is
+  // admin-only) and must not see the report page — send them back to the dashboard.
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: membership } = await supabase
+    .from('church_members').select('role')
+    .eq('church_id', churchId).eq('user_id', user?.id ?? '').maybeSingle()
+  const isAdmin = membership?.role === 'admin'
+  if (!isAdmin) redirect(`/app/${churchId}`)
+
   const { data: run } = await supabase
     .from('assessment_runs')
     .select('id, status')
@@ -60,16 +69,6 @@ export default async function DiagnosisPage({
   }
 
   if (!diagRow) return <EmptyState churchId={churchId} />
-
-  // Mirrors the role check at access/page.tsx:18-22, minus its notFound() — viewers are
-  // legitimately allowed on this page, only the share control is admin-only. get_report_share
-  // is itself admin-gated in SQL and would error for a viewer, so skip calling it entirely
-  // rather than let a viewer see a "Create share link" button that can never succeed.
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: membership } = await supabase
-    .from('church_members').select('role')
-    .eq('church_id', churchId).eq('user_id', user?.id ?? '').maybeSingle()
-  const isAdmin = membership?.role === 'admin'
 
   let existingShareToken: string | null = null
   if (isAdmin) {

@@ -51,7 +51,7 @@ export default function SignInPage() {
   }, [])
 
   // Forward the `?next=` the sign-in page was loaded with (e.g. the answer page
-  // or createInvitation redirect here when unauthenticated) through the magic
+  // or the accept-invitation page redirecting here when unauthenticated) through the magic
   // link so /auth/callback lands the user back where they started. Falls back to
   // /get-started for a bare sign-in visit. Open-redirect guarded in resolveNext.
   const callbackUrl = () => {
