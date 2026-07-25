@@ -105,37 +105,60 @@ select is(
   '[{"ref":"G1","kind":"item","value":33}]'::jsonb,
   'non-dispersion evidence_trail refs (primary_constraint, blind_spot, generosity_mode) are left untouched');
 
--- Real fixture payload: diagnosis 2549974d-d898-4083-9836-bc29510fe564, run
--- f5451c2b-9646-4f30-b1d6-9f35c12c9367 (Redwood Chapel). Scoped by primary key AND
--- run_id together, so this can never become a multi-row subquery against the local
--- e2e fixtures. Proves the three respondent names actually present in the committed
--- fixture data are gone after strip_respondents, with a positive control proving the
--- same ref-level LIKE probe matches them beforehand.
+-- Crafted fixture payload mirroring a real diagnosis: respondent names appear in
+-- dispersion:* evidence_trail refs (e.g. "guest.Marcus Ellingsworth" -> 3.1) across two
+-- categories (guest, formation). Inlined rather than read from the diagnoses table
+-- because the committed e2e fixtures are NOT loaded by `supabase db reset` (config.toml
+-- [db.seed] seeds ./seed.sql only, which carries no diagnoses), so a table-scoped probe
+-- finds zero rows on a clean reset. The positive control proves the same ref-level LIKE
+-- probe matches the three respondent names before stripping; the paired assertion proves
+-- they are all gone after strip_respondents (every needle ref lives in a dispersion:*
+-- entry, which strip_respondents empties).
 select is(
   (select count(*)
-   from diagnoses, jsonb_array_elements(payload -> 'evidence_trail') as entry,
+   from jsonb_array_elements(
+     '{"overall_score":58,"evidence_trail":[
+        {"claim":"primary_constraint:guest","refs":[{"ref":"G1","kind":"item","value":33}]},
+        {"claim":"dispersion:guest","refs":[
+           {"ref":"guest.Marcus Ellingsworth","kind":"metric","value":3.1},
+           {"ref":"guest.Priscilla Vandermeer","kind":"metric","value":7.4},
+           {"ref":"guest.Theodore Nakashima","kind":"metric","value":5.2}]},
+        {"claim":"dispersion:formation","refs":[
+           {"ref":"formation.Marcus Ellingsworth","kind":"metric","value":2.8},
+           {"ref":"formation.Priscilla Vandermeer","kind":"metric","value":6.1},
+           {"ref":"formation.Theodore Nakashima","kind":"metric","value":4.4}]},
+        {"claim":"blind_spot:guest","refs":[{"ref":"guest.belief","kind":"metric","value":5}]}
+      ]}'::jsonb -> 'evidence_trail') as entry,
         jsonb_array_elements(entry -> 'refs') as r
-   where id = '2549974d-d898-4083-9836-bc29510fe564'
-     and run_id = 'f5451c2b-9646-4f30-b1d6-9f35c12c9367'
-     and (r::text like '%Marcus Ellingsworth%'
-          or r::text like '%Priscilla Vandermeer%'
-          or r::text like '%Theodore Nakashima%')),
-  15::bigint,
-  'positive control: the real fixture diagnosis carries respondent-named refs in evidence_trail before stripping');
+   where r::text like '%Marcus Ellingsworth%'
+      or r::text like '%Priscilla Vandermeer%'
+      or r::text like '%Theodore Nakashima%'),
+  6::bigint,
+  'positive control: the crafted fixture carries respondent-named refs in evidence_trail before stripping');
 
 select is(
   (select count(*)
    from (
-     select strip_respondents(payload) as stripped from diagnoses
-     where id = '2549974d-d898-4083-9836-bc29510fe564'
-       and run_id = 'f5451c2b-9646-4f30-b1d6-9f35c12c9367'
+     select strip_respondents(
+       '{"overall_score":58,"evidence_trail":[
+          {"claim":"primary_constraint:guest","refs":[{"ref":"G1","kind":"item","value":33}]},
+          {"claim":"dispersion:guest","refs":[
+             {"ref":"guest.Marcus Ellingsworth","kind":"metric","value":3.1},
+             {"ref":"guest.Priscilla Vandermeer","kind":"metric","value":7.4},
+             {"ref":"guest.Theodore Nakashima","kind":"metric","value":5.2}]},
+          {"claim":"dispersion:formation","refs":[
+             {"ref":"formation.Marcus Ellingsworth","kind":"metric","value":2.8},
+             {"ref":"formation.Priscilla Vandermeer","kind":"metric","value":6.1},
+             {"ref":"formation.Theodore Nakashima","kind":"metric","value":4.4}]},
+          {"claim":"blind_spot:guest","refs":[{"ref":"guest.belief","kind":"metric","value":5}]}
+        ]}'::jsonb) as stripped
    ) s, jsonb_array_elements(stripped -> 'evidence_trail') as entry,
         jsonb_array_elements(entry -> 'refs') as r
    where r::text like '%Marcus Ellingsworth%'
       or r::text like '%Priscilla Vandermeer%'
       or r::text like '%Theodore Nakashima%'),
   0::bigint,
-  'strip_respondents removes all three respondent needles from the real fixture diagnosis evidence_trail');
+  'strip_respondents removes all three respondent needles from the crafted evidence_trail');
 
 -- ── the partial unique index ───────────────────────────────────────────────
 select has_index('public', 'report_shares', 'report_shares_one_active_per_run',
