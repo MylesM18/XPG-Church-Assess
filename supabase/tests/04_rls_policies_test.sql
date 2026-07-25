@@ -29,7 +29,7 @@ set local request.jwt.claims to '{"sub":"44444444-4444-4444-4444-444444444444","
 select is((select count(*)::int from churches where name = 'RLS Test Church'), 1, 'member selects own church');
 select is((select count(*)::int from assessment_runs), 1, 'member selects own run');
 select is((select count(*)::int from diagnoses), 1, 'member selects own diagnosis');
-select is((select count(*)::int from church_members), 1, 'member sees own membership row');
+select is((select count(*)::int from church_members), 2, 'member sees all co-member rows in own church (church-wide members_select)');
 
 -- member CANNOT self-insert another membership row (no write policy on church_members)
 select throws_ok(
