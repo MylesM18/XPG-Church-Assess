@@ -1,4 +1,5 @@
 import { RevokeInviteButton } from './revoke-invite-button'
+import { ResendInviteButton } from './resend-invite-button'
 import { acceptLink } from '@/lib/access/accept-state'
 
 // The focus target when a row unmounts. BOTH branches below carry this id deliberately: revoking the
@@ -36,7 +37,10 @@ export function PendingInvitesList({
                 <p className="truncate font-body text-sm text-ink">{inv.invited_email}</p>
                 <p className="font-body text-xs text-ink-soft">{inv.role === 'admin' ? 'Co-admin' : 'Member'} · expires {new Date(inv.expires_at).toLocaleDateString()}</p>
               </div>
-              <RevokeInviteButton churchId={churchId} inviteId={inv.id} headingId={PENDING_HEADING_ID} />
+              <div className="flex items-center gap-3">
+                <ResendInviteButton churchId={churchId} inviteId={inv.id} />
+                <RevokeInviteButton churchId={churchId} inviteId={inv.id} headingId={PENDING_HEADING_ID} />
+              </div>
             </div>
             <code className="break-all font-body text-xs text-ink-soft">{acceptLink(appUrl, inv.id)}</code>
           </li>

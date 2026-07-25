@@ -4,7 +4,7 @@
 
 **Goal:** Stop every control that disables itself during an async action from dropping keyboard focus to `<body>` for the duration of that action.
 
-**Architecture:** Ten controls across nine files swap `disabled={…}` for `aria-disabled={…}`, so the control stays focusable and focus survives the pending phase. Each gains a guard replacing what native `disabled` was doing for double-activation, and the eight carrying Tailwind's `disabled:opacity-50` swap it for `aria-disabled:opacity-50`, which the native variant would otherwise stop matching. A census test pins the result, carrying the measurement that justifies deviating from React's documented idiom.
+**Architecture:** Eleven controls across ten files swap `disabled={…}` for `aria-disabled={…}`, so the control stays focusable and focus survives the pending phase. Each gains a guard replacing what native `disabled` was doing for double-activation, and the eight carrying Tailwind's `disabled:opacity-50` swap it for `aria-disabled:opacity-50`, which the native variant would otherwise stop matching. A census test pins the result, carrying the measurement that justifies deviating from React's documented idiom.
 
 **Tech Stack:** Next.js App Router (React 19, `useActionState`, `useTransition`), TypeScript, Tailwind 4.3.2, vitest (node environment, source-reading tests only).
 
@@ -35,6 +35,7 @@
 | `app/app/[churchId]/access/invite-member-form.tsx` | 1 | `pending` | A | yes | 2 |
 | `app/app/[churchId]/access/revoke-invite-button.tsx` | 1 | `pending` | A | yes | 2 |
 | `app/app/[churchId]/access/remove-member-button.tsx` | 1 | `pending` | A | yes | 2 |
+| `app/app/[churchId]/access/resend-invite-button.tsx` | 1 | `pending` | A | yes | A3 |
 | `app/app/[churchId]/invite-panel.tsx` | 1 | `pending` | A | yes | 3 |
 | `app/get-started/form.tsx` | 1 | `pending` | A | yes | 3 |
 | `components/answer-form.tsx` | 1 | `pending` | A | yes | 3 |

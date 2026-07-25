@@ -120,18 +120,22 @@ describe('pending controls', () => {
   // aria-disabled={newPending}, both driven by useActionState(createInvitation) in that same file.
   // respond-form.tsx was deleted in the same task but carried no aria-disabled binding, so it
   // contributed nothing. Verified: the entire 12 -> 10 drop is category-invite.tsx's two controls.
-  it('covers all ten known pending controls', () => {
+  // Bumped from 10 to 11 when Task A3 (dashboard + invite relocation) added the Resend control in
+  // app/app/[churchId]/access/resend-invite-button.tsx — aria-disabled={pending} with a matching
+  // e.preventDefault() guard, driven by useActionState(resendInvitation). See §2 of
+  // docs/superpowers/plans/2026-07-20-m6d-i3-pending-focus.md.
+  it('covers all eleven known pending controls', () => {
     const count = FILES.reduce(
       (n, f) => n + (f.source.match(new RegExp(ARIA_DISABLED, 'g'))?.length ?? 0),
       0,
     )
     expect(
       count,
-      'expected exactly 10 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
+      'expected exactly 11 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
         'control in the spec’s scope table. A LOWER count means a site was missed or reverted. A ' +
         'HIGHER count is not a defect: a new pending control was added, which is fine — add it to ' +
         '§2 of the design doc and bump this number. The answer-form wizard contributes two: the ' +
         'Submit/Next control and the Back navigation boundary (aria-disabled={step === 0}).',
-    ).toBe(10)
+    ).toBe(11)
   })
 })

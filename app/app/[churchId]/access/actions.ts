@@ -79,3 +79,39 @@ export async function removeMember(_prev: ManageResult, formData: FormData): Pro
   revalidatePath(`/app/${churchId}/access`)
   return { error: null }
 }
+
+export async function resendInvitation(_prev: ManageResult, formData: FormData): Promise<ManageResult> {
+  const churchId = String(formData.get('church_id') ?? '')
+  const id = String(formData.get('invite_id') ?? '')
+  const { supabase, error: authErr } = await requireAdmin(churchId)
+  if (authErr) return { error: authErr }
+
+  // Re-read the still-pending, not-yet-expired invite (RLS-scoped SELECT).
+  const { data: invite } = await supabase
+    .from('member_invitations')
+    .select('invited_email, role')
+    .eq('id', id).eq('church_id', churchId).eq('status', 'pending')
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle()
+  if (!invite) return { error: 'This invitation is no longer pending.' }
+
+  // Bump the 14-day expiry. minv_update gates admin-only with no column restriction, so this
+  // scoped UPDATE (same policy revokeInvitation uses) needs no migration.
+  const { error: updErr } = await supabase
+    .from('member_invitations')
+    .update({ expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString() })
+    .eq('id', id).eq('church_id', churchId).eq('status', 'pending')
+  if (updErr) return { error: updErr.message }
+
+  // Re-email (best-effort — the pending row already shows the copyable link).
+  const { data: church } = await supabase.from('churches').select('name').eq('id', churchId).maybeSingle()
+  await sendMemberInvitationEmail({
+    to: invite.invited_email,
+    link: acceptLink(APP_URL, id),
+    churchName: church?.name ?? 'your church',
+    role: invite.role,
+  })
+
+  revalidatePath(`/app/${churchId}/access`)
+  return { error: null }
+}
