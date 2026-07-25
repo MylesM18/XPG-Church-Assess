@@ -10,7 +10,11 @@ const cats: Category[] = ['a', 'b', 'c'].map((id, i) => ({
 }))
 
 function result(statuses: Array<'not_started' | 'partial' | 'covered'>): CoverageResult {
-  const categories = cats.map((c, i) => ({ category_id: c.id, status: statuses[i] ?? 'not_started' }))
+  const categories = cats.map((c, i) => {
+    const status = statuses[i] ?? 'not_started'
+    const answeredCount = status === 'not_started' ? 0 : status === 'covered' ? c.items.length : 1
+    return { category_id: c.id, status, answeredCount }
+  })
   return { categories, coveredCount: categories.filter((c) => c.status === 'covered').length }
 }
 

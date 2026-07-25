@@ -12,6 +12,17 @@ export interface CoverageRow {
 export interface CategoryCoverage {
   category_id: string
   status: CoverageStatus
+  answeredCount: number
+}
+
+/**
+ * Pure status classifier shared by the per-card counter and the member matrix.
+ * 0 → not_started; every item answered → covered; otherwise → partial.
+ */
+export function classify(answeredCount: number, total: number): CoverageStatus {
+  if (answeredCount === 0) return 'not_started'
+  if (answeredCount === total) return 'covered'
+  return 'partial'
 }
 
 export interface CoverageResult {
@@ -31,11 +42,7 @@ export function coverage(rows: CoverageRow[], categories: Category[]): CoverageR
 
   const cats: CategoryCoverage[] = categories.map((cat) => {
     const answeredCount = cat.items.filter((it) => answered.has(`${cat.id}:${it.id}`)).length
-    let status: CoverageStatus
-    if (answeredCount === 0) status = 'not_started'
-    else if (answeredCount === cat.items.length) status = 'covered'
-    else status = 'partial'
-    return { category_id: cat.id, status }
+    return { category_id: cat.id, status: classify(answeredCount, cat.items.length), answeredCount }
   })
 
   return { categories: cats, coveredCount: cats.filter((c) => c.status === 'covered').length }
