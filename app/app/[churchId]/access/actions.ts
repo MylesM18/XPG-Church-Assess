@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { sendMemberInvitationEmail } from '@/lib/email/send-member-invitation'
 import { acceptLink } from '@/lib/access/accept-state'
+import { mapRoleInput } from '@/lib/access/roles'
 
 export interface InviteResult {
   link: string | null
@@ -32,7 +33,7 @@ export async function inviteMember(_prev: InviteResult, formData: FormData): Pro
   const churchId = String(formData.get('church_id') ?? '')
   const email = String(formData.get('email') ?? '').trim()
   const roleInput = String(formData.get('role') ?? '')
-  const role = roleInput === 'Co-admin' ? 'admin' : roleInput === 'Viewer' ? 'viewer' : roleInput
+  const role = mapRoleInput(roleInput)
 
   const { supabase, error: authErr } = await requireAdmin(churchId)
   if (authErr) return { link: null, emailed: false, error: authErr }

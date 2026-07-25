@@ -34,7 +34,7 @@ export function PendingInvitesList({
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate font-body text-sm text-ink">{inv.invited_email}</p>
-                <p className="font-body text-xs text-ink-soft">{inv.role === 'admin' ? 'Co-admin' : 'Viewer'} · expires {new Date(inv.expires_at).toLocaleDateString()}</p>
+                <p className="font-body text-xs text-ink-soft">{inv.role === 'admin' ? 'Co-admin' : 'Member'} · expires {new Date(inv.expires_at).toLocaleDateString()}</p>
               </div>
               <RevokeInviteButton churchId={churchId} inviteId={inv.id} headingId={PENDING_HEADING_ID} />
             </div>

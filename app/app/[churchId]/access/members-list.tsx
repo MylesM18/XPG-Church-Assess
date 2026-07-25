@@ -28,7 +28,7 @@ export function MembersList({
                 <p className="truncate font-body text-sm text-ink">
                   {m.full_name ?? m.email ?? 'Unknown'}{isSelf && <span className="text-ink-soft"> (you)</span>}
                 </p>
-                <p className="font-body text-xs text-ink-soft">{m.role === 'admin' ? 'Co-admin' : 'Viewer'} · joined {new Date(m.joined_at).toLocaleDateString()}</p>
+                <p className="font-body text-xs text-ink-soft">{m.role === 'admin' ? 'Co-admin' : 'Member'} · joined {new Date(m.joined_at).toLocaleDateString()}</p>
               </div>
               {noRemove ? (
                 <span className="font-body text-xs text-ink-soft" title="A church must keep at least one admin.">Last admin</span>

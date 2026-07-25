@@ -3,6 +3,7 @@
 import { useActionState } from 'react'
 import { inviteMember, type InviteResult } from './actions'
 import { LiveStatus } from '@/components/live-status'
+import { FieldInfo } from '@/app/get-started/field-info'
 
 const initial: InviteResult = { link: null, emailed: false, error: null }
 const inputClass =
@@ -20,13 +21,15 @@ export function InviteMemberForm({ churchId }: { churchId: string }) {
         <input name="email" type="email" required className={inputClass} />
       </label>
 
-      <label className="flex flex-col gap-1 font-body text-sm text-ink-soft">
-        Role
-        <select name="role" required defaultValue="Viewer" className={inputClass}>
-          <option value="Viewer">Viewer</option>
+      <div className="flex flex-col gap-1 font-body text-sm text-ink-soft">
+        <FieldInfo htmlFor="invite-role" label="Role">
+          Co-admins can view the assessment results and send invites, in addition to answering. Members only answer the assessment.
+        </FieldInfo>
+        <select id="invite-role" name="role" required defaultValue="Member" className={inputClass}>
+          <option value="Member">Member</option>
           <option value="Co-admin">Co-admin</option>
         </select>
-      </label>
+      </div>
 
       <button type="submit" aria-disabled={pending}
         onClick={(e) => { if (pending) e.preventDefault() }}
