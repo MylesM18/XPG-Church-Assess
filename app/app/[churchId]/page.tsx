@@ -55,8 +55,9 @@ export default async function DashboardPage({
   const role = membership?.role ?? null
   const isAdmin = role === 'admin'
 
-  // Admins read the church-wide aggregate (needed to gate diagnosis generation on all-8-covered);
-  // viewers read their OWN coverage so status dots + the header reflect only their own answers.
+  // Admins read the church-wide aggregate (needed to gate diagnosis generation on all-8-covered)
+  // for the header, status dots, and gate below; viewers read their OWN coverage, which drives
+  // everything for them. Admins additionally fetch their own coverage further down for the CTA.
   const { data: coverageData, error: coverageError } = await supabase.rpc(
     isAdmin ? 'get_run_coverage' : 'get_member_run_coverage',
     { p_church_id: churchId },
@@ -70,7 +71,20 @@ export default async function DashboardPage({
   const enablers = methodology.rules.enablers
 
   const result = coverage(rows, categories)
-  const cta = assessmentCta(result, categories)
+
+  // The whole-assessment CTA always reflects the CURRENT user's own progress, so an admin
+  // resumes where THEY left off. Church-wide coverage still drives the header, the status
+  // dots, and the diagnosis-generation gate below.
+  let ctaResult = result
+  if (isAdmin) {
+    const { data: memberCoverageData, error: memberCoverageError } = await supabase.rpc(
+      'get_member_run_coverage',
+      { p_church_id: churchId },
+    )
+    if (memberCoverageError) throw memberCoverageError
+    ctaResult = coverage((memberCoverageData ?? []) as CoverageRow[], categories)
+  }
+  const cta = assessmentCta(ctaResult, categories)
   const statusById = new Map(result.categories.map((c) => [c.category_id, c.status]))
   const anyStarted = result.categories.some((c) => c.status !== 'not_started')
   const progressState = anyStarted ? 'Assessment in progress' : 'Assessment not started'

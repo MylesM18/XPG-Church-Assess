@@ -56,4 +56,19 @@ describe('dashboard self-assessment wiring', () => {
     expect(CODE).toContain('cta.label')
     expect(CODE).toContain('cta.targetCategoryId')
   })
+
+  it("derives the admin whole-assessment CTA from the caller's OWN coverage, not church-wide coverage", () => {
+    expect(
+      CODE,
+      'the CTA must be fed by ctaResult (caller-scoped), not the church-wide result — an admin resumes ' +
+        'their own progress; the header/dots/diagnosis-gate stay on church-wide result',
+    ).toContain('assessmentCta(ctaResult, categories)')
+    const memberCoverageCallCount = CODE.split("'get_member_run_coverage'").length - 1
+    expect(
+      memberCoverageCallCount,
+      "get_member_run_coverage must be called exactly twice: once for viewers (it drives everything) " +
+        'and once more for admins (to source the CTA only, alongside the church-wide fetch). If this drops ' +
+        'to 1, the admin CTA has silently regressed back to church-wide coverage.',
+    ).toBe(2)
+  })
 })
