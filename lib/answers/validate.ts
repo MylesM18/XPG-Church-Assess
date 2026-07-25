@@ -54,3 +54,36 @@ export function validateCategoryAnswers(
 
   return { ok: true, answers: clean }
 }
+
+export type ValidateSingleResult =
+  | { ok: true; answer: AnswerInput }
+  | { ok: false; error: string }
+
+/**
+ * Partial-tolerant sibling of validateCategoryAnswers: validates ONE answer as the user advances
+ * (save-on-advance / resume), without requiring the whole category. Checks: category exists, the
+ * item_id belongs to that category, and value is an integer 1–10. The strict all-or-nothing
+ * validateCategoryAnswers above is unchanged and still guards any full-submit path.
+ */
+export function validateSingleAnswer(
+  categoryId: string,
+  answer: unknown,
+  categories: Category[],
+): ValidateSingleResult {
+  const category = categories.find((c) => c.id === categoryId)
+  if (!category) return { ok: false, error: `Unknown category: ${categoryId}` }
+
+  if (typeof answer !== 'object' || answer === null) {
+    return { ok: false, error: 'Answer must be an object.' }
+  }
+  const itemId = (answer as Record<string, unknown>).item_id
+  const value = (answer as Record<string, unknown>).value
+  const itemIds = category.items.map((i) => i.id)
+  if (typeof itemId !== 'string' || !itemIds.includes(itemId)) {
+    return { ok: false, error: `Item ${String(itemId)} does not belong to category ${categoryId}.` }
+  }
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 10) {
+    return { ok: false, error: `Value for ${itemId} must be an integer 1–10.` }
+  }
+  return { ok: true, answer: { item_id: itemId, value } }
+}

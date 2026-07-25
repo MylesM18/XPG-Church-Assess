@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { coverage, type CoverageRow, type CoverageStatus } from '@/lib/coverage/coverage'
+import { assessmentCta } from '@/lib/coverage/assessment-cta'
 import { ChainGlyph } from './chain-glyph'
 import { GenerateButton } from './generate-button'
 import { RefreshOnFocus } from './refresh-on-focus'
@@ -54,8 +55,9 @@ export default async function DashboardPage({
   const role = membership?.role ?? null
   const isAdmin = role === 'admin'
 
-  // Admins read the church-wide aggregate (needed to gate diagnosis generation on all-8-covered);
-  // viewers read their OWN coverage so status dots + the header reflect only their own answers.
+  // Admins read the church-wide aggregate (needed to gate diagnosis generation on all-8-covered)
+  // for the header, status dots, and gate below; viewers read their OWN coverage, which drives
+  // everything for them. Admins additionally fetch their own coverage further down for the CTA.
   const { data: coverageData, error: coverageError } = await supabase.rpc(
     isAdmin ? 'get_run_coverage' : 'get_member_run_coverage',
     { p_church_id: churchId },
@@ -69,6 +71,20 @@ export default async function DashboardPage({
   const enablers = methodology.rules.enablers
 
   const result = coverage(rows, categories)
+
+  // The whole-assessment CTA always reflects the CURRENT user's own progress, so an admin
+  // resumes where THEY left off. Church-wide coverage still drives the header, the status
+  // dots, and the diagnosis-generation gate below.
+  let ctaResult = result
+  if (isAdmin) {
+    const { data: memberCoverageData, error: memberCoverageError } = await supabase.rpc(
+      'get_member_run_coverage',
+      { p_church_id: churchId },
+    )
+    if (memberCoverageError) throw memberCoverageError
+    ctaResult = coverage((memberCoverageData ?? []) as CoverageRow[], categories)
+  }
+  const cta = assessmentCta(ctaResult, categories)
   const statusById = new Map(result.categories.map((c) => [c.category_id, c.status]))
   const anyStarted = result.categories.some((c) => c.status !== 'not_started')
   const progressState = anyStarted ? 'Assessment in progress' : 'Assessment not started'
@@ -110,6 +126,15 @@ export default async function DashboardPage({
           <p className="font-body text-sm text-ink-soft">{header}</p>
         </div>
       </header>
+
+      <section>
+        <Link
+          href={`/app/${churchId}/answer/${cta.targetCategoryId}`}
+          className="inline-block rounded-md border border-line bg-ink px-4 py-2 font-body text-sm text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        >
+          {cta.label}
+        </Link>
+      </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {categories.map((cat) => {

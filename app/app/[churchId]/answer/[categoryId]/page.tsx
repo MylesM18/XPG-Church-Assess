@@ -30,9 +30,27 @@ export default async function AnswerPage({
 
   const items = category.items.map((i) => ({ id: i.id, text: i.text, anchors: i.anchors }))
 
+  // Resume: pull the caller's OWN saved answers for this category (own-data only; responses stays
+  // default-deny — the read goes through the security-definer RPC). Empty on the first visit.
+  const { data: savedRows, error: savedError } = await supabase.rpc('get_my_category_answers', {
+    p_church_id: churchId,
+    p_category_id: categoryId,
+  })
+  if (savedError) throw savedError
+  const initialValues: Record<string, number> = {}
+  for (const row of (savedRows ?? []) as { item_id: string; value: number }[]) {
+    initialValues[row.item_id] = row.value
+  }
+
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-lg flex-col gap-6 px-6 py-12">
-      <SelfForm churchId={churchId} categoryId={categoryId} categoryName={category.name} items={items} />
+      <SelfForm
+        churchId={churchId}
+        categoryId={categoryId}
+        categoryName={category.name}
+        items={items}
+        initialValues={initialValues}
+      />
     </main>
   )
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateCategoryAnswers } from '@/lib/answers/validate'
+import { validateCategoryAnswers, validateSingleAnswer } from '@/lib/answers/validate'
 import type { Category } from '@/lib/methodology/schema'
 
 const guest: Category = {
@@ -58,5 +58,27 @@ describe('validateCategoryAnswers()', () => {
   it('rejects a non-integer value', () => {
     const bad = [...full.slice(0, 4), { item_id: 'G5', value: 5.5 }]
     expect(validateCategoryAnswers('guest', bad, CATS).ok).toBe(false)
+  })
+})
+
+describe('validateSingleAnswer()', () => {
+  it('accepts a single in-range answer for a real item', () => {
+    const r = validateSingleAnswer('guest', { item_id: 'G3', value: 7 }, CATS)
+    expect(r).toEqual({ ok: true, answer: { item_id: 'G3', value: 7 } })
+  })
+  it('rejects an unknown category', () => {
+    expect(validateSingleAnswer('nope', { item_id: 'G1', value: 5 }, CATS).ok).toBe(false)
+  })
+  it('rejects an item not in the category', () => {
+    expect(validateSingleAnswer('guest', { item_id: 'ZZ', value: 5 }, CATS).ok).toBe(false)
+  })
+  it('rejects an out-of-range value', () => {
+    expect(validateSingleAnswer('guest', { item_id: 'G1', value: 11 }, CATS).ok).toBe(false)
+  })
+  it('rejects a non-integer value', () => {
+    expect(validateSingleAnswer('guest', { item_id: 'G1', value: 5.5 }, CATS).ok).toBe(false)
+  })
+  it('rejects a non-object payload', () => {
+    expect(validateSingleAnswer('guest', 7, CATS).ok).toBe(false)
   })
 })
