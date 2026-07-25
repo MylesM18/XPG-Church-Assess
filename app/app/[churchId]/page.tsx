@@ -158,14 +158,6 @@ export default async function DashboardPage({
                 />
                 {STATUS_LABEL[status]}
               </p>
-              <Link
-                href={`/app/${churchId}/answer/${cat.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-block py-1.5 font-body text-sm text-ink underline underline-offset-2 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-              >
-                Answer yourself
-              </Link>
             </article>
           )
         })}

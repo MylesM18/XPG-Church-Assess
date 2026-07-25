@@ -1,11 +1,10 @@
 // Source-reading tripwire (node env, no DOM): asserts on app/app/[churchId]/page.tsx text,
 // not rendered output.
 //
-// Pins the Bug-2 dashboard wiring: each per-area self-assessment link opens in a NEW window
-// (target="_blank" + rel="noopener noreferrer"), the fully-covered status reads "Completed", and
-// the page mounts <RefreshOnFocus/> so returning to this tab re-runs the server render. Each of
-// these is invisible in a static render and guarded by no other test — if one is dropped, the
-// new-window / live-status behaviour regresses silently. This is the tripwire.
+// Pins dashboard wiring that is invisible in a static render and guarded by no other test: the
+// per-area "Answer yourself" card link is REMOVED (owner decision) and must not return, the
+// fully-covered status reads "Completed", and the page mounts <RefreshOnFocus/> so returning to
+// this tab re-runs the server render. If one of these regresses it does so silently — the tripwire.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,20 +16,20 @@ const SOURCE = fs.readFileSync(path.join(REPO_ROOT, 'app', 'app', '[churchId]', 
 const CODE = SOURCE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
 
 describe('dashboard self-assessment wiring', () => {
-  it('opens the per-area self-assessment link in a new window', () => {
+  it('does not render a per-area "Answer yourself" card link (removed with the owner)', () => {
+    // The per-area link was removed from the category cards (owner decision); the whole-assessment
+    // primary CTA is now the single entry point into answering. A re-add must fail here. That link
+    // was also the only new-window control on the dashboard, so its target/rel attributes go too.
     expect(
       CODE,
-      'the per-area "Answer yourself" card Link must carry target="_blank" (Bug 2) — without it, ' +
-        'answering navigates away from the dashboard tab instead of opening a new window. ' +
-        '(The whole-assessment primary button is a separate, same-tab control.)',
-    ).toContain('target="_blank"')
-  })
-
-  it('marks the new window rel="noopener noreferrer"', () => {
+      'the per-area "Answer yourself" card link was removed (owner decision) — a re-add must fail here',
+    ).not.toContain('Answer yourself')
     expect(
       CODE,
-      'target="_blank" without rel="noopener noreferrer" leaves the opener reachable (reverse tabnabbing)',
-    ).toContain('rel="noopener noreferrer"')
+      'the removed per-area link was the only target="_blank" / rel="noopener noreferrer" new-window ' +
+        'control on the dashboard — no card link should reintroduce one',
+    ).not.toContain('target="_blank"')
+    expect(CODE).not.toContain('rel="noopener noreferrer"')
   })
 
   it('labels a fully-covered area "Completed", not "Covered"', () => {
