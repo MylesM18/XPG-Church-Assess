@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { sendMemberInvitationEmail } from '@/lib/email/send-member-invitation'
 import { acceptLink } from '@/lib/access/accept-state'
+import { mapRoleInput } from '@/lib/access/roles'
 
 export interface InviteResult {
   link: string | null
@@ -32,7 +33,7 @@ export async function inviteMember(_prev: InviteResult, formData: FormData): Pro
   const churchId = String(formData.get('church_id') ?? '')
   const email = String(formData.get('email') ?? '').trim()
   const roleInput = String(formData.get('role') ?? '')
-  const role = roleInput === 'Co-admin' ? 'admin' : roleInput === 'Viewer' ? 'viewer' : roleInput
+  const role = mapRoleInput(roleInput)
 
   const { supabase, error: authErr } = await requireAdmin(churchId)
   if (authErr) return { link: null, emailed: false, error: authErr }
@@ -49,6 +50,7 @@ export async function inviteMember(_prev: InviteResult, formData: FormData): Pro
     to: email, link, churchName: church?.name ?? 'your church', role,
   })
   revalidatePath(`/app/${churchId}/access`)
+  revalidatePath(`/app/${churchId}`)
   return { link, emailed: sent.ok, error: null }
 }
 
@@ -74,6 +76,42 @@ export async function removeMember(_prev: ManageResult, formData: FormData): Pro
   // remove_member is last-admin-guarded server-side; surface its refusal message instead of failing silently.
   const { error } = await supabase.rpc('remove_member', { p_church_id: churchId, p_user_id: userId })
   if (error) return { error: error.message }
+  revalidatePath(`/app/${churchId}/access`)
+  return { error: null }
+}
+
+export async function resendInvitation(_prev: ManageResult, formData: FormData): Promise<ManageResult> {
+  const churchId = String(formData.get('church_id') ?? '')
+  const id = String(formData.get('invite_id') ?? '')
+  const { supabase, error: authErr } = await requireAdmin(churchId)
+  if (authErr) return { error: authErr }
+
+  // Re-read the still-pending invite (RLS-scoped SELECT). No expiry filter: Resend deliberately
+  // revives a lapsed-but-unrevoked invite, resetting the 14-day clock in the UPDATE below.
+  const { data: invite } = await supabase
+    .from('member_invitations')
+    .select('invited_email, role')
+    .eq('id', id).eq('church_id', churchId).eq('status', 'pending')
+    .maybeSingle()
+  if (!invite) return { error: 'This invitation is no longer pending.' }
+
+  // Bump the 14-day expiry. minv_update gates admin-only with no column restriction, so this
+  // scoped UPDATE (same policy revokeInvitation uses) needs no migration.
+  const { error: updErr } = await supabase
+    .from('member_invitations')
+    .update({ expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString() })
+    .eq('id', id).eq('church_id', churchId).eq('status', 'pending')
+  if (updErr) return { error: updErr.message }
+
+  // Re-email (best-effort — the pending row already shows the copyable link).
+  const { data: church } = await supabase.from('churches').select('name').eq('id', churchId).maybeSingle()
+  await sendMemberInvitationEmail({
+    to: invite.invited_email,
+    link: acceptLink(APP_URL, id),
+    churchName: church?.name ?? 'your church',
+    role: invite.role,
+  })
+
   revalidatePath(`/app/${churchId}/access`)
   return { error: null }
 }

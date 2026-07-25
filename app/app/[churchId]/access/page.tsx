@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { InviteMemberForm } from './invite-member-form'
 import { MembersList, type Member } from './members-list'
 import { PendingInvitesList, type PendingInvite } from './pending-invites-list'
 
@@ -39,9 +38,9 @@ export default async function AccessPage({ params }: { params: Promise<{ churchI
       <header className="flex flex-col gap-1">
         <Link href={`/app/${churchId}`} className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-2 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">← Back to {church.name}</Link>
         <h1 className="font-display text-2xl text-ink">Manage access</h1>
+        <p className="font-body text-sm text-ink-soft">{"Manage who can access this church's assessment."}</p>
       </header>
 
-      <InviteMemberForm churchId={churchId} />
       <MembersList churchId={churchId} members={members} currentUserId={user?.id ?? null} disableRemoveFor={disableRemoveFor} />
       <PendingInvitesList churchId={churchId} invites={pending} appUrl={APP_URL} />
     </main>
