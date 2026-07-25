@@ -86,12 +86,12 @@ export async function resendInvitation(_prev: ManageResult, formData: FormData):
   const { supabase, error: authErr } = await requireAdmin(churchId)
   if (authErr) return { error: authErr }
 
-  // Re-read the still-pending, not-yet-expired invite (RLS-scoped SELECT).
+  // Re-read the still-pending invite (RLS-scoped SELECT). No expiry filter: Resend deliberately
+  // revives a lapsed-but-unrevoked invite, resetting the 14-day clock in the UPDATE below.
   const { data: invite } = await supabase
     .from('member_invitations')
     .select('invited_email, role')
     .eq('id', id).eq('church_id', churchId).eq('status', 'pending')
-    .gt('expires_at', new Date().toISOString())
     .maybeSingle()
   if (!invite) return { error: 'This invitation is no longer pending.' }
 

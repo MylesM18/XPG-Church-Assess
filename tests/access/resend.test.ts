@@ -1,6 +1,8 @@
 // Source-reading tripwire: a Resend action + button exist and are wired into pending rows,
 // resend bumps expiry via a scoped UPDATE (not create_member_invitation) and re-emails, and
-// the manage-access page carries its intro line.
+// the manage-access page carries its intro line. Resend's lookup has no expiry gate: a
+// lapsed-but-unrevoked ('pending') invite is deliberately revived, not refused, so its
+// UPDATE resets the 14-day clock rather than requiring the row to still be unexpired.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
