@@ -15,13 +15,15 @@ const INFO_ICON_CLASS =
 export function FieldInfo({
   htmlFor,
   label,
+  defaultOpen,
   children,
 }: {
   htmlFor: string
   label: string
+  defaultOpen?: boolean
   children: ReactNode
 }) {
-  const { triggerProps, regionProps } = useDisclosure()
+  const { triggerProps, regionProps } = useDisclosure(defaultOpen)
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <label htmlFor={htmlFor} className="font-body text-sm text-ink-soft">

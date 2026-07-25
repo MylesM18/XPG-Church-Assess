@@ -10,7 +10,7 @@ const CODE_ONLY = SOURCE.replace(/\/\/.*$/gm, '')
 describe('FieldInfo', () => {
   it('builds on the shared disclosure primitive', () => {
     expect(CODE_ONLY).toContain("from '@/components/inline-disclosure'")
-    expect(CODE_ONLY).toContain('useDisclosure()')
+    expect(CODE_ONLY).toContain('useDisclosure(')
   })
   it('names the trigger for screen readers', () => {
     expect(CODE_ONLY).toContain('aria-label={`About ${label}`}')
