@@ -14,7 +14,6 @@ export function InviteMemberForm({ churchId }: { churchId: string }) {
   return (
     <form action={formAction} className="flex flex-col gap-3 rounded-lg border border-line bg-paper p-4">
       <input type="hidden" name="church_id" value={churchId} />
-      <h2 className="font-display text-lg text-ink">Invite a leader</h2>
 
       <label className="flex flex-col gap-1 font-body text-sm text-ink-soft">
         Their email

@@ -8,6 +8,7 @@ import { assessmentCta } from '@/lib/coverage/assessment-cta'
 import { ChainGlyph } from './chain-glyph'
 import { GenerateButton } from './generate-button'
 import { RefreshOnFocus } from './refresh-on-focus'
+import { InviteMemberForm } from './access/invite-member-form'
 
 function gatesLabel(gates: 'all' | string[] | undefined): string {
   if (gates === 'all') return 'all stages'
@@ -201,6 +202,16 @@ export default async function DashboardPage({
           </Link>
         )}
       </section>
+
+      {isAdmin && (
+        <section className="flex flex-col gap-3">
+          <h2 className="font-display text-lg text-ink">Invite Member</h2>
+          <p className="font-body text-sm text-ink-soft">
+            {"Invite a member or co-admin to help with your church's assessment."}
+          </p>
+          <InviteMemberForm churchId={churchId} />
+        </section>
+      )}
     </main>
   )
 }

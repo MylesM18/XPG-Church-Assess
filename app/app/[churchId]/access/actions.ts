@@ -50,6 +50,7 @@ export async function inviteMember(_prev: InviteResult, formData: FormData): Pro
     to: email, link, churchName: church?.name ?? 'your church', role,
   })
   revalidatePath(`/app/${churchId}/access`)
+  revalidatePath(`/app/${churchId}`)
   return { link, emailed: sent.ok, error: null }
 }
 

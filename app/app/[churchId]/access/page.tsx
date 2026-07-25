@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { InviteMemberForm } from './invite-member-form'
 import { MembersList, type Member } from './members-list'
 import { PendingInvitesList, type PendingInvite } from './pending-invites-list'
 
@@ -41,7 +40,6 @@ export default async function AccessPage({ params }: { params: Promise<{ churchI
         <h1 className="font-display text-2xl text-ink">Manage access</h1>
       </header>
 
-      <InviteMemberForm churchId={churchId} />
       <MembersList churchId={churchId} members={members} currentUserId={user?.id ?? null} disableRemoveFor={disableRemoveFor} />
       <PendingInvitesList churchId={churchId} invites={pending} appUrl={APP_URL} />
     </main>
