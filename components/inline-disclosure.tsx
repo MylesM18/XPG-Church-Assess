@@ -9,8 +9,8 @@ import { useId, useState, type ReactNode } from 'react'
  * when collapsed. Consumers must NOT put a Tailwind display utility (flex/grid/block) on the region
  * wrapper — it would override `hidden`. Style width/padding/border only; let children lay out.
  */
-export function useDisclosure() {
-  const [open, setOpen] = useState(false)
+export function useDisclosure(initialOpen = false) {
+  const [open, setOpen] = useState(initialOpen)
   const regionId = useId()
   const toggle = () => setOpen((o) => !o)
   return {

@@ -21,7 +21,7 @@ export function InviteMemberForm({ churchId }: { churchId: string }) {
       </label>
 
       <div className="flex flex-col gap-1 font-body text-sm text-ink-soft">
-        <FieldInfo htmlFor="invite-role" label="Role">
+        <FieldInfo htmlFor="invite-role" label="Role" defaultOpen>
           Co-admins can view the assessment results and send invites, in addition to answering. Members only answer the assessment.
         </FieldInfo>
         <select id="invite-role" name="role" required defaultValue="Member" className={inputClass}>
