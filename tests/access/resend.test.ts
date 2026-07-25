@@ -28,6 +28,14 @@ describe('resend pending invitation', () => {
     expect(actions).toContain('This invitation is no longer pending.')
     expect(actions).toContain('sendMemberInvitationEmail')
   })
+  it('revives lapsed invites: resend lookup has no expiry gate', () => {
+    // Reverse-tripwire for the owner-approved revive behavior: resendInvitation must NOT
+    // re-filter its lookup by expires_at, or a lapsed-but-pending invite (which still appears
+    // in the pending list) could never be resent. Guards against silently reintroducing
+    // `.gt('expires_at', …)`. The +14-day `.update({ expires_at: … })` is a write, not a `.gt`
+    // filter, so it is unaffected.
+    expect(actions).not.toMatch(/\.gt\(\s*['"]expires_at['"]/)
+  })
   it('provides a Resend button wired to the action', () => {
     expect(button).toContain('resendInvitation')
     expect(button).toContain('ResendInviteButton')
