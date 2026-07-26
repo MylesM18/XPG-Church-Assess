@@ -23,7 +23,7 @@ export function SelfForm({
     return saveSelfAnswer(churchId, categoryId, answer)
   }
   function onComplete() {
-    router.push(`/app/${churchId}/done`)
+    router.push(`/app/${churchId}/answer/${categoryId}/complete`)
   }
   return (
     <AnswerForm

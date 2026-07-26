@@ -155,6 +155,9 @@ export default async function DashboardPage({
         >
           {cta.label}
         </Link>
+        <p className="mt-3 max-w-prose font-body text-sm text-ink-soft">
+          {"Please complete the assessment for each category. We encourage you to provide honest and thoughtful feedback, as your responses will help us gain an accurate understanding of the church's overall health and well-being."}
+        </p>
       </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">

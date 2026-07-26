@@ -54,13 +54,17 @@ describe('assessment completion screen', () => {
     )
   })
 
-  it('self-form onComplete routes to the done screen, not the bare dashboard', () => {
-    expect(selfForm, 'onComplete must push to /app/${churchId}/done').toContain(
-      'router.push(`/app/${churchId}/done`)',
-    )
+  it('is reached via the section-complete interstitial, not a direct self-form push', () => {
+    // Finish now hands off to answer/${categoryId}/complete; that interstitial redirects here on
+    // its `done` action. So self-form must NOT push straight to /done anymore. (The positive
+    // interstitial wiring is pinned in self-form-complete-wiring.test.ts.)
     expect(
       selfForm,
-      'the old onComplete route to the bare dashboard must be gone (a revert must fail here)',
+      'Finish no longer pushes straight to /done — it routes through the interstitial; a revert must fail here',
+    ).not.toContain('router.push(`/app/${churchId}/done`)')
+    expect(
+      selfForm,
+      'and still must not drop back on the bare dashboard',
     ).not.toContain('router.push(`/app/${churchId}`)')
   })
 })
