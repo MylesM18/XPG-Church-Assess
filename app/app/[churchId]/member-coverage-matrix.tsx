@@ -28,9 +28,9 @@ export function MemberCoverageMatrix({
 }) {
   if (matrix.length === 0) return null
   return (
-    <section className="flex flex-col gap-2">
+    <section className="flex flex-col gap-3">
       <h2 className="font-display text-lg text-ink">Member progress</h2>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-lg border border-line bg-paper p-4">
         <table className="w-full border-collapse font-body text-sm">
           <caption className="sr-only">Each member’s progress across the assessment areas</caption>
           <thead>
