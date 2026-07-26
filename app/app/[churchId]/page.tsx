@@ -9,6 +9,8 @@ import { ChainGlyph } from './chain-glyph'
 import { GenerateButton } from './generate-button'
 import { RefreshOnFocus } from './refresh-on-focus'
 import { InviteMemberForm } from './access/invite-member-form'
+import { buildMemberMatrix, type MatrixMember, type MemberCategoryCoverageRow, type MemberMatrixRow } from '@/lib/coverage/member-matrix'
+import { MemberCoverageMatrix } from './member-coverage-matrix'
 
 function gatesLabel(gates: 'all' | string[] | undefined): string {
   if (gates === 'all') return 'all stages'
@@ -93,6 +95,24 @@ export default async function DashboardPage({
     ? `${progressState} · ${result.coveredCount} of ${categories.length} areas`
     : `${progressState} · You've completed ${result.coveredCount} of ${categories.length} areas`
 
+  // The per-card counter always reflects the CURRENT user's own answers: viewers use `result`
+  // (their get_member_run_coverage), admins use `ctaResult` (their own refetch). The card's dot
+  // stays church-wide for admins (see status dot below), by design.
+  const ownCoverage = isAdmin ? ctaResult : result
+  const ownAnsweredById = new Map(ownCoverage.categories.map((c) => [c.category_id, c.answeredCount]))
+
+  // Admin-only Member × Category matrix (RPC is admin-gated).
+  let memberMatrix: MemberMatrixRow[] = []
+  if (isAdmin) {
+    const { data: rosterRows } = await supabase.rpc('get_church_members', { p_church_id: churchId })
+    const { data: matrixRows } = await supabase.rpc('get_member_category_coverage', { p_church_id: churchId })
+    memberMatrix = buildMemberMatrix(
+      (rosterRows ?? []) as MatrixMember[],
+      (matrixRows ?? []) as MemberCategoryCoverageRow[],
+      categories,
+    )
+  }
+
   let hasDiagnosis = false
   if (isAdmin) {
     const { data: run } = await supabase
@@ -159,10 +179,17 @@ export default async function DashboardPage({
                 />
                 {STATUS_LABEL[status]}
               </p>
+              <p className="mt-2 text-right font-body text-xs text-ink-soft">
+                {ownAnsweredById.get(cat.id) ?? 0} out of {cat.items.length} Questions
+              </p>
             </article>
           )
         })}
       </section>
+
+      {isAdmin && (
+        <MemberCoverageMatrix matrix={memberMatrix} categories={categories} currentUserId={user?.id ?? null} />
+      )}
 
       <section className="flex flex-wrap items-start gap-2">
         {isAdmin && (
