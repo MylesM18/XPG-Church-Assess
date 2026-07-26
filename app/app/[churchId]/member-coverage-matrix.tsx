@@ -30,14 +30,19 @@ export function MemberCoverageMatrix({
   return (
     <section className="flex flex-col gap-3">
       <h2 className="font-display text-lg text-ink">Member progress</h2>
-      <div className="overflow-x-auto rounded-lg border border-line bg-paper p-4">
+      <div className="rounded-lg border border-line bg-paper p-4">
+        {/* Cap the box at ~3 members from the initial view, then scroll for the rest. max-h-60
+            (15rem) + fixed h-14 rows below make the 3-row cap hold no matter how a status wraps;
+            overflow-y-auto scrolls the extra members, overflow-x-auto keeps the existing horizontal
+            scroll for the wide category columns. */}
+        <div className="max-h-60 overflow-x-auto overflow-y-auto">
         <table className="w-full border-collapse font-body text-sm">
           <caption className="sr-only">Each member’s progress across the assessment areas</caption>
           <thead>
             <tr>
-              <th scope="col" className="p-2 text-left font-body text-xs text-ink-soft">Member</th>
+              <th scope="col" className="sticky top-0 z-10 bg-paper p-2 text-left font-body text-xs text-ink-soft">Member</th>
               {categories.map((cat) => (
-                <th key={cat.id} scope="col" className="p-2 text-left font-body text-xs text-ink-soft">
+                <th key={cat.id} scope="col" className="sticky top-0 z-10 bg-paper p-2 text-left font-body text-xs text-ink-soft">
                   {cat.name}
                 </th>
               ))}
@@ -47,7 +52,7 @@ export function MemberCoverageMatrix({
             {matrix.map((row) => {
               const isSelf = row.member.user_id === currentUserId
               return (
-                <tr key={row.member.user_id} className={isSelf ? 'bg-sand' : undefined}>
+                <tr key={row.member.user_id} className={`h-14 ${isSelf ? 'bg-sand' : ''}`}>
                   <th scope="row" className="p-2 text-left font-body text-sm text-ink">
                     {row.member.full_name ?? row.member.email ?? 'Unknown'}
                     {isSelf && <span className="text-ink-soft"> (you)</span>}
@@ -68,6 +73,7 @@ export function MemberCoverageMatrix({
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </section>
   )
