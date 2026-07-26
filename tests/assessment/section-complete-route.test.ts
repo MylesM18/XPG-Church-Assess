@@ -28,12 +28,20 @@ describe('section-complete interstitial route', () => {
     expect(route).toContain("from '@/lib/coverage/section-complete'")
   })
 
-  it('mirrors the /done + answer guards', () => {
-    expect(route, 'membership gate (matches /done)').toContain("from('church_members')")
+  it('delegates the church + membership gate to the shared helper', () => {
+    expect(route, 'imports the shared guard').toContain(
+      "from '@/lib/auth/require-church-membership'",
+    )
+    expect(route, 'calls the shared guard').toContain('requireChurchMembership(')
+    expect(route, 'unauth deep-link → sign-in with next back to this page').toContain(
+      '/app/${churchId}/answer/${categoryId}/complete',
+    )
+  })
+
+  it('keeps the route-specific coverage + methodology loads', () => {
     expect(route, 'own coverage via the security-definer RPC').toContain('get_member_run_coverage')
     expect(route, 'classifies coverage via the shared helper').toContain('coverage(rows, categories)')
     expect(route, 'validates categoryId against the methodology').toContain('loadMethodology()')
-    expect(route, 'unauth deep-link → sign-in with next').toContain('/sign-in?next=')
   })
 
   it('acts on each redirecting helper branch', () => {

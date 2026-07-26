@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireChurchMembership } from '@/lib/auth/require-church-membership'
 import { loadMethodology } from '@/lib/methodology/load'
 import { coverage, type CoverageRow } from '@/lib/coverage/coverage'
 import { sectionCompleteNav } from '@/lib/coverage/section-complete'
@@ -13,29 +14,11 @@ export default async function SectionCompletePage({
   const { churchId, categoryId } = await params
   const supabase = await createClient()
 
-  // Guard 1 — church by id: RLS hides churches the caller isn't a member of → 404;
-  // an unauthenticated deep link is sent to sign-in with a next back to this page.
-  const { data: church, error } = await supabase
-    .from('churches')
-    .select('id')
-    .eq('id', churchId)
-    .maybeSingle()
-  if (error) throw error
-  if (!church) {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect(`/sign-in?next=/app/${churchId}/answer/${categoryId}/complete`)
-    notFound()
-  }
-
-  // Guard 2 — membership (matches /done): only members reach this screen.
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: membership } = await supabase
-    .from('church_members')
-    .select('role')
-    .eq('church_id', churchId)
-    .eq('user_id', user?.id ?? '')
-    .maybeSingle()
-  if (!membership) notFound()
+  // Guards 1–2 — church + membership permission wall (shared with /answer and /done). An
+  // unauthenticated deep link is sent to sign-in with a next back to this page.
+  await requireChurchMembership(supabase, churchId, {
+    signInNext: `/app/${churchId}/answer/${categoryId}/complete`,
+  })
 
   // Guard 3 — categoryId must be a real methodology category.
   const categories = loadMethodology().questions.categories
