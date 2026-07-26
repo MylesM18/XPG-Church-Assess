@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { notFound, redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireChurchMembership } from '@/lib/auth/require-church-membership'
 import { loadMethodology } from '@/lib/methodology/load'
 import { coverage, type CoverageRow } from '@/lib/coverage/coverage'
 
@@ -12,24 +13,9 @@ export default async function DonePage({
   const { churchId } = await params
   const supabase = await createClient()
 
-  // Same church + user + membership load as the dashboard: RLS hides churches the caller isn't a
-  // member of (→ 404), and the membership row is the second gate so only members reach this screen.
-  const { data: church, error } = await supabase
-    .from('churches')
-    .select('id')
-    .eq('id', churchId)
-    .maybeSingle()
-  if (error) throw error
-  if (!church) notFound()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: membership } = await supabase
-    .from('church_members')
-    .select('role')
-    .eq('church_id', churchId)
-    .eq('user_id', user?.id ?? '')
-    .maybeSingle()
-  if (!membership) notFound()
+  // Church + membership permission wall. No signInNext ⇒ an unauthenticated / non-member deep link
+  // gets notFound() (never a sign-in redirect) — /done's behavior is unchanged.
+  await requireChurchMembership(supabase, churchId)
 
   // Completion guard: this screen is only reachable once the CALLER has personally covered every
   // category. Own coverage comes from the security-definer RPC (responses stays default-deny). Anyone

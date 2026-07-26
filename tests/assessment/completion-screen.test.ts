@@ -67,4 +67,15 @@ describe('assessment completion screen', () => {
       'and still must not drop back on the bare dashboard',
     ).not.toContain('router.push(`/app/${churchId}`)')
   })
+
+  it('delegates the church + membership gate to the shared helper', () => {
+    expect(done, 'imports the shared guard').toContain(
+      "from '@/lib/auth/require-church-membership'",
+    )
+    expect(done, 'calls the shared guard').toContain('requireChurchMembership(')
+    // Decision #3 reverse-guard: /done stays notFound()-only on unauth — it must NOT opt into a
+    // sign-in redirect. Adding signInNext to the /done guard turns these red.
+    expect(done, 'no sign-in redirect on /done').not.toContain('/sign-in?next=')
+    expect(done, 'must not opt into signInNext').not.toContain('signInNext')
+  })
 })
