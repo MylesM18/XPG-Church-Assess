@@ -187,10 +187,6 @@ export default async function DashboardPage({
         })}
       </section>
 
-      {isAdmin && (
-        <MemberCoverageMatrix matrix={memberMatrix} categories={categories} currentUserId={user?.id ?? null} />
-      )}
-
       <section className="flex flex-wrap items-start gap-2">
         {isAdmin && (
           hasDiagnosis ? (
@@ -238,6 +234,10 @@ export default async function DashboardPage({
           </p>
           <InviteMemberForm churchId={churchId} />
         </section>
+      )}
+
+      {isAdmin && (
+        <MemberCoverageMatrix matrix={memberMatrix} categories={categories} currentUserId={user?.id ?? null} />
       )}
     </main>
   )
