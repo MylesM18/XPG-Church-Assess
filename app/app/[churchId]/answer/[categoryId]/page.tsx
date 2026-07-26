@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireChurchMembership } from '@/lib/auth/require-church-membership'
 import { loadMethodology } from '@/lib/methodology/load'
 import { SelfForm } from './self-form'
 
@@ -12,18 +13,12 @@ export default async function AnswerPage({
   const { churchId, categoryId } = await params
   const supabase = await createClient()
 
-  // Permission wall: RLS hides churches the caller isn't a member of → 404.
-  const { data: church, error } = await supabase
-    .from('churches')
-    .select('id')
-    .eq('id', churchId)
-    .maybeSingle()
-  if (error) throw error
-  if (!church) {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect(`/sign-in?next=/app/${churchId}/answer/${categoryId}`)
-    notFound()
-  }
+  // Permission wall: church must be visible (RLS) AND the caller must hold a church_members row
+  // (defense-in-depth — no longer RLS-only). An unauthenticated deep link is sent to sign-in with a
+  // next back to this page.
+  await requireChurchMembership(supabase, churchId, {
+    signInNext: `/app/${churchId}/answer/${categoryId}`,
+  })
 
   const methodology = loadMethodology()
   const category = methodology.questions.categories.find((c) => c.id === categoryId)
