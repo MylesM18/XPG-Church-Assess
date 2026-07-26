@@ -32,7 +32,7 @@ describe('section-complete interstitial route', () => {
     expect(route, 'imports the shared guard').toContain(
       "from '@/lib/auth/require-church-membership'",
     )
-    expect(route, 'calls the shared guard').toContain('requireChurchMembership(')
+    expect(route, 'calls the shared guard').toContain('await requireChurchMembership(')
     expect(route, 'unauth deep-link → sign-in with next back to this page').toContain(
       '/app/${churchId}/answer/${categoryId}/complete',
     )

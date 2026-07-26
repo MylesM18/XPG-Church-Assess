@@ -21,7 +21,7 @@ describe('answer page church + membership guard', () => {
     expect(answer, 'imports the shared guard').toContain(
       "from '@/lib/auth/require-church-membership'",
     )
-    expect(answer, 'calls the shared guard').toContain('requireChurchMembership(')
+    expect(answer, 'calls the shared guard').toContain('await requireChurchMembership(')
   })
 
   it('opts into a sign-in redirect with a next back to the answer page', () => {

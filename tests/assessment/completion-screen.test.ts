@@ -72,7 +72,7 @@ describe('assessment completion screen', () => {
     expect(done, 'imports the shared guard').toContain(
       "from '@/lib/auth/require-church-membership'",
     )
-    expect(done, 'calls the shared guard').toContain('requireChurchMembership(')
+    expect(done, 'calls the shared guard').toContain('await requireChurchMembership(')
     // Decision #3 reverse-guard: /done stays notFound()-only on unauth — it must NOT opt into a
     // sign-in redirect. Adding signInNext to the /done guard turns these red.
     expect(done, 'no sign-in redirect on /done').not.toContain('/sign-in?next=')
