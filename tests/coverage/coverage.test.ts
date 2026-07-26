@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { coverage, type CoverageRow } from '@/lib/coverage/coverage'
+import { coverage, classify, type CoverageRow } from '@/lib/coverage/coverage'
 import type { Category } from '@/lib/methodology/schema'
 
 // minimal two-category fixture (5 items each), matching the methodology shape
@@ -64,5 +64,26 @@ describe('coverage()', () => {
       ['conn', 'C1'], ['conn', 'C2'], ['conn', 'C3'], ['conn', 'C4'], ['conn', 'C5'],
     ])
     expect(coverage(all, CATS).coveredCount).toBe(2)
+  })
+})
+
+describe('classify()', () => {
+  it('0 answered → not_started', () => expect(classify(0, 5)).toBe('not_started'))
+  it('all answered → covered', () => expect(classify(5, 5)).toBe('covered'))
+  it('some answered → partial', () => expect(classify(3, 5)).toBe('partial'))
+})
+
+describe('coverage() answeredCount', () => {
+  it('reports 0 for an untouched category', () => {
+    const r = coverage([], CATS)
+    expect(r.categories.find((c) => c.category_id === 'guest')!.answeredCount).toBe(0)
+  })
+  it('reports the partial count', () => {
+    const r = coverage(rows([['guest', 'G1'], ['guest', 'G2'], ['guest', 'G3']]), CATS)
+    expect(r.categories.find((c) => c.category_id === 'guest')!.answeredCount).toBe(3)
+  })
+  it('reports the full count', () => {
+    const r = coverage(rows([['guest', 'G1'], ['guest', 'G2'], ['guest', 'G3'], ['guest', 'G4'], ['guest', 'G5']]), CATS)
+    expect(r.categories.find((c) => c.category_id === 'guest')!.answeredCount).toBe(5)
   })
 })
