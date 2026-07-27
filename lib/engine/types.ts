@@ -1,4 +1,5 @@
 import type { CategoryKind, Offer } from '../methodology/schema';
+import type { AreaFit } from './fit';
 
 export interface Response {
   category_id: string;
@@ -16,6 +17,7 @@ export interface NormalizedCategory {
   itemValues: Map<string, number[]>; // item_id -> values across all respondents
   respondentMeans: Array<{ label: string; mean: number }>;
   respondentCount: number;
+  fit: AreaFit;
 }
 
 export type GapClass = 'blind_spot' | 'underrated' | 'calibrated' | null;

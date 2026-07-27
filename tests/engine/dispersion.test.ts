@@ -3,7 +3,13 @@ import { dispersionFor } from '../../lib/engine/dispersion';
 import type { NormalizedCategory } from '../../lib/engine/types';
 
 function norm(means: Array<{ label: string; mean: number }>): NormalizedCategory {
-  return { category_id: 'disc', itemValues: new Map(), respondentMeans: means, respondentCount: means.length };
+  return {
+    category_id: 'disc',
+    itemValues: new Map(),
+    respondentMeans: means,
+    respondentCount: means.length,
+    fit: { category_id: 'disc', mu: 0, n: 0, personEffects: [], questionEffects: [], excludedPartial: 0 },
+  };
 }
 
 describe('dispersionFor', () => {

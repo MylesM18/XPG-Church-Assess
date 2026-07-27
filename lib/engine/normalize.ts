@@ -1,5 +1,6 @@
 import type { Methodology } from '../methodology/schema';
 import type { Response, NormalizedCategory } from './types';
+import { fitArea, type FitCell } from './fit';
 
 export function normalize(
   responses: Response[],
@@ -12,6 +13,7 @@ export function normalize(
     for (const it of cat.items) itemValues.set(it.id, []);
 
     const perRespondent = new Map<string, number[]>();
+    const cells: FitCell[] = [];
 
     for (const r of responses) {
       if (r.category_id !== cat.id) continue;
@@ -21,6 +23,7 @@ export function normalize(
       const rb = perRespondent.get(r.respondent_label);
       if (rb) rb.push(r.value);
       else perRespondent.set(r.respondent_label, [r.value]);
+      cells.push({ respondent_id: r.respondent_label, item_id: r.item_id, value: r.value });
     }
 
     const respondentMeans = [...perRespondent.entries()].map(([label, vals]) => ({
@@ -33,6 +36,7 @@ export function normalize(
       itemValues,
       respondentMeans,
       respondentCount: perRespondent.size,
+      fit: fitArea(cat.id, cat.items.map(it => it.id), cells),
     });
   }
 

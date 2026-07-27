@@ -9,7 +9,7 @@ import type {
   DispersionFlag,
   EvidenceReceipt,
 } from './types';
-import { scoreCategory } from './score';
+import { scoreFromFit } from './fit';
 import { gapFor } from './gap';
 import { benchmarkFor } from './benchmark';
 import { dispersionFor } from './dispersion';
@@ -154,7 +154,7 @@ export function assemble(
 
   for (const cat of methodology.questions.categories) {
     const norm = normalized.get(cat.id)!;
-    const score = scoreCategory(norm);
+    const score = scoreFromFit(norm.fit);
     scores.set(cat.id, score);
 
     const g = gapFor(norm, cat, t.blind_spot_gap);

@@ -10,6 +10,10 @@ export interface AreaFit {
   n: number; // respondents who answered EVERY item
   personEffects: Array<{ respondent_id: string; effect: number }>;
   questionEffects: Array<{ item_id: string; effect: number }>;
+  // Respondents who answered SOME but not all items of this area. Counts only
+  // people who submitted at least one cell here, so n + excludedPartial is NOT
+  // the run's respondent count — someone who skipped the area entirely is in
+  // neither. Report copy must not read it as "N people didn't finish this area".
   excludedPartial: number;
 }
 

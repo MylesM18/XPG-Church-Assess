@@ -10,7 +10,13 @@ const gov = m.questions.categories.find(c => c.id === 'gov')!;
 function normFor(values: Record<string, number>): NormalizedCategory {
   const itemValues = new Map<string, number[]>();
   for (const [k, v] of Object.entries(values)) itemValues.set(k, [v]);
-  return { category_id: 'x', itemValues, respondentMeans: [], respondentCount: 1 };
+  return {
+    category_id: 'x',
+    itemValues,
+    respondentMeans: [],
+    respondentCount: 1,
+    fit: { category_id: 'x', mu: 0, n: 0, personEffects: [], questionEffects: [], excludedPartial: 0 },
+  };
 }
 
 describe('gapFor', () => {

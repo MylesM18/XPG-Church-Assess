@@ -1,24 +1,34 @@
 import { describe, it, expect } from 'vitest';
-import { scoreCategory } from '../../lib/engine/score';
-import type { NormalizedCategory } from '../../lib/engine/types';
+import { loadFixtureMethodology, answers, partialAnswers } from './helpers';
+import { normalize } from '../../lib/engine/normalize';
+import { scoreFromFit } from '../../lib/engine/fit';
 
-function norm(itemMap: Record<string, number[]>): NormalizedCategory {
-  return {
-    category_id: 'x',
-    itemValues: new Map(Object.entries(itemMap)),
-    respondentMeans: [],
-    respondentCount: 0,
-  };
-}
+describe('area score', () => {
+  const methodology = loadFixtureMethodology();
+  const pooled = (rows: { value: number }[]) =>
+    Math.round((rows.reduce((a, r) => a + r.value, 0) / rows.length) * 10);
 
-describe('scoreCategory', () => {
-  it('all sixes → 60', () => {
-    expect(scoreCategory(norm({ a: [6], b: [6], c: [6] }))).toBe(60);
+  it('equals the pooled mean when every respondent completed the area', () => {
+    const rows = [
+      ...answers(methodology, 'guest', { G1: 8, G2: 6, G3: 7, G4: 9, G5: 5 }, 'Pastor'),
+      ...answers(methodology, 'guest', { G1: 4, G2: 5, G3: 6, G4: 3, G5: 7 }, 'Elder'),
+    ];
+    const guest = normalize(rows, methodology).get('guest')!;
+    expect(scoreFromFit(guest.fit)).toBe(pooled(rows));
   });
-  it('mixed values → mean × 10, rounded', () => {
-    expect(scoreCategory(norm({ a: [8], b: [2], c: [2], d: [2], e: [2] }))).toBe(32);
+
+  it('diverges from the pooled mean exactly when someone is partial', () => {
+    const rows = [
+      ...answers(methodology, 'guest', 6, 'Pastor'),
+      ...partialAnswers(methodology, 'guest', ['G1'], 1, 'Elder'),
+    ];
+    const guest = normalize(rows, methodology).get('guest')!;
+    expect(scoreFromFit(guest.fit)).toBe(60);
+    expect(scoreFromFit(guest.fit)).not.toBe(pooled(rows));
   });
-  it('no values → 0', () => {
-    expect(scoreCategory(norm({ a: [], b: [] }))).toBe(0);
+
+  it('scores 0 when nobody completed the area', () => {
+    const guest = normalize([], methodology).get('guest')!;
+    expect(scoreFromFit(guest.fit)).toBe(0);
   });
 });
