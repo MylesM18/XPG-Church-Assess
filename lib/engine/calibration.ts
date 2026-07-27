@@ -1,4 +1,5 @@
 import type { AreaFit } from './fit';
+import { populationStdDev } from './stats';
 
 export interface Calibration {
   people: Array<{ respondent_id: string; style: number; areasCompleted: number }>;
@@ -35,10 +36,8 @@ export function calibrationFrom(fits: AreaFit[]): Calibration {
 
   if (people.length === 0) return { people, spread: 0 };
   const styles = people.map(p => p.style);
-  const mean = styles.reduce((a, b) => a + b, 0) / styles.length;
-  const variance = styles.reduce((a, s) => a + (s - mean) ** 2, 0) / styles.length;
 
-  return { people, spread: Math.sqrt(variance) };
+  return { people, spread: populationStdDev(styles) };
 }
 
 /**

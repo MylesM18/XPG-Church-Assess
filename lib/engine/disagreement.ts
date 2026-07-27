@@ -1,6 +1,7 @@
 import type { AreaFit } from './fit';
 import type { Calibration } from './calibration';
 import { deviationsFor } from './calibration';
+import { populationStdDev } from './stats';
 
 export interface DisagreementFlag {
   category_id: string;
@@ -27,9 +28,7 @@ export function disagreementFor(
   if (fit.n <= 1) return null;
 
   const devs = deviationsFor(fit, calibration).map(d => d.deviation);
-  const mean = devs.reduce((a, b) => a + b, 0) / devs.length;
-  const variance = devs.reduce((a, d) => a + (d - mean) ** 2, 0) / devs.length;
-  const stddev = Math.sqrt(variance);
+  const stddev = populationStdDev(devs);
   if (stddev < threshold) return null;
 
   return {
