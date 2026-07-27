@@ -1,5 +1,5 @@
 begin;
-select plan(6);
+select plan(7);
 
 -- Three users: A (admin via create_church_with_admin), B (viewer member, seeded), C (stranger).
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
@@ -63,6 +63,19 @@ set local request.jwt.claims to '{"sub":"d3333333-3333-3333-3333-333333333333","
 select throws_ok(
   $$select * from get_member_category_coverage((select id from churches where name = 'Matrix Test Church'))$$,
   '42501', 'must be an admin of this church', 'non-member is rejected');
+
+-- REGRESSION (completion-survives-diagnosis): after save_diagnosis completes the run, the admin
+-- Member x Category matrix MUST survive. Pre-fix the status='in_progress' run-selection returned
+-- empty once complete -> the matrix went blank. Complete the run and assert all three
+-- (member,category) rows still come back to the admin.
+reset role;
+update assessment_runs set status = 'complete'
+where church_id = (select id from churches where name = 'Matrix Test Church');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"d1111111-1111-1111-1111-111111111111","email":"mccadmin@test.com","role":"authenticated"}';
+select is(
+  (select count(*)::int from get_member_category_coverage((select id from churches where name = 'Matrix Test Church'))),
+  3, 'matrix still returns three (member,category) rows after the run is completed');
 
 select * from finish();
 rollback;
