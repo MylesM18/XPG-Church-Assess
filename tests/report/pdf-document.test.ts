@@ -31,6 +31,7 @@ function diagnosis(): Diagnosis {
       respondents: [{ label: SENTINEL, mean: 3.1 }, { label: 'Sam Reyes', mean: 7.4 }],
       spread: 2.2,
     }],
+    calibration: { people: [], spread: 0 },
     offer: { type: 'guest_retention', call_type: 'Diagnostic call', hook: 'Lets walk the chain together.' },
     confidence: 0.8,
     evidence_trail: [

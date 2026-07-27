@@ -12,7 +12,8 @@ import type {
 import { scoreFromFit } from './fit';
 import { gapFor } from './gap';
 import { benchmarkFor } from './benchmark';
-import { dispersionFor } from './dispersion';
+import { disagreementFor } from './disagreement';
+import { calibrationFrom, type Calibration } from './calibration';
 import { analyzeConstraint, type ConstraintResult } from './constraint';
 
 interface Thresholds {
@@ -152,6 +153,10 @@ export function assemble(
   const blind_spots: BlindSpot[] = [];
   const dispersion_flags: DispersionFlag[] = [];
 
+  const calibration: Calibration = calibrationFrom(
+    methodology.questions.categories.map(c => normalized.get(c.id)!.fit),
+  );
+
   for (const cat of methodology.questions.categories) {
     const norm = normalized.get(cat.id)!;
     const score = scoreFromFit(norm.fit);
@@ -178,7 +183,7 @@ export function assemble(
       blind_spots.push({ category_id: cat.id, belief: g.belief, evidence: g.evidence, gap: g.gap });
     }
 
-    const disp = dispersionFor(norm, t.dispersion);
+    const disp = disagreementFor(norm.fit, calibration, norm.respondentMeans, t.dispersion);
     if (disp) dispersion_flags.push(disp);
   }
 
@@ -205,6 +210,7 @@ export function assemble(
     generosity_mode: constraint.generosity_mode,
     blind_spots,
     dispersion_flags,
+    calibration,
     offer: selectOffer(constraint, methodology),
     confidence: computeConfidence(constraint, categories, methodology),
     evidence_trail: buildEvidenceTrail(constraint, blind_spots, dispersion_flags, normalized, methodology),

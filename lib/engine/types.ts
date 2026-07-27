@@ -1,5 +1,6 @@
 import type { CategoryKind, Offer } from '../methodology/schema';
 import type { AreaFit } from './fit';
+import type { Calibration } from './calibration';
 
 export interface Response {
   category_id: string;
@@ -45,11 +46,9 @@ export interface BlindSpot {
   gap: number;
 }
 
-export interface DispersionFlag {
-  category_id: string;
-  respondents: Array<{ label: string; mean: number }>;
-  spread: number; // population stddev of respondent means, 0..10 scale
-}
+export type { DisagreementFlag } from './disagreement';
+/** @deprecated use DisagreementFlag — kept until the report layer is reshaped (Task 13). */
+export type DispersionFlag = import('./disagreement').DisagreementFlag;
 
 export interface DoNotWorkOn {
   category_id: string;
@@ -83,6 +82,7 @@ export interface Diagnosis {
   generosity_mode: GenerosityMode;
   blind_spots: BlindSpot[];
   dispersion_flags: DispersionFlag[];
+  calibration: Calibration;
   offer: Offer;
   confidence: number;
   evidence_trail: EvidenceReceipt[];

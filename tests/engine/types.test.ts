@@ -14,6 +14,7 @@ describe('engine types', () => {
       generosity_mode: null,
       blind_spots: [],
       dispersion_flags: [],
+      calibration: { people: [], spread: 0 },
       offer: { type: 't', call_type: 'c', hook: 'h' },
       confidence: 1,
       evidence_trail: [],
