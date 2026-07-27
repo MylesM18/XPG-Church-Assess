@@ -146,6 +146,14 @@ export default async function DashboardPage({
           <h1 className="font-display text-2xl text-ink">{church.name}</h1>
           <p className="font-body text-sm text-ink-soft">{header}</p>
         </div>
+        <form action="/auth/signout" method="post" className="ml-auto">
+          <button
+            type="submit"
+            className="rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink-soft transition-colors hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+          >
+            Sign out
+          </button>
+        </form>
       </header>
 
       <section>

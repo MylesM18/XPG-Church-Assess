@@ -1,5 +1,5 @@
 begin;
-select plan(5);
+select plan(6);
 
 -- Two members in ONE church: A (admin via create_church_with_admin) and B (viewer, seeded).
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
@@ -58,6 +58,21 @@ select throws_ok(
   '42501',
   'not a member of this church',
   'non-member cannot read personal coverage');
+
+-- REGRESSION (completion-survives-diagnosis): after save_diagnosis completes the run, A's own
+-- personal coverage MUST survive. Pre-fix the status='in_progress' run-selection returned empty
+-- once the run was complete -> the viewer/admin card counters reset to zero. Complete the run and
+-- assert A still sees own 5 guest items.
+reset role;
+update assessment_runs set status = 'complete'
+where church_id = (select id from churches where name = 'Coverage Test Church');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"c1111111-1111-1111-1111-111111111111","email":"covadmin@test.com","role":"authenticated"}';
+select is(
+  (select count(*)::int from get_member_run_coverage(
+     (select id from churches where name = 'Coverage Test Church'))
+   where category_id = 'guest'),
+  5, 'personal coverage still returns own 5 guest items after the run is completed');
 
 select * from finish();
 rollback;
