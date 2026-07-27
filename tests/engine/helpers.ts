@@ -14,6 +14,7 @@ export function answers(
   categoryId: string,
   valueOrMap: number | Record<string, number>,
   label = 'Pastor',
+  respondentId = label,
 ): Response[] {
   const cat = methodology.questions.categories.find(c => c.id === categoryId);
   if (!cat) throw new Error(`answers: unknown category "${categoryId}"`);
@@ -22,6 +23,7 @@ export function answers(
     item_id: it.id,
     value: typeof valueOrMap === 'number' ? valueOrMap : (valueOrMap[it.id] ?? 5),
     respondent_label: label,
+    respondent_id: respondentId,
   }));
 }
 
@@ -42,6 +44,7 @@ export function partialAnswers(
   itemIds: string[],
   valueOrMap: number | Record<string, number>,
   label = 'Elder',
+  respondentId = label,
 ): Response[] {
   const cat = methodology.questions.categories.find(c => c.id === categoryId);
   if (!cat) throw new Error(`partialAnswers: unknown category "${categoryId}"`);
@@ -54,5 +57,6 @@ export function partialAnswers(
     item_id: id,
     value: typeof valueOrMap === 'number' ? valueOrMap : (valueOrMap[id] ?? 5),
     respondent_label: label,
+    respondent_id: respondentId,
   }));
 }

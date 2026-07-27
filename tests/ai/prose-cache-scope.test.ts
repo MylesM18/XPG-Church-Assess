@@ -24,7 +24,7 @@ const CHURCH_B = '22222222-2222-2222-2222-222222222222';
 // Identical answer sets for both churches → identical responseHash. responseHash contains no
 // church identifier (lib/report/response-hash.ts), which is what makes the collision possible.
 const responses: Response[] = m.questions.categories.flatMap((c) =>
-  c.items.map((it) => ({ category_id: c.id, item_id: it.id, value: 7, respondent_label: 'Pastor' })),
+  c.items.map((it) => ({ category_id: c.id, item_id: it.id, value: 7, respondent_label: 'Pastor', respondent_id: 'Pastor' })),
 );
 const HASH = responseHash(responses, diagnose(responses, m, { attendance_band: '500_999' }).methodology_version);
 const coverageRows = m.questions.categories.flatMap((c) =>

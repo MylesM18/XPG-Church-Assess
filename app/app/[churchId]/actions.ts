@@ -11,6 +11,17 @@ import type { Response } from '@/lib/engine/types'
 import { responseHash } from '@/lib/report/response-hash'
 import { generateProse } from '@/lib/ai/prose'
 
+// Raw shape of one get_run_responses row (supabase.rpc returns it untyped). respondent_user_id
+// is null for a row predating the 20260728000100 migration or a submission the RPC never
+// resolved to a member id; the map below falls back to the label in that case.
+interface RunResponseRow {
+  category_id: string
+  item_id: string
+  value: number
+  respondent_label: string
+  respondent_user_id: string | null
+}
+
 export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -48,7 +59,13 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
     p_church_id: churchId,
   })
   if (respError) return { ok: false, error: respError.message }
-  const responses = (raw ?? []) as Response[]
+  const responses: Response[] = (raw ?? []).map((r: RunResponseRow) => ({
+    category_id: r.category_id,
+    item_id: r.item_id,
+    value: r.value,
+    respondent_label: r.respondent_label,
+    respondent_id: r.respondent_user_id ?? r.respondent_label,
+  }))
 
   const diagnosis = diagnose(responses, methodology, ctx)
   const hash = responseHash(responses, diagnosis.methodology_version)

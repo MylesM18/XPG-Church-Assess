@@ -80,7 +80,7 @@ describe('cells from another area never reach this area fit', () => {
       // Mistagged: V1 is a vol item, but this row claims to be a guest answer.
       // normalize()'s bucket lookup cannot catch this one — only the category
       // guard can, because V1 IS a real key in vol's itemValues map.
-      { category_id: 'guest', item_id: 'V1', value: 1, respondent_label: 'Ghost' },
+      { category_id: 'guest', item_id: 'V1', value: 1, respondent_label: 'Ghost', respondent_id: 'Ghost' },
     ];
     const vol = normalize(responses, methodology).get('vol')!;
 

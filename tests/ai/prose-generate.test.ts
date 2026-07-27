@@ -19,7 +19,7 @@ import { generateProse } from '../../lib/ai/prose';
 const m = loadMethodology();
 function cat(id: string, v: number): Response[] {
   const c = m.questions.categories.find(x => x.id === id)!;
-  return c.items.map(it => ({ category_id: id, item_id: it.id, value: v, respondent_label: 'Pastor' }));
+  return c.items.map(it => ({ category_id: id, item_id: it.id, value: v, respondent_label: 'Pastor', respondent_id: 'Pastor' }));
 }
 const dBroken = diagnose(
   [...cat('guest', 3), ...cat('conn', 7), ...cat('disc', 7), ...cat('vol', 7),

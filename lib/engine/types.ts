@@ -5,7 +5,8 @@ export interface Response {
   category_id: string;
   item_id: string;
   value: number; // 1..10
-  respondent_label: string;
+  respondent_label: string; // DISPLAY ONLY — may collide across people
+  respondent_id: string; // stable identity — what the engine groups on
 }
 
 export interface Context {

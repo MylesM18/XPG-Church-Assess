@@ -8,7 +8,7 @@ import type { Response } from '../../lib/engine/types';
 const m = loadMethodology();
 function cat(id: string, v: number): Response[] {
   const c = m.questions.categories.find(x => x.id === id)!;
-  return c.items.map(it => ({ category_id: id, item_id: it.id, value: v, respondent_label: 'Pastor' }));
+  return c.items.map(it => ({ category_id: id, item_id: it.id, value: v, respondent_label: 'Pastor', respondent_id: 'Pastor' }));
 }
 
 // Broken chain: guest is the primary constraint → full multi-field draft.
@@ -34,8 +34,8 @@ const NAMED = 'Priscilla Vandermeer';
 function cat2(id: string, a: number, b: number): Response[] {
   const c = m.questions.categories.find(x => x.id === id)!;
   return c.items.flatMap(it => [
-    { category_id: id, item_id: it.id, value: a, respondent_label: NAMED },
-    { category_id: id, item_id: it.id, value: b, respondent_label: 'Marcus Ellingsworth' },
+    { category_id: id, item_id: it.id, value: a, respondent_label: NAMED, respondent_id: NAMED },
+    { category_id: id, item_id: it.id, value: b, respondent_label: 'Marcus Ellingsworth', respondent_id: 'Marcus Ellingsworth' },
   ]);
 }
 

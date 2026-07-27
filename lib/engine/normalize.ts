@@ -12,7 +12,7 @@ export function normalize(
     const itemValues = new Map<string, number[]>();
     for (const it of cat.items) itemValues.set(it.id, []);
 
-    const perRespondent = new Map<string, number[]>();
+    const perRespondent = new Map<string, { label: string; values: number[] }>();
     const cells: FitCell[] = [];
 
     for (const r of responses) {
@@ -20,15 +20,15 @@ export function normalize(
       const bucket = itemValues.get(r.item_id);
       if (!bucket) continue; // ignore values for unknown items
       bucket.push(r.value);
-      const rb = perRespondent.get(r.respondent_label);
-      if (rb) rb.push(r.value);
-      else perRespondent.set(r.respondent_label, [r.value]);
-      cells.push({ respondent_id: r.respondent_label, item_id: r.item_id, value: r.value });
+      const rb = perRespondent.get(r.respondent_id);
+      if (rb) rb.values.push(r.value);
+      else perRespondent.set(r.respondent_id, { label: r.respondent_label, values: [r.value] });
+      cells.push({ respondent_id: r.respondent_id, item_id: r.item_id, value: r.value });
     }
 
-    const respondentMeans = [...perRespondent.entries()].map(([label, vals]) => ({
+    const respondentMeans = [...perRespondent.values()].map(({ label, values }) => ({
       label,
-      mean: vals.reduce((a, b) => a + b, 0) / vals.length,
+      mean: values.reduce((a, b) => a + b, 0) / values.length,
     }));
 
     result.set(cat.id, {
