@@ -7,6 +7,8 @@ enablers:
 generosity:
   breadth_items: [GEN1]
   depth_items: [GEN2, GEN4]
+throughput:
+  min_weight: 0.85
 thresholds:
   break: 45
   severe: 25

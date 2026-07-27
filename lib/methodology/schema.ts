@@ -39,6 +39,9 @@ export const RulesSchema = z.object({
     breadth_items: z.array(z.string()).min(1),
     depth_items: z.array(z.string()).min(1),
   }),
+  throughput: z.object({
+    min_weight: z.number().min(0).max(1),
+  }),
   thresholds: z.object({
     break: z.number(),
     severe: z.number(),
