@@ -73,4 +73,22 @@ describe('cells from another area never reach this area fit', () => {
     expect(fit.mu).toBe(6);
     expect(scoreFromFit(fit)).toBe(60);
   });
+
+  it('ignores a row tagged to another category even when the item is ours', () => {
+    const responses = [
+      ...answers(methodology, 'vol', 6, 'Pastor'),
+      // Mistagged: V1 is a vol item, but this row claims to be a guest answer.
+      // normalize()'s bucket lookup cannot catch this one — only the category
+      // guard can, because V1 IS a real key in vol's itemValues map.
+      { category_id: 'guest', item_id: 'V1', value: 1, respondent_label: 'Ghost' },
+    ];
+    const vol = normalize(responses, methodology).get('vol')!;
+
+    // Without the category guard, Ghost lands in vol as a 1-of-5 partial
+    // respondent: excludedPartial goes to 1 and respondentCount to 2.
+    expect(vol.fit.n).toBe(1);
+    expect(vol.fit.excludedPartial).toBe(0);
+    expect(vol.respondentCount).toBe(1);
+    expect(scoreFromFit(vol.fit)).toBe(60);
+  });
 });
