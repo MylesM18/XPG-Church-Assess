@@ -28,13 +28,13 @@ export function EmptyState({ churchId }: { churchId: string }) {
 }
 
 export function VerdictHeader({
-  name, brandColor, monogram, verdict, overallScore, confidence,
+  name, brandColor, monogram, verdict, throughput, confidence,
 }: {
   name: string
   brandColor: string
   monogram: string
   verdict: string
-  overallScore: number
+  throughput: number
   confidence: number
 }) {
   const band = confidenceBand(confidence)
@@ -49,7 +49,7 @@ export function VerdictHeader({
         </div>
         <div>
           <h1 className="font-display text-2xl text-ink">{name}</h1>
-          <p className="font-body text-sm text-ink-soft">Overall {overallScore} · Confidence: {band.label}</p>
+          <p className="font-body text-sm text-ink-soft">Overall {throughput} · Confidence: {band.label}</p>
         </div>
       </div>
       <p className="font-body text-lg text-ink">{verdict}</p>

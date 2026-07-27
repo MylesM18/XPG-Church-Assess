@@ -15,6 +15,7 @@ import { benchmarkFor } from './benchmark';
 import { disagreementFor } from './disagreement';
 import { calibrationFrom, type Calibration } from './calibration';
 import { analyzeConstraint, type ConstraintResult } from './constraint';
+import { throughput, capacity, gap } from './throughput';
 
 interface Thresholds {
   break: number;
@@ -176,7 +177,7 @@ export function assemble(
       gap_class: g.gap_class,
       cohort_percentile,
       state,
-      respondent_count: norm.respondentCount,
+      respondent_count: norm.fit.n,
     });
 
     if (g.gap_class === 'blind_spot' && g.belief !== null && g.evidence !== null && g.gap !== null) {
@@ -195,13 +196,15 @@ export function assemble(
 
   const constraint = analyzeConstraint(scores, generosityMeans, methodology, categoryNames);
 
-  const overall_score = Math.round(
-    [...scores.values()].reduce((a, b) => a + b, 0) / scores.size,
-  );
+  const chainScores = methodology.rules.chain.map(id => scores.get(id) ?? 0);
+  const capacityValue = capacity([...scores.values()]);
+  const throughputValue = throughput(chainScores, methodology.rules.throughput.min_weight);
 
   return {
     methodology_version: methodology.questions.version,
-    overall_score,
+    throughput: throughputValue,
+    capacity: capacityValue,
+    gap: gap(capacityValue, throughputValue),
     categories,
     primary_constraint: constraint.primary_constraint,
     contributing: constraint.contributing,

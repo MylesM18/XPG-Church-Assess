@@ -13,7 +13,9 @@ const SENTINEL = 'Zzyzx Quimby';
 function diagnosis(): Diagnosis {
   return {
     methodology_version: methodology.questions.version,
-    overall_score: 55,
+    throughput: 55,
+    capacity: 70,
+    gap: 15,
     categories: [
       { category_id: 'guest_experience', kind: 'stage', score: 30, belief: null, evidence: null,
         gap: null, gap_class: null, cohort_percentile: null, state: 'broken', respondent_count: 2 },
@@ -82,6 +84,15 @@ describe('ReportDocument', () => {
     const text = await renderText('pdf');
     expect(text).toContain('Grace Church');
     expect(text).toContain('Guest Experience');
+  }, 30_000);
+
+  // Guards the cover number specifically: the fixture's throughput (55) and
+  // capacity (70) deliberately differ, so a render site that read the wrong
+  // field would print 70 here instead of 55.
+  it('prints the throughput value, not capacity, as the cover score', async () => {
+    const text = await renderText('pdf');
+    expect(text).toContain('Overall score: 55');
+    expect(text).not.toContain('Overall score: 70');
   }, 30_000);
 
   it('NEVER prints a respondent name in the pdf audience', async () => {

@@ -78,7 +78,7 @@ export default async function SharedReportPage({
         brandColor={row.brand_color}
         monogram={brand.monogram}
         verdict={view.verdict}
-        overallScore={view.overallScore}
+        throughput={view.throughput}
         confidence={view.confidence}
       />
 

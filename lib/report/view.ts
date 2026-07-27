@@ -7,7 +7,9 @@ export type ReportAudience = 'screen' | 'pdf' | 'shared';
 
 export interface ReportView {
   verdict: string;
-  overallScore: number;
+  throughput: number;
+  capacity: number;
+  gap: number;
   confidence: number;
   stages: StageView[];
   evidence?: { text: string; refs: EvidenceRef[] };
@@ -52,7 +54,9 @@ export function buildReportView(
 
   return {
     verdict: blocks.verdict,
-    overallScore: d.overall_score,
+    throughput: d.throughput,
+    capacity: d.capacity,
+    gap: d.gap,
     confidence: d.confidence,
     stages: chainWalk(d, methodology),
 

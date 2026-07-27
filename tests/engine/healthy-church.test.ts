@@ -25,6 +25,12 @@ describe('Fixture: Healthy Church (NO_STRUCTURAL_CONSTRAINT)', () => {
     expect(d.primary_constraint).toBeNull();
     expect(d.do_not_work_on).toEqual([]);
   });
+  it('capacity is the 8-area mean; throughput is the chain blend', () => {
+    // All 8 areas score 70 (uniform 7 -> mu=7 -> round(7*10)=70), so chain
+    // min=70, mean=70: 0.85*70 + 0.15*70 = 70 either way.
+    expect(d.capacity).toBe(70);
+    expect(d.throughput).toBe(70);
+  });
   it('offers the capacity conversation', () => {
     expect(d.offer.type).toBe('capacity');
   });

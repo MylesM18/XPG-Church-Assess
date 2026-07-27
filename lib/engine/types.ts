@@ -73,7 +73,9 @@ export interface EvidenceReceipt {
 
 export interface Diagnosis {
   methodology_version: string;
-  overall_score: number;
+  throughput: number; // the cover number — 0.85*min(chain) + 0.15*mean(chain)
+  capacity: number;   // 8-area mean — what overall_score used to be
+  gap: number;        // capacity - throughput
   categories: DiagnosisCategory[];
   primary_constraint: { category_id: string } | null;
   contributing: string[];

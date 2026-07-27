@@ -22,6 +22,13 @@ describe('Fixture: Leaky Bucket', () => {
   it('primary constraint is guest', () => {
     expect(d.primary_constraint?.category_id).toBe('guest');
   });
+  it('capacity is the 8-area mean; throughput is dragged down by the guest bottleneck', () => {
+    // chain scores (guest,conn,disc,vol,gen) = [32,30,30,30,30]; min=30, mean=30.4
+    // throughput = round(0.85*30 + 0.15*30.4) = round(25.5 + 4.56) = round(30.06) = 30
+    // capacity = mean of all 8 = (32+30+30+30+30+70+70+70)/8 = 362/8 = 45.25 -> 45
+    expect(d.capacity).toBe(45);
+    expect(d.throughput).toBe(30);
+  });
   it('guest is a blind spot (belief far above evidence)', () => {
     expect(d.blind_spots.map(b => b.category_id)).toContain('guest');
     const gbs = d.blind_spots.find(b => b.category_id === 'guest')!;

@@ -9,7 +9,9 @@ const methodology = loadMethodology();
 function diagnosis(over: Partial<Diagnosis> = {}): Diagnosis {
   return {
     methodology_version: methodology.questions.version,
-    overall_score: 55,
+    throughput: 55,
+    capacity: 60,
+    gap: 5,
     categories: [
       { category_id: 'guest_experience', kind: 'stage', score: 30, belief: null, evidence: null,
         gap: null, gap_class: null, cohort_percentile: null, state: 'broken', respondent_count: 2 },
@@ -54,7 +56,9 @@ describe('buildReportView', () => {
   it('resolves the verdict, score, confidence and chain stages', () => {
     const v = buildReportView(diagnosis(), blocks(), methodology, { audience: 'screen' });
     expect(v.verdict).toContain('Guest Experience');
-    expect(v.overallScore).toBe(55);
+    expect(v.throughput).toBe(55);
+    expect(v.capacity).toBe(60);
+    expect(v.gap).toBe(5);
     expect(v.confidence).toBe(0.8);
     expect(v.stages.length).toBeGreaterThan(0);
   });

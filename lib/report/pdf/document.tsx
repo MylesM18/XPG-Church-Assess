@@ -62,7 +62,7 @@ export function ReportDocument({
         <View style={s.section}>
           <Text style={s.verdict}>{view.verdict}</Text>
           <View style={s.scoreRow}>
-            <Text>Overall score: {view.overallScore}</Text>
+            <Text>Overall score: {view.throughput}</Text>
             <Text>Confidence: {view.confidence.toFixed(2)}</Text>
           </View>
         </View>
