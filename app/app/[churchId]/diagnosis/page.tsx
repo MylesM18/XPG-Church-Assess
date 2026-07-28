@@ -7,10 +7,7 @@ import { fallbackProse, type ReportBlocks } from '@/lib/ai/fallback'
 import { buildReportView } from '@/lib/report/view'
 import { shareLink } from '@/lib/report/share-link'
 import type { Diagnosis } from '@/lib/engine/types'
-import { EmptyState, NextStep, Appendix } from './report/shared'
-import { VerdictHeader } from './report/cover'
-import { ChainWalk, EvidenceReceipt, CostSection } from './report/chain'
-import { GatingFlags, Disagreement } from './report/system'
+import { EmptyState, ReportBody } from './report/shared'
 import { ShareControl } from './share-control'
 
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'
@@ -82,14 +79,15 @@ export default async function DiagnosisPage({
 
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
-      <VerdictHeader
-        name={church.name}
-        brandColor={church.brand_color}
-        monogram={brand.monogram}
-        verdict={view.verdict}
-        throughput={view.throughput}
-        confidence={view.confidence}
-      />
+      <div className="flex items-center gap-3">
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-md font-display text-base text-white"
+          style={{ backgroundColor: church.brand_color }}
+        >
+          {brand.monogram}
+        </div>
+        <p className="font-display text-lg text-ink">{church.name}</p>
+      </div>
 
       <div className="flex flex-col gap-4">
         <a
@@ -108,24 +106,15 @@ export default async function DiagnosisPage({
         )}
       </div>
 
-      <ChainWalk stages={view.stages} />
-
-      {view.evidence && <EvidenceReceipt text={view.evidence.text} refs={view.evidence.refs} />}
-      {view.cost && <CostSection cost={view.cost.cost} doNotWorkOn={view.cost.doNotWorkOn} />}
-      {view.gating && <GatingFlags text={view.gating} />}
-      {view.dispersion && (
-        <Disagreement text={view.dispersion.text} respondents={view.dispersion.respondents} />
-      )}
-
-      {view.nextStep && (
-        <NextStep
-          callType={view.nextStep.callType}
-          hook={view.nextStep.hook}
-          nextStep={view.nextStep.text}
-        />
-      )}
-
-      <Appendix diagnosis={diagnosis} methodology={methodology} benchmarkNote={view.appendix.benchmarkNote} />
+      {/* diagnoses.payload is cached JSONB — a pre-reform row is methodology_version '0.1.0'
+          and carries no throughput/cover/areas/system. ReportBody holds that comparison and
+          the branch it drives (spec §5.4); this page only fetches data and delegates. */}
+      <ReportBody
+        storedVersion={diagnosis.methodology_version}
+        currentVersion={methodology.questions.version}
+        view={view}
+        churchId={churchId}
+      />
     </main>
   )
 }

@@ -66,14 +66,17 @@ export default async function SharedReportPage({
 
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
-      <VerdictHeader
-        name={row.church_name}
-        brandColor={row.brand_color}
-        monogram={brand.monogram}
-        verdict={view.verdict}
-        throughput={view.throughput}
-        confidence={view.confidence}
-      />
+      <div className="flex items-center gap-3">
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-md font-display text-base text-white"
+          style={{ backgroundColor: row.brand_color }}
+        >
+          {brand.monogram}
+        </div>
+        <p className="font-display text-lg text-ink">{row.church_name}</p>
+      </div>
+
+      <VerdictHeader verdict={view.verdict} confidence={view.confidence} />
 
       <ChainWalk stages={view.stages} />
 
@@ -98,8 +101,8 @@ export default async function SharedReportPage({
       )}
 
       <Appendix
-        diagnosis={diagnosis}
-        methodology={methodology}
+        categories={view.appendix.categories}
+        stages={view.stages}
         benchmarkNote={view.appendix.benchmarkNote}
       />
 
