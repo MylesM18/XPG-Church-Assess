@@ -7,17 +7,10 @@ import { fallbackProse, type ReportBlocks } from '@/lib/ai/fallback'
 import { buildReportView } from '@/lib/report/view'
 import { shareLink } from '@/lib/report/share-link'
 import type { Diagnosis } from '@/lib/engine/types'
-import {
-  EmptyState,
-  VerdictHeader,
-  ChainWalk,
-  EvidenceReceipt,
-  CostSection,
-  GatingFlags,
-  Disagreement,
-  NextStep,
-  Appendix,
-} from './report'
+import { EmptyState, NextStep, Appendix } from './report/shared'
+import { VerdictHeader } from './report/cover'
+import { ChainWalk, EvidenceReceipt, CostSection } from './report/chain'
+import { GatingFlags, Disagreement } from './report/system'
 import { ShareControl } from './share-control'
 
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'

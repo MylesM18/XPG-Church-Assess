@@ -98,7 +98,7 @@ describe('live-region application', () => {
   // `&&`; or when Prettier's own house style — `{cond && (\n  <Tag />\n)}` — puts a parenthesis and
   // a newline between the operator and the tag. That last form is not hypothetical: 16 legitimate
   // instances of the `{cond && (` convention exist in this tree today (e.g.
-  // app/app/[churchId]/page.tsx, app/app/[churchId]/diagnosis/report.tsx,
+  // app/app/[churchId]/page.tsx, app/app/[churchId]/diagnosis/report/chain.tsx,
   // app/app/[churchId]/diagnosis/page.tsx, components/marketing/chain-viz.tsx), which is exactly
   // why the fix can't be "just widen the regex to allow whitespace" — it has to key on something
   // that is actually a status-message signal, not on punctuation.

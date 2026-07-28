@@ -22,16 +22,10 @@ import { resolveBrand } from '@/lib/brand/resolve'
 import { fallbackProse, type ReportBlocks } from '@/lib/ai/fallback'
 import { buildReportView } from '@/lib/report/view'
 import type { Diagnosis } from '@/lib/engine/types'
-import {
-  VerdictHeader,
-  ChainWalk,
-  EvidenceReceipt,
-  CostSection,
-  GatingFlags,
-  Disagreement,
-  NextStep,
-  Appendix,
-} from '@/app/app/[churchId]/diagnosis/report'
+import { VerdictHeader } from '@/app/app/[churchId]/diagnosis/report/cover'
+import { ChainWalk, EvidenceReceipt, CostSection } from '@/app/app/[churchId]/diagnosis/report/chain'
+import { GatingFlags, Disagreement } from '@/app/app/[churchId]/diagnosis/report/system'
+import { NextStep, Appendix } from '@/app/app/[churchId]/diagnosis/report/shared'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
