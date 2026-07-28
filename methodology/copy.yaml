@@ -12,23 +12,20 @@ inserts:
   dispersion: "Your leaders do not agree on {disp_name}. Answers ranged across {disp_spread} points. That disagreement is itself the finding."
   benchmark_note: "Benchmarks are XPG provisional priors, not an observed cohort yet."
   dependency_note: "Dependencies are XPG's working model of how these areas compound, not an observed causal finding."
-# DOSSIER COPY IS XPG METHODOLOGY (spec §10).
-# The values below are PLACEHOLDERS pending Natalie's authoring — see Task 14.
-# DO NOT SHIP TO A CUSTOMER WITH THESE IN PLACE.
 dossier:
   reading:
     stage:
-      severe:  "<owner text>"
-      broken:  "<owner text>"
-      watch:   "<owner text>"
-      holding: "<owner text>"
+      severe:  "This is not underperforming, it is absent — there is no working version of this to improve yet."
+      broken:  "This is below the line where it holds — everything downstream of it is running on what little gets through."
+      watch:   "This works, but not reliably — it holds on a good week and slips on the rest."
+      holding: "This is holding. It is not what is limiting you."
     enabler:
-      severe:  "<owner text>"
-      broken:  "<owner text>"
-      watch:   "<owner text>"
-      holding: "<owner text>"
-  enabler_belief_only: "<owner text>"
-  calibration_spread: "<owner text with {spread}>"
+      severe:  "This is absent, and it is capping every area that leans on it — none of them can rise above it."
+      broken:  "This is below the line, and it puts a ceiling on every area it touches at once."
+      watch:   "This mostly holds, but it is thin enough to give way under any added load."
+      holding: "This is holding — it is not what is capping anything."
+  enabler_belief_only: "Measured on perception only — there's no countable evidence side to cross-check this against."
+  calibration_spread: "Rater style spans {spread} points across your leaders — that is removed before any score you see above."
   generosity:
     breadth: "Breadth: your givers are generous — there just aren’t enough of them yet. This routes upstream to connection."
     depth: "Depth: most of your people give, but few have been taught why. The opportunity is discipleship around generosity."
