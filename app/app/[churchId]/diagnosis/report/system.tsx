@@ -17,34 +17,16 @@ const READ_LABEL: Record<string, string> = {
 }
 
 /**
- * The read-specific half of a dependency row (spec §6.1's table, worked example:
- * "Systems (74) gates Volunteers (48). Systems is holding — so systems is not
- * what's capping your volunteers." — that sentence is the 'clear' case below,
- * reproduced verbatim; the other three reads are symmetric constructions off
- * the same spec language ("active and costing you" / "running on borrowed
- * time" / "nothing to say").
+ * The "X (n) gates/feeds Y (m). " scaffold (spec §6.1) — names, scores, and the
+ * gates/feeds verb, all structural. The read-specific sentence that follows is
+ * XPG methodology (spec §10): it is precomputed in lib/report/view.ts from
+ * methodology.copy.dependency_reads and arrives on `e.readSentence`, so this
+ * surface and pdf/document.tsx render one identical string instead of each
+ * carrying its own copy.
  */
-function readSentence(fromName: string, toName: string, read: string): string {
-  // Category names are slashed compounds ("Governance / Accountability", "Org Structure /
-  // Systems"), not common nouns — lowercasing them mid-sentence read as broken (whole-branch
-  // review finding M3 / T15-a): "Governance / Accountability is holding — so governance /
-  // accountability is not what's capping your org structure / systems." Use the display
-  // names as given throughout; do not re-case them.
-  switch (read) {
-    case 'load_bearing':
-      return `${fromName} is weak here too — this dependency is active and part of what's costing you.`
-    case 'clear':
-      return `${fromName} is holding — so ${fromName} is not what's capping your ${toName}.`
-    case 'at_risk':
-      return `${toName} is holding for now, but ${fromName} is weak — it's running on borrowed time.`
-    default: // 'both_strong'
-      return 'Both are holding — nothing to flag here.'
-  }
-}
-
 function relationshipLine(e: SystemView['dependencies'][number]): string {
   const verb = e.kind === 'gate' ? 'gates' : 'feeds'
-  return `${e.fromName} (${e.fromScore}) ${verb} ${e.toName} (${e.toScore}). ${readSentence(e.fromName, e.toName, e.read)}`
+  return `${e.fromName} (${e.fromScore}) ${verb} ${e.toName} (${e.toScore}). ${e.readSentence}`
 }
 
 /**

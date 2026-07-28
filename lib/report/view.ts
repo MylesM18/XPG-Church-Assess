@@ -33,6 +33,11 @@ export interface SystemView {
     from: string; to: string; kind: string; statement: string;
     read: string; fromName: string; toName: string;
     fromScore: number; toScore: number;
+    // Pre-interpolated read sentence (spec §6.1). Built in buildSystem from
+    // methodology.copy.dependency_reads so the two report surfaces (system.tsx,
+    // pdf/document.tsx) render one string and cannot drift — the byte-for-byte
+    // duplication their comments used to lament is gone.
+    readSentence: string;
   }>;
   correlations: CorrelationAnnotation[];
   calibrationSpread: number;
@@ -100,11 +105,15 @@ function insideItFor(n: number, questionEffects: Array<{ item_id: string; effect
 /** Residual spread after rater style is removed (spec §4.2/§7.2): tight when no
  *  disagreement flag fired for this area, split (with the measured spread) when
  *  one did. Needs n >= 2 — a single respondent has no spread to measure. */
-function agreementFor(n: number, flag: DisagreementFlag | undefined): string | null {
+function agreementFor(
+  n: number,
+  flag: DisagreementFlag | undefined,
+  methodology: Methodology,
+): string | null {
   if (n < 2) return null;
   return flag
-    ? `Split — spread of ${flag.spread} points after removing rater style`
-    : 'Tight — no significant spread once rater style is removed';
+    ? interp(methodology.copy.dossier.agreement.split, { spread: String(flag.spread) })
+    : methodology.copy.dossier.agreement.tight;
 }
 
 function positionFor(cohortPercentile: number | null): string | null {
@@ -214,7 +223,7 @@ function buildAreas(d: Diagnosis, methodology: Methodology): AreaDossierView[] {
       n,
       reading: methodology.copy.dossier.reading[kind][band]!,
       insideIt: insideItFor(n, cat?.questionEffects ?? []),
-      agreement: agreementFor(n, flagById.get(categoryId)),
+      agreement: agreementFor(n, flagById.get(categoryId), methodology),
       position: positionFor(cat?.cohort_percentile ?? null),
       dependsOn: dependsOnFor(categoryId, d.dependencies, names),
       watchFor: watchForFor(categoryId, d, methodology, names),
@@ -242,6 +251,10 @@ function buildSystem(
       toName: names.get(e.to) ?? e.to,
       fromScore: e.fromScore,
       toScore: e.toScore,
+      readSentence: interp(methodology.copy.dependency_reads[e.read], {
+        fromName: names.get(e.from) ?? e.from,
+        toName: names.get(e.to) ?? e.to,
+      }),
     })),
     correlations: d.correlations,
     calibrationSpread: d.calibration.spread,

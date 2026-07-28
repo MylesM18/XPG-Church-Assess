@@ -114,6 +114,18 @@ export const DossierReadingBandSchema = z.object({
   holding: z.string().min(1),
 });
 
+// Named keys, not z.record — same rationale as DossierReadingBandSchema above: the four
+// reads are a closed set (EdgeRead, lib/engine/dependencies.ts), and `dependency_reads[e.read]`
+// (lib/report/view.ts) must resolve for every edge. A z.record would load with any subset and
+// let a missing read surface as `undefined` interpolated into a rendered sentence, far from the
+// copy file. Naming the four makes a missing read a load-time failure instead.
+export const DependencyReadsSchema = z.object({
+  load_bearing: z.string().min(1),
+  clear: z.string().min(1),
+  at_risk: z.string().min(1),
+  both_strong: z.string().min(1),
+});
+
 export const CopySchema = z.object({
   version: z.string().min(1),
   blocks: z.record(z.string().min(1)),
@@ -130,7 +142,12 @@ export const CopySchema = z.object({
       depth: z.string().min(1),
       both: z.string().min(1),
     }),
+    agreement: z.object({
+      split: z.string().min(1),
+      tight: z.string().min(1),
+    }),
   }),
+  dependency_reads: DependencyReadsSchema,
 });
 
 export type Signal = z.infer<typeof SignalSchema>;
@@ -146,6 +163,7 @@ export type Benchmarks = z.infer<typeof BenchmarksSchema>;
 export type Offer = z.infer<typeof OfferSchema>;
 export type Offers = z.infer<typeof OffersSchema>;
 export type DossierReadingBand = z.infer<typeof DossierReadingBandSchema>;
+export type DependencyReads = z.infer<typeof DependencyReadsSchema>;
 export type Copy = z.infer<typeof CopySchema>;
 
 export interface Methodology {

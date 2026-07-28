@@ -114,8 +114,10 @@ function scoreBand(score: number): string {
   return 'Holding';
 }
 
-// Mirrors system.tsx's private READ_ORDER/READ_LABEL/readSentence/relationshipLine — same
-// "cannot import a DOM component" constraint as confidenceBand/scoreBand above.
+// Mirrors system.tsx's private READ_ORDER/READ_LABEL — same "cannot import a DOM component"
+// constraint as confidenceBand/scoreBand above. The read sentence is no longer mirrored here:
+// it is precomputed once in lib/report/view.ts (methodology.copy.dependency_reads, spec §10) and
+// arrives on e.readSentence, so both surfaces render the identical string.
 const DEP_READ_ORDER = ['load_bearing', 'at_risk', 'clear', 'both_strong'] as const satisfies readonly EdgeRead[];
 
 const DEP_READ_LABEL: Record<string, string> = {
@@ -125,25 +127,9 @@ const DEP_READ_LABEL: Record<string, string> = {
   both_strong: 'Both holding',
 };
 
-function depReadSentence(fromName: string, toName: string, read: string): string {
-  // Mirrors system.tsx's readSentence — see its comment (whole-branch review finding M3 /
-  // T15-a) for why the names are never lowercased: they are slashed compounds ("Governance /
-  // Accountability"), not common nouns.
-  switch (read) {
-    case 'load_bearing':
-      return `${fromName} is weak here too — this dependency is active and part of what's costing you.`;
-    case 'clear':
-      return `${fromName} is holding — so ${fromName} is not what's capping your ${toName}.`;
-    case 'at_risk':
-      return `${toName} is holding for now, but ${fromName} is weak — it's running on borrowed time.`;
-    default: // 'both_strong'
-      return 'Both are holding — nothing to flag here.';
-  }
-}
-
 function depRelationshipLine(e: SystemView['dependencies'][number]): string {
   const verb = e.kind === 'gate' ? 'gates' : 'feeds';
-  return `${e.fromName} (${e.fromScore}) ${verb} ${e.toName} (${e.toScore}). ${depReadSentence(e.fromName, e.toName, e.read)}`;
+  return `${e.fromName} (${e.fromScore}) ${verb} ${e.toName} (${e.toScore}). ${e.readSentence}`;
 }
 
 // Mirrors dossier.tsx's private UNAVAILABLE/field() — same constraint again: dossier.tsx

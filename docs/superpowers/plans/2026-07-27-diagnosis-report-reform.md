@@ -2910,10 +2910,11 @@ In `tests/methodology/copy.test.ts`:
       ...Object.values(dossier.reading.stage),
       ...Object.values(dossier.reading.enabler),
       ...Object.values(dossier.generosity),
+      ...Object.values(dossier.agreement),
       dossier.enabler_belief_only,
       dossier.calibration_spread,
     ];
-    expect(all).toHaveLength(8 + 3 + 2); // every authored string is in the guard
+    expect(all).toHaveLength(8 + 3 + 2 + 2); // every authored string is in the guard
     for (const s of all) {
       expect(s).not.toMatch(/owner text|PLACEHOLDER|TODO|TBD/i);
       expect(s.trim().length).toBeGreaterThan(20);

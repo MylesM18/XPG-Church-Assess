@@ -32,3 +32,15 @@ dossier:
     breadth: "Breadth: your givers are generous — there just aren’t enough of them yet. This routes upstream to connection."
     depth: "Depth: most of your people give, but few have been taught why. The opportunity is discipleship around generosity."
     both: "Both breadth and depth are low: few givers, and little teaching behind the giving."
+  # Residual-spread read for a single area (spec §7.2), relocated verbatim from
+  # lib/report/view.ts's agreementFor. `split` keeps the {spread} token.
+  agreement:
+    split: "Split — spread of {spread} points after removing rater style"
+    tight: "Tight — no significant spread once rater style is removed"
+# Dependency-map read sentences (spec §6.1), one per EdgeRead. Relocated verbatim from
+# system.tsx / pdf/document.tsx; {fromName}/{toName} interpolated in lib/report/view.ts.
+dependency_reads:
+  load_bearing: "{fromName} is weak here too — this dependency is active and part of what's costing you."
+  clear: "{fromName} is holding — so {fromName} is not what's capping your {toName}."
+  at_risk: "{toName} is holding for now, but {fromName} is weak — it's running on borrowed time."
+  both_strong: "Both are holding — nothing to flag here."
