@@ -22,9 +22,10 @@ import { resolveBrand } from '@/lib/brand/resolve'
 import { fallbackProse, type ReportBlocks } from '@/lib/ai/fallback'
 import { buildReportView } from '@/lib/report/view'
 import type { Diagnosis } from '@/lib/engine/types'
-import { VerdictHeader } from '@/app/app/[churchId]/diagnosis/report/cover'
+import { CoverCard, VerdictHeader, AreaTable } from '@/app/app/[churchId]/diagnosis/report/cover'
 import { ChainWalk, EvidenceReceipt, CostSection } from '@/app/app/[churchId]/diagnosis/report/chain'
-import { GatingFlags, Disagreement } from '@/app/app/[churchId]/diagnosis/report/system'
+import { DependencyMap, Calibration, Disagreement, GatingFlags } from '@/app/app/[churchId]/diagnosis/report/system'
+import { AreaDossier } from '@/app/app/[churchId]/diagnosis/report/dossier'
 import { NextStep, Appendix } from '@/app/app/[churchId]/diagnosis/report/shared'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -73,25 +74,42 @@ export default async function SharedReportPage({
         >
           {brand.monogram}
         </div>
-        <h1 className="font-display text-lg text-ink">{row.church_name}</h1>
+        {/* Not an <h1>: CoverCard below renders the page's one true <h1> ("Overall church
+            health") — tests/a11y/shared-report-heading.test.ts pins exactly one <h1> on this
+            public, unauthenticated page. Same visual treatment as before, just a <p>. */}
+        <p className="font-display text-lg text-ink">{row.church_name}</p>
       </div>
 
+      {/* Layer 1 — the verdict. Same order as ReportBody (app/app/[churchId]/diagnosis/report/
+          shared.tsx), minus the PDF/Share admin buttons — those belong to the authenticated
+          diagnosis page, not a public forwarded link. */}
+      <CoverCard cover={view.cover} />
       <VerdictHeader verdict={view.verdict} confidence={view.confidence} />
+      <AreaTable areas={view.areas} />
 
+      {/* Layer 2 — how your system behaves */}
       <ChainWalk stages={view.stages} />
-
       {view.evidence && <EvidenceReceipt text={view.evidence.text} refs={view.evidence.refs} />}
       {view.cost && <CostSection cost={view.cost.cost} doNotWorkOn={view.cost.doNotWorkOn} />}
-      {view.gating && <GatingFlags text={view.gating} />}
-      {view.dispersion && (
-        <Disagreement text={view.dispersion.text} respondents={view.dispersion.respondents} />
+      <DependencyMap system={view.system} />
+      <Calibration spread={view.system.calibrationSpread} text={view.system.calibrationText} />
+      {view.system.disagreement && (
+        <Disagreement text={view.system.disagreement.text} respondents={view.system.disagreement.respondents} />
       )}
+      {view.system.gating && <GatingFlags text={view.system.gating} />}
 
-      {/* audience 'shared' always leaves view.nextStep undefined (lib/report/view.ts) — the CTA
-          is an admin action a board member reading a forwarded link cannot take. Gated here
-          anyway, deliberately, rather than relying on that invariant holding forever: this page
-          does not inherit the guard from app/app/[churchId]/diagnosis/page.tsx, and nextStep
-          being optional on ReportView means tsc itself refuses an ungated `.callType` access. */}
+      {/* Layer 3 — the eight areas, fixed chain-then-enabler order (view.areas' own order —
+          never re-sorted here). Rendered inline on every surface, PDF included (spec §7.8). */}
+      {view.areas.map((area) => (
+        <AreaDossier key={area.category_id} area={area} />
+      ))}
+
+      {/* Layer 4 — what to do. audience 'shared' always leaves view.nextStep undefined
+          (lib/report/view.ts) — the CTA is an admin action a board member reading a
+          forwarded link cannot take. Gated here anyway, deliberately, rather than relying on
+          that invariant holding forever: this page does not inherit the guard from
+          app/app/[churchId]/diagnosis/page.tsx, and nextStep being optional on ReportView means
+          tsc itself refuses an ungated `.callType` access. */}
       {view.nextStep && (
         <NextStep
           callType={view.nextStep.callType}
