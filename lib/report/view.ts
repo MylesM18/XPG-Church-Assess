@@ -341,3 +341,42 @@ export function buildReportView(
     system: buildSystem(d, blocks, methodology, opts),
   };
 }
+
+export type ReportViewResolution =
+  | { stale: true }
+  | { stale: false; view: ReportView };
+
+/**
+ * The one place all three report surfaces (the authenticated diagnosis page, the public
+ * share page, and the PDF route) decide whether a stored diagnosis can be rendered under
+ * the CURRENT methodology, before fallbackProse or buildReportView ever run (spec §5.4).
+ *
+ * `diagnoses.payload` is cached JSONB, read back with a bare `as Diagnosis` cast and never
+ * runtime-validated. A row generated under an older methodology_version carries the OLD
+ * Diagnosis shape at runtime regardless of what the current TypeScript type says — e.g.
+ * `overall_score` and `dispersion_flags` instead of `throughput`/`capacity`/`gap` and
+ * `disagreement_flags`. Calling fallbackProse or buildReportView on one throws (`Cannot
+ * read properties of undefined`, e.g. `d.disagreement_flags[0]` in lib/ai/fallback.ts when
+ * `disagreement_flags` doesn't exist on the payload at all).
+ *
+ * `blocks` is a lazy thunk, not a value, specifically so a stale payload can never reach
+ * fallbackProse either — a caller that resolved `blocks` eagerly before calling this
+ * function would reintroduce exactly the bug this function exists to make structurally
+ * impossible to repeat at a fourth call site.
+ *
+ * The comparison — `diagnosis.methodology_version !== methodology.questions.version` — is
+ * identical to the one ReportBody (app/app/[churchId]/diagnosis/report/shared.tsx) already
+ * used to pick its own stale-vs-fresh branch. There is only one notion of "stale" in this
+ * codebase; every caller compares the same two fields the same way.
+ */
+export function resolveReportView(
+  diagnosis: Diagnosis,
+  methodology: Methodology,
+  blocks: () => ReportBlocks,
+  opts: { audience: ReportAudience },
+): ReportViewResolution {
+  if (diagnosis.methodology_version !== methodology.questions.version) {
+    return { stale: true };
+  }
+  return { stale: false, view: buildReportView(diagnosis, blocks(), methodology, opts) };
+}

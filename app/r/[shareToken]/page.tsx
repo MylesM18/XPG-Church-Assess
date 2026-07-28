@@ -19,8 +19,8 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
-import { fallbackProse, type ReportBlocks } from '@/lib/ai/fallback'
-import { buildReportView } from '@/lib/report/view'
+import { fallbackProse } from '@/lib/ai/fallback'
+import { resolveReportView } from '@/lib/report/view'
 import type { Diagnosis } from '@/lib/engine/types'
 import { CoverCard, VerdictHeader, AreaTable } from '@/app/app/[churchId]/diagnosis/report/cover'
 import { ChainWalk, EvidenceReceipt, CostSection } from '@/app/app/[churchId]/diagnosis/report/chain'
@@ -60,10 +60,53 @@ export default async function SharedReportPage({
   const brand = resolveBrand(row.church_name)
 
   // Deliberately NOT gated on PROSE_MODE — see the header comment. The RPC returns no prose
-  // column, so there is nothing here for one env var to silently switch on.
-  const blocks: ReportBlocks = fallbackProse(diagnosis, methodology)
+  // column, so there is nothing here for one env var to silently switch on. resolveReportView
+  // (lib/report/view.ts) makes the stale-vs-fresh comparison BEFORE this thunk ever runs — a
+  // payload stored under an older methodology_version throws inside fallbackProse/
+  // buildReportView otherwise (CT-1), and this is a public, unauthenticated route: that throw
+  // would have been an unhandled 500 on an already-forwarded link, with no version check at all
+  // upstream of it before this fix.
+  const resolution = resolveReportView(
+    diagnosis,
+    methodology,
+    () => fallbackProse(diagnosis, methodology),
+    { audience: 'shared' },
+  )
 
-  const view = buildReportView(diagnosis, blocks, methodology, { audience: 'shared' })
+  if (resolution.stale) {
+    // No admin action is offered here (unlike StaleMethodologyNotice on the authenticated
+    // page): GenerateButton's regenerate action is admin-only, and a public visitor holding a
+    // forwarded link cannot take it. Deliberately not an <h1>: tests/a11y/shared-report-heading
+    // -test.ts statically counts this file's own <h1> occurrences regardless of which runtime
+    // branch executes, and the fresh branch below still unconditionally contains the literal
+    // text <CoverCard> — the page's one true <h1> — so a second literal <h1> here would break
+    // that count on every reading of this file, not only when this branch actually renders.
+    return (
+      <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-md font-display text-base text-white"
+            style={{ backgroundColor: row.brand_color }}
+          >
+            {brand.monogram}
+          </div>
+          <p className="font-display text-lg text-ink">{row.church_name}</p>
+        </div>
+        <section className="flex flex-col items-start gap-4 rounded-lg border border-line bg-paper p-6">
+          <h2 className="font-display text-xl text-ink">This shared report is out of date</h2>
+          <p className="font-body text-ink-soft">
+            This link was generated under an earlier version of the assessment and can no longer
+            be displayed. Ask a church admin to regenerate the diagnosis and share a fresh link.
+          </p>
+        </section>
+        <p className="font-body text-sm text-ink-soft">
+          Shared read-only view. This link expires and can be revoked at any time.
+        </p>
+      </main>
+    )
+  }
+
+  const view = resolution.view
 
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">

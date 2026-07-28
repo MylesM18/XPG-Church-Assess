@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { fallbackProse, type ReportBlocks } from '@/lib/ai/fallback'
-import { buildReportView } from '@/lib/report/view'
+import { resolveReportView } from '@/lib/report/view'
 import { renderReportDocument } from '@/lib/report/pdf/render'
 import type { Diagnosis } from '@/lib/engine/types'
 
@@ -68,14 +68,30 @@ export async function GET(
     const diagnosis = diag.payload as Diagnosis
     const methodology = loadMethodology()
 
-    // Same gate as the report page — the document never depends on AI.
+    // Same gate as the report page (spec §5.4) — a payload stored under an older
+    // methodology_version throws inside fallbackProse/buildReportView (CT-1; see
+    // resolveReportView's doc comment in lib/report/view.ts for the mechanism). Checked
+    // before either ever runs, so a stale payload returns a clean, distinct status here
+    // instead of falling through to the generic 500 below.
     const PROSE_MODE = process.env.PROSE_MODE ?? 'fallback'
-    const blocks: ReportBlocks =
-      PROSE_MODE !== 'fallback' && diag.prose
-        ? (diag.prose as ReportBlocks)
-        : fallbackProse(diagnosis, methodology)
+    const resolution = resolveReportView(
+      diagnosis,
+      methodology,
+      () =>
+        PROSE_MODE !== 'fallback' && diag.prose
+          ? (diag.prose as ReportBlocks)
+          : fallbackProse(diagnosis, methodology),
+      { audience: 'pdf' },
+    )
 
-    const view = buildReportView(diagnosis, blocks, methodology, { audience: 'pdf' })
+    if (resolution.stale) {
+      return new Response(
+        'This report predates the current methodology and cannot be exported until it is regenerated.',
+        { status: 409 },
+      )
+    }
+
+    const view = resolution.view
     const brand = resolveBrand(church.name)
     const generatedAt = new Date()
 
