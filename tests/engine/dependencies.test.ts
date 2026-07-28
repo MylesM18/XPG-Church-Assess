@@ -77,6 +77,13 @@ describe('dependency map', () => {
     }
   });
 
+  it('has no placeholder statements left', () => {
+    for (const d of methodology.rules.dependencies) {
+      expect(d.statement).not.toMatch(/PLACEHOLDER|TODO|TBD/i);
+      expect(d.statement.trim().length).toBeGreaterThan(20);
+    }
+  });
+
   it('works at N=1 — it reads scores, never respondent counts', () => {
     const scores = new Map([['sys', 74], ['vol', 48]]);
     expect(readDependencies(rules, scores, 45).length).toBe(13);
