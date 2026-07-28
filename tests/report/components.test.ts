@@ -159,6 +159,6 @@ describe('SharedStaleMethodologyNotice', () => {
     const types = collectTypes(tree);
     expect(types, 'expected an <h1> in the tree').toContain('h1');
     expect(types, 'must not be demoted back to <h2>').not.toContain('h2');
-    expect(textOf(tree)).toMatch(/This shared report is out of date/);
+    expect(textOf(tree)).toMatch(/This shared report isn.t ready yet/);
   });
 });

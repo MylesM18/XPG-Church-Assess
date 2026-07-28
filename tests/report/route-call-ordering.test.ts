@@ -128,12 +128,17 @@ describe('report routes resolve staleness before ever touching fallbackProse/bui
       for (const arg of call.args) {
         const usesGuardedCall = GUARDED_CALLS.some((fn) => arg.includes(fn))
         if (!usesGuardedCall) continue
+        // CT-2(c) repurposed the thunk to take the freshly re-derived diagnosis, so it is now
+        // `(d) => ...` rather than the original zero-arg `() => ...`. Accept any arrow-function
+        // parameter list — the load-bearing invariant is unchanged: the argument must be an
+        // arrow (lazy), never a bare eagerly-evaluated `fallbackProse(...)` / `buildReportView(...)`
+        // call (which does not start with `(...) =>` and so still fails this assertion).
         expect(
-          /^\s*\(\)\s*=>/.test(arg),
+          /^\s*\([^)]*\)\s*=>/.test(arg),
           `${label}: an argument passed to resolveReportView(...) calls fallbackProse/` +
-            `buildReportView but is not itself a lazy "() => ..." thunk (found: ` +
+            `buildReportView but is not itself a lazy "(...) => ..." thunk (found: ` +
             `${JSON.stringify(arg.trim().slice(0, 160))}). A non-thunk argument is evaluated ` +
-            `eagerly, before the version check runs — CT-1 again.`,
+            `eagerly, before the not-scoreable gate runs — CT-1 again.`,
         ).toBe(true)
       }
     })

@@ -102,32 +102,32 @@ export function StaleMethodologyNotice({
 }
 
 /**
- * The public share page's (app/r/[shareToken]/page.tsx) stale-methodology notice — the
- * read-only counterpart to StaleMethodologyNotice above. No GenerateButton: regenerating a
- * diagnosis is an admin action, and a visitor holding a forwarded share link is never an admin.
+ * The public share page's (app/r/[shareToken]/page.tsx) not-scoreable notice — the read-only
+ * counterpart to StaleMethodologyNotice above. No GenerateButton: regenerating a diagnosis is an
+ * admin action, and a visitor holding a forwarded share link is never an admin.
+ *
+ * Under CT-2(c) this renders when the run cannot be re-derived under the current methodology
+ * (some area has no complete respondent, or the church's attendance band is unset/unknown) —
+ * version-staleness itself can no longer occur, since the view is always re-derived fresh.
  *
  * Extracted into its own component for the same reason StaleMethodologyNotice already is: it
  * owns the ONLY <h1> its branch renders, from a file other than the page itself. Without this,
- * a literal <h1> inline in app/r/[shareToken]/page.tsx's stale branch would break
+ * a literal <h1> inline in app/r/[shareToken]/page.tsx's not-scoreable branch would break
  * tests/a11y/shared-report-heading.test.ts, which statically sums that page's own <h1> count
  * with cover.tsx's CoverCard <h1> count and requires exactly one — a static count that cannot
  * tell "two <h1>s in one branch" (wrong) apart from "one <h1> per mutually exclusive branch"
  * (right). Routing the heading through another file, exactly like CoverCard already does for
  * the fresh branch, keeps the page's own literal count at 0 either way, so the guard reads
- * true regardless of which branch actually renders.
- *
- * Copy is unchanged from the inline version this replaces (the whole-branch re-review's finding:
- * that version used <h2>, leaving the page's rendered outline with no <h1> at all) — only the
- * heading level moved, to <h1>, matching every other top-level report surface (EmptyState,
- * StaleMethodologyNotice) in using a real one.
+ * true regardless of which branch actually renders. It stays an <h1>, matching every other
+ * top-level report surface (EmptyState, StaleMethodologyNotice).
  */
 export function SharedStaleMethodologyNotice() {
   return (
     <section className="flex flex-col items-start gap-4 rounded-lg border border-line bg-paper p-6">
-      <h1 className="font-display text-xl text-ink">This shared report is out of date</h1>
+      <h1 className="font-display text-xl text-ink">This shared report isn’t ready yet</h1>
       <p className="font-body text-ink-soft">
-        This link was generated under an earlier version of the assessment and can no longer
-        be displayed. Ask a church admin to regenerate the diagnosis and share a fresh link.
+        The assessment behind this link can’t be scored under the current methodology yet. Ask a
+        church admin to finish the assessment and share a fresh link.
       </p>
     </section>
   )

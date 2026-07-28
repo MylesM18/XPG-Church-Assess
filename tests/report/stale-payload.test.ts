@@ -2,75 +2,80 @@ import { describe, it, expect } from 'vitest';
 import { resolveReportView } from '@/lib/report/view';
 import { loadMethodology } from '@/lib/methodology/load';
 import { fallbackProse } from '@/lib/ai/fallback';
-import type { Diagnosis } from '@/lib/engine/types';
+import { diagnose } from '../../lib/engine';
+import { loadFixtureMethodology, answers } from '../engine/helpers';
+import type { DeriveResult } from '@/lib/report/derive';
 
 const methodology = loadMethodology();
 
 /**
- * Whole-branch review, finding CT-1. Genuinely pre-branch-shaped, not a hand-set
- * `storedVersion` string paired with a fresh view (the shortcut
- * tests/report/components.test.ts's ReportBody test uses, and precisely the combination
- * that let this ship green — that test builds a fully-populated ReportView from a live
- * diagnose() and only fakes the version string, so it never actually exercises what an old
- * row's DATA looks like).
+ * CT-2(c) repurpose of the old "stale payload" unit (the branch review's finding CT-1).
  *
- * `diagnoses.payload` is cached JSONB, read back with a bare `as Diagnosis` cast in all
- * three routes (app/app/[churchId]/diagnosis/page.tsx, app/r/[shareToken]/page.tsx,
- * app/api/report/[runId]/pdf/route.ts) and never runtime-validated. A row generated before
- * methodology_version 0.2.0 carries `overall_score` and `dispersion_flags` — never
- * `throughput`/`capacity`/`gap`, `disagreement_flags`, `dependencies`, `correlations`, or
- * `calibration`, all of which are required, non-optional fields on the CURRENT `Diagnosis`
- * type. Typed `as unknown as Diagnosis`, not `Partial<Diagnosis>`, precisely so TypeScript
- * cannot "helpfully" fill in the new required fields this fixture must NOT have — a
- * `Partial<Diagnosis>` cast would let a future required field silently vanish from this
- * fixture without the compiler ever telling us we stopped testing the old shape.
+ * Under re-derive-at-render, resolveReportView no longer receives a cached Diagnosis and no
+ * longer compares methodology_version at all: the input is always freshly re-derived from the
+ * run's responses under the CURRENT methodology, so version-staleness is structurally
+ * impossible. resolveReportView now consumes a DeriveResult and turns a NOT-OK derive (some
+ * area has no complete respondent, or the attendance band is not a benchmark key) into a
+ * graceful `scoreable: false` state instead of building a view.
+ *
+ * The CT-1 laziness invariant is PRESERVED and still the load-bearing guarantee: `blocks` is a
+ * lazy thunk (the ONLY path to fallbackProse / buildReportView), and it must never run when the
+ * derive is not ok. resolveReportView is the one place all three surfaces share, so pinning the
+ * thunk's laziness here proves it for every call site at once.
  */
-const STALE_PAYLOAD = {
-  methodology_version: '0.1.0',
-  overall_score: 52,
-  categories: [
-    {
-      category_id: 'guest', kind: 'stage', score: 30, belief: null, evidence: null,
-      gap: null, gap_class: null, cohort_percentile: null, state: 'broken',
-      respondent_count: 2, excluded_partial: 0, questionEffects: [],
-    },
-  ],
-  primary_constraint: { category_id: 'guest' },
-  contributing: [],
-  do_not_work_on: [],
-  gating_conditions: [],
-  generosity_mode: null,
-  blind_spots: [],
-  dispersion_flags: [],
-  offer: { type: 'guest_retention', call_type: 'Diagnostic call', hook: 'Lets walk the chain together.' },
-  confidence: 0.8,
-  evidence_trail: [],
-} as unknown as Diagnosis;
+const INCOMPLETE: DeriveResult = { ok: false, reason: 'incomplete_areas', blockedAreas: ['disc', 'vol'] };
+const UNKNOWN_BAND: DeriveResult = { ok: false, reason: 'unknown_band' };
 
-describe('resolveReportView on a genuinely pre-branch-shaped payload (CT-1)', () => {
-  it('reports the payload as stale without ever calling fallbackProse or buildReportView', () => {
-    let resolution: ReturnType<typeof resolveReportView> | undefined;
-    expect(() => {
-      resolution = resolveReportView(
-        STALE_PAYLOAD,
-        methodology,
-        // If this thunk were ever invoked on a stale payload, it would throw exactly the
-        // error the second test below pins — resolveReportView's whole job is to guarantee
-        // it never is.
-        () => fallbackProse(STALE_PAYLOAD, methodology),
-        { audience: 'screen' },
-      );
-    }).not.toThrow();
-    expect(resolution).toEqual({ stale: true });
+const ALL = ['guest', 'conn', 'disc', 'vol', 'gen', 'gov', 'comm', 'sys'];
+const OK: DeriveResult = {
+  ok: true,
+  diagnosis: diagnose(
+    ALL.flatMap((id) => [
+      ...answers(loadFixtureMethodology(), id, id === 'vol' ? 2 : 8, 'Pastor Dana', 'u-1'),
+      ...answers(loadFixtureMethodology(), id, id === 'vol' ? 9 : 7, 'Elder Sam', 'u-2'),
+    ]),
+    loadFixtureMethodology(),
+    { attendance_band: '100_249' },
+  ),
+};
+
+describe('resolveReportView maps a DeriveResult to a scoreable-or-not resolution (CT-2c)', () => {
+  it('returns scoreable:false for an incomplete-areas derive WITHOUT ever invoking the blocks thunk', () => {
+    let thunkCalled = false;
+    const resolution = resolveReportView(
+      INCOMPLETE,
+      methodology,
+      (d) => { thunkCalled = true; return fallbackProse(d, methodology); },
+      { audience: 'screen' },
+    );
+    expect(resolution).toEqual({ scoreable: false, reason: 'incomplete_areas', blockedAreas: ['disc', 'vol'] });
+    expect(thunkCalled).toBe(false);
   });
 
-  it('documents the mechanism: fallbackProse itself throws on this exact payload shape', () => {
-    // Not exercised through any route — this pins WHY resolveReportView's guard exists.
-    // d.disagreement_flags[0] (lib/ai/fallback.ts) reads a key this payload never had; the
-    // old shape only ever carried dispersion_flags. Reproduces, word for word, the error the
-    // whole-branch reviewer got running a real 0.1.0-shaped payload through this function.
-    expect(() => fallbackProse(STALE_PAYLOAD, methodology)).toThrow(
-      /Cannot read propert(?:y|ies) of undefined/,
+  it('returns scoreable:false with an empty blockedAreas for an unknown-band derive, thunk untouched', () => {
+    let thunkCalled = false;
+    const resolution = resolveReportView(
+      UNKNOWN_BAND,
+      methodology,
+      (d) => { thunkCalled = true; return fallbackProse(d, methodology); },
+      { audience: 'screen' },
     );
+    expect(resolution).toEqual({ scoreable: false, reason: 'unknown_band', blockedAreas: [] });
+    expect(thunkCalled).toBe(false);
+  });
+
+  it('returns scoreable:true and builds the view for an ok derive, invoking the thunk exactly once', () => {
+    let thunkCalls = 0;
+    const resolution = resolveReportView(
+      OK,
+      methodology,
+      (d) => { thunkCalls += 1; return fallbackProse(d, methodology); },
+      { audience: 'screen' },
+    );
+    expect(resolution.scoreable).toBe(true);
+    if (!resolution.scoreable) throw new Error('unreachable — asserted scoreable above');
+    expect(resolution.view.verdict.length).toBeGreaterThan(0);
+    expect(resolution.view.areas).toHaveLength(8);
+    expect(thunkCalls).toBe(1);
   });
 });

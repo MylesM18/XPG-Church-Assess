@@ -4,10 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { loadMethodology } from '@/lib/methodology/load'
 import { createClient } from '@/lib/supabase/server'
-import { normalize } from '@/lib/engine/normalize'
-import { assemble } from '@/lib/engine/assemble'
-import { diagnosisGate } from '@/lib/coverage/diagnosis-gate'
-import { isKnownBand } from '@/lib/engine/benchmark'
+import { deriveDiagnosisForRun } from '@/lib/report/derive'
 import type { Response } from '@/lib/engine/types'
 import { responseHash } from '@/lib/report/response-hash'
 import { generateProse } from '@/lib/ai/prose'
@@ -44,38 +41,35 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
     respondent_id: r.respondent_user_id ?? r.respondent_label,
   }))
 
-  // HARD GATE (spec §4.6): never diagnose a run where some area has zero respondents who
-  // completed every item in it — an incomplete area's fit is unscoreable (n === 0) → phantom
-  // constraint. normalize() here is the single pass shared with assemble() below, so the gate
-  // and the diagnosis never disagree about what "complete" means.
-  const normalized = normalize(responses, methodology)
-  const gate = diagnosisGate(normalized, categories)
-  if (!gate.ok) {
-    const names = gate.blockedAreas
-      .map((id) => categories.find((c) => c.id === id)?.name ?? id)
-      .join(', ')
-    return {
-      ok: false,
-      error: `Every area needs at least one person who answered all its questions. Still waiting on: ${names}.`,
-    }
-  }
-
   const { data: church } = await supabase
     .from('churches')
     .select('attendance_band')
     .eq('id', churchId)
     .maybeSingle()
-  // Require a known attendance band before diagnosing: cohort benchmarks are keyed by it,
-  // and assemble() (via benchmarkFor() in lib/engine/benchmark.ts) throws on an unknown band.
-  // Guard here so a blank/legacy band returns a friendly error instead of a 500. (M5a
-  // governance: require band.)
-  const band = church?.attendance_band ?? ''
-  if (!isKnownBand(methodology, band)) {
+
+  // normalize → diagnosis gate → attendance-band guard → assemble, the SAME sequence the three
+  // report surfaces re-derive with at render (deriveDiagnosisForRun, lib/report/derive.ts). Sharing
+  // it here is what guarantees generateDiagnosis and the render path can never disagree about what
+  // "complete" means or which bands are known. HARD GATE (spec §4.6): never diagnose a run where
+  // some area has zero fully-covered respondents (a phantom constraint), and never assemble() with
+  // an unknown band (benchmarkFor() throws) — both surface as friendly errors here, not a 500.
+  const derived = deriveDiagnosisForRun(responses, methodology, {
+    attendance_band: church?.attendance_band ?? '',
+  })
+  if (!derived.ok) {
+    if (derived.reason === 'incomplete_areas') {
+      const names = derived.blockedAreas
+        .map((id) => categories.find((c) => c.id === id)?.name ?? id)
+        .join(', ')
+      return {
+        ok: false,
+        error: `Every area needs at least one person who answered all its questions. Still waiting on: ${names}.`,
+      }
+    }
     return { ok: false, error: 'Set your church’s weekend attendance band before generating a diagnosis.' }
   }
-  const ctx = { attendance_band: band }
 
-  const diagnosis = assemble(normalized, methodology, ctx)
+  const diagnosis = derived.diagnosis
   const hash = responseHash(responses, diagnosis.methodology_version)
 
   const { error: saveError } = await supabase.rpc('save_diagnosis', {

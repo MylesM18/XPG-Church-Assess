@@ -2,6 +2,7 @@ import type { Diagnosis, DiagnosisCategory, DisagreementFlag, EvidenceRef } from
 import type { CorrelationAnnotation } from '../engine/correlation';
 import type { ReportBlocks } from '../ai/fallback';
 import type { Methodology } from '../methodology/schema';
+import type { DeriveResult } from './derive';
 import { chainWalk, type StageView } from './chain-walk';
 
 export type ReportAudience = 'screen' | 'pdf' | 'shared';
@@ -343,40 +344,45 @@ export function buildReportView(
 }
 
 export type ReportViewResolution =
-  | { stale: true }
-  | { stale: false; view: ReportView };
+  | { scoreable: false; reason: 'incomplete_areas' | 'unknown_band'; blockedAreas: string[] }
+  | { scoreable: true; view: ReportView };
 
 /**
- * The one place all three report surfaces (the authenticated diagnosis page, the public
- * share page, and the PDF route) decide whether a stored diagnosis can be rendered under
- * the CURRENT methodology, before fallbackProse or buildReportView ever run (spec §5.4).
+ * The one place all three report surfaces (the authenticated diagnosis page, the public share
+ * page, and the PDF route) turn a freshly RE-DERIVED Diagnosis into a renderable view — or, when
+ * the run cannot be scored under the current methodology, into a graceful not-scoreable state
+ * (spec §5.4, CT-2(c)).
  *
- * `diagnoses.payload` is cached JSONB, read back with a bare `as Diagnosis` cast and never
- * runtime-validated. A row generated under an older methodology_version carries the OLD
- * Diagnosis shape at runtime regardless of what the current TypeScript type says — e.g.
- * `overall_score` and `dispersion_flags` instead of `throughput`/`capacity`/`gap` and
- * `disagreement_flags`. Calling fallbackProse or buildReportView on one throws (`Cannot
- * read properties of undefined`, e.g. `d.disagreement_flags[0]` in lib/ai/fallback.ts when
- * `disagreement_flags` doesn't exist on the payload at all).
+ * Every surface now re-derives the Diagnosis from the run's stored RESPONSES under the CURRENT
+ * methodology (deriveDiagnosisForRun, lib/report/derive.ts) instead of trusting the cached
+ * `diagnoses.payload`. Because the input is always freshly derived, methodology_version always
+ * matches by construction and version-staleness can no longer occur — the old `{ stale: true }`
+ * arm is repurposed to carry the two ways a re-derive can legitimately fail instead: some area
+ * has no fully-covered respondent (`incomplete_areas`, carrying the blocked area ids) or the
+ * church's attendance band is not a benchmark key (`unknown_band`).
  *
- * `blocks` is a lazy thunk, not a value, specifically so a stale payload can never reach
- * fallbackProse either — a caller that resolved `blocks` eagerly before calling this
- * function would reintroduce exactly the bug this function exists to make structurally
- * impossible to repeat at a fourth call site.
- *
- * The comparison — `diagnosis.methodology_version !== methodology.questions.version` — is
- * identical to the one ReportBody (app/app/[churchId]/diagnosis/report/shared.tsx) already
- * used to pick its own stale-vs-fresh branch. There is only one notion of "stale" in this
- * codebase; every caller compares the same two fields the same way.
+ * `blocks` is a lazy thunk, not a value, and is the ONLY path to fallbackProse / buildReportView.
+ * It takes the fresh Diagnosis and is invoked at most once, only on the ok path — so a
+ * not-scoreable derive can never reach fallbackProse either (it carries no diagnosis to hand the
+ * thunk). tests/report/route-call-ordering.test.ts pins that every call site keeps this thunk
+ * lazy; a caller resolving it eagerly, before this function, would reintroduce the CT-1 defect
+ * this shape exists to make structurally impossible.
  */
 export function resolveReportView(
-  diagnosis: Diagnosis,
+  derived: DeriveResult,
   methodology: Methodology,
-  blocks: () => ReportBlocks,
+  blocks: (d: Diagnosis) => ReportBlocks,
   opts: { audience: ReportAudience },
 ): ReportViewResolution {
-  if (diagnosis.methodology_version !== methodology.questions.version) {
-    return { stale: true };
+  if (!derived.ok) {
+    return {
+      scoreable: false,
+      reason: derived.reason,
+      blockedAreas: derived.reason === 'incomplete_areas' ? derived.blockedAreas : [],
+    };
   }
-  return { stale: false, view: buildReportView(diagnosis, blocks(), methodology, opts) };
+  return {
+    scoreable: true,
+    view: buildReportView(derived.diagnosis, blocks(derived.diagnosis), methodology, opts),
+  };
 }

@@ -1,27 +1,26 @@
 // app/r/[shareToken]/page.tsx
-// Public, tokenized, read-only report. No auth. Rendered with audience 'shared', which is
-// the SECOND of two independent respondent-name strips — get_shared_report already removed
-// them in SQL (strip_respondents empties disagreement_flags[].respondents — and, for rows
-// persisted before Task 13's engine rename, the legacy dispersion_flags[].respondents too
-// (20260728000200) — plus evidence_trail[].refs). Both must fail before a name can leak.
+// Public, tokenized, read-only report. No auth. Rendered with audience 'shared'.
 //
-// Those two strips cover `payload` and nothing else, so this page renders deterministic
-// fallbackProse unconditionally rather than reading AI prose. That is not belt-and-braces:
-// AI prose is generated from a prompt embedding the whole Diagnosis, so it can carry
-// respondent names past BOTH strips. get_shared_report no longer returns a `prose` column at
-// all (20260718000600), which is what makes "two independent strips" a true statement of this
-// path's posture — prose is structurally absent here, not merely unused.
+// CT-2(c): this page RE-DERIVES the Diagnosis from the run's responses under the current
+// methodology (deriveDiagnosisForRun) rather than reading the cached, possibly-stale
+// diagnoses.payload. The responses arrive via get_shared_run_responses — a token-gated sibling
+// of get_shared_report — which under owner ruling "Option B" REDACTS respondent_label to the
+// empty string and returns the REAL (opaque) respondent_user_id. normalize() keys on
+// respondent_user_id ?? respondent_label, so scores are bit-identical to the admin path while no
+// human-readable name ever leaves Postgres; the 'shared' audience then strips the respondents
+// list at the view layer too. Two independent name defenses, same as before — just relocated
+// from the payload strip to the response-read redaction.
 //
-// This is a Server Component and stays one: it passes only the built ReportView and the
-// already-stripped Diagnosis to children. Handing the raw RPC row to a Client Component
-// would ship respondent names to the browser inside RSC flight data.
+// This is a Server Component and stays one: it passes only the built ReportView to children.
+// Handing raw RPC rows to a Client Component would ship data to the browser inside RSC flight.
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { fallbackProse } from '@/lib/ai/fallback'
 import { resolveReportView } from '@/lib/report/view'
-import type { Diagnosis } from '@/lib/engine/types'
+import { deriveDiagnosisForRun } from '@/lib/report/derive'
+import type { Response } from '@/lib/engine/types'
 import { CoverCard, VerdictHeader, AreaTable } from '@/app/app/[churchId]/diagnosis/report/cover'
 import { ChainWalk, EvidenceReceipt, CostSection } from '@/app/app/[churchId]/diagnosis/report/chain'
 import { DependencyMap, Calibration, Disagreement, GatingFlags } from '@/app/app/[churchId]/diagnosis/report/system'
@@ -29,6 +28,18 @@ import { AreaDossier } from '@/app/app/[churchId]/diagnosis/report/dossier'
 import { NextStep, Appendix, SharedStaleMethodologyNotice } from '@/app/app/[churchId]/diagnosis/report/shared'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Raw shape of one get_shared_run_responses row. respondent_label is redacted to '' by the RPC;
+// respondent_user_id is the real (opaque) identity; attendance_band is denormalized onto every
+// row because the anon page cannot query churches.
+interface SharedRunResponseRow {
+  category_id: string
+  item_id: string
+  value: number
+  respondent_label: string
+  respondent_user_id: string | null
+  attendance_band: string | null
+}
 
 export default async function SharedReportPage({
   params,
@@ -55,25 +66,37 @@ export default async function SharedReportPage({
   // that would let a caller probe which tokens exist.
   if (!row || !row.valid) notFound()
 
-  const diagnosis = row.payload as Diagnosis
   const methodology = loadMethodology()
   const brand = resolveBrand(row.church_name)
 
-  // Deliberately NOT gated on PROSE_MODE — see the header comment. The RPC returns no prose
-  // column, so there is nothing here for one env var to silently switch on. resolveReportView
-  // (lib/report/view.ts) makes the stale-vs-fresh comparison BEFORE this thunk ever runs — a
-  // payload stored under an older methodology_version throws inside fallbackProse/
-  // buildReportView otherwise (CT-1), and this is a public, unauthenticated route: that throw
-  // would have been an unhandled 500 on an already-forwarded link, with no version check at all
-  // upstream of it before this fix.
+  // CT-2(c): re-derive from the run's responses (token-gated, name-redacted) instead of reading
+  // row.payload. The band is denormalized onto each response row because this anon path cannot
+  // query churches. respondent_id keys on the real user id first, so scores match the admin path.
+  const { data: rawResponses } = await supabase.rpc('get_shared_run_responses', { p_token: shareToken })
+  const responseRows = (Array.isArray(rawResponses) ? rawResponses : []) as SharedRunResponseRow[]
+  const responses: Response[] = responseRows.map((r) => ({
+    category_id: r.category_id,
+    item_id: r.item_id,
+    value: r.value,
+    respondent_label: r.respondent_label,
+    respondent_id: r.respondent_user_id ?? r.respondent_label,
+  }))
+  const derived = deriveDiagnosisForRun(responses, methodology, {
+    attendance_band: responseRows[0]?.attendance_band ?? '',
+  })
+
+  // Deliberately NOT gated on PROSE_MODE — this public path never reads AI prose (which could
+  // carry names past both defenses); it renders deterministic, provably name-free fallbackProse.
+  // The thunk stays lazy (only evaluated on the scoreable path) purely to preserve the shared
+  // call shape tests/report/route-call-ordering.test.ts pins across all three surfaces.
   const resolution = resolveReportView(
-    diagnosis,
+    derived,
     methodology,
-    () => fallbackProse(diagnosis, methodology),
+    (d) => fallbackProse(d, methodology),
     { audience: 'shared' },
   )
 
-  if (resolution.stale) {
+  if (!resolution.scoreable) {
     // No admin action is offered here (unlike StaleMethodologyNotice on the authenticated
     // page): GenerateButton's regenerate action is admin-only, and a public visitor holding a
     // forwarded link cannot take it. SharedStaleMethodologyNotice (report/shared.tsx) supplies
