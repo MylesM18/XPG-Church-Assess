@@ -1,8 +1,21 @@
 import { describe, it, expect } from 'vitest';
+import { isValidElement } from 'react';
 import { buildReportView, type ReportAudience } from '@/lib/report/view';
 import { loadMethodology } from '@/lib/methodology/load';
 import { fallbackProse } from '@/lib/ai/fallback';
 import type { Diagnosis } from '@/lib/engine/types';
+import { VerdictHeader } from '@/app/app/[churchId]/diagnosis/report/cover';
+import { confidenceBand as pdfConfidenceBand } from '@/lib/report/pdf/document';
+
+/** Same tiny walker tests/report/components.test.ts uses locally to read a plain-function
+ *  component's output without a DOM (it's file-local there, not exported, hence duplicated). */
+function textOf(node: unknown): string {
+  if (node === null || node === undefined || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join(' ');
+  if (isValidElement(node)) return textOf((node.props as { children?: unknown }).children);
+  return '';
+}
 
 const methodology = loadMethodology();
 
@@ -63,6 +76,32 @@ describe('report view audience parity (Task 16 drift guard)', () => {
       const v = buildReportView(d, blocks, methodology, { audience });
       expect(v.cover.throughput).toBe(d.throughput);
       expect(v.cover.capacity).toBe(d.capacity);
+    }
+  });
+});
+
+/**
+ * Task 16 review round 2, Finding 1. lib/report/pdf/document.tsx hand-duplicates
+ * app/app/[churchId]/diagnosis/report/cover.tsx's private confidenceBand() (react-pdf cannot
+ * render cover.tsx's DOM output, so only the pure band logic can travel, copied by hand — see
+ * document.tsx's comment on its own confidenceBand for why). This test is what makes that
+ * comment true: it pins the 0.75/0.5 thresholds by checking both implementations agree at each
+ * boundary and just below it — cover.tsx's real behavior via its exported VerdictHeader
+ * component (called directly as a plain function, no DOM/renderer needed — same pattern
+ * tests/report/components.test.ts uses), document.tsx's via its own exported confidenceBand.
+ */
+describe('confidence band parity: cover.tsx (screen/shared) vs document.tsx (pdf)', () => {
+  it('pins the 0.75 and 0.5 thresholds so both hand-duplicated confidenceBand() copies must agree', () => {
+    const cases: Array<{ confidence: number; label: string }> = [
+      { confidence: 0.75, label: 'High' },
+      { confidence: 0.74, label: 'Moderate' },
+      { confidence: 0.5, label: 'Moderate' },
+      { confidence: 0.49, label: 'Low' },
+    ];
+    for (const { confidence, label } of cases) {
+      const screenText = textOf(VerdictHeader({ verdict: 'irrelevant for this test', confidence }));
+      expect(screenText, `screen VerdictHeader at confidence=${confidence}`).toContain(`Confidence: ${label}`);
+      expect(pdfConfidenceBand(confidence).label, `pdf confidenceBand at confidence=${confidence}`).toBe(label);
     }
   });
 });

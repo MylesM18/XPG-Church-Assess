@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PDFParse } from 'pdf-parse';
 import { renderReportDocument } from '@/lib/report/pdf/render';
-import { buildReportView } from '@/lib/report/view';
+import { buildReportView, type ReportView } from '@/lib/report/view';
 import { loadMethodology } from '@/lib/methodology/load';
 import { fallbackProse } from '@/lib/ai/fallback';
 import type { Diagnosis } from '@/lib/engine/types';
@@ -89,16 +89,20 @@ describe('ReportDocument', () => {
   }, 30_000);
 
   // Guards the cover number specifically: the fixture's throughput (55) and capacity (70)
-  // deliberately differ. Re-labelled for the four-layer cover (Task 16) — the PDF now also
-  // legitimately prints "Capacity 70" right next to this on the CoverCard-equivalent subline,
-  // so a bare `.not.toContain('70')` would falsely fail. Anchoring on the "Throughput: " prefix
-  // keeps this test discriminating throughput from capacity at the cover's specific position: a
-  // render site that read view.cover.capacity instead of view.cover.throughput for the headline
-  // would print "Throughput: 70%" here, which the negative assertion below still catches.
+  // deliberately differ. The PDF cover matches cover.tsx's bare `{cover.throughput}%` exactly
+  // (Task 16 review round 2, Finding 2 — an earlier "Throughput: " prefix was unshipped copy
+  // drift, added as a test anchor that copy.tsx's screen version never carries). '%' is
+  // confirmed (by rendering and inspecting the actual extracted text, not assumed) to occur at
+  // exactly one position anywhere in this document's rendered text — the cover score itself —
+  // so a bare '55%' / not-'70%' pair is already fully discriminating without reintroducing a
+  // PDF-only prefix: a render site that read view.cover.capacity instead of view.cover.throughput
+  // for the headline would print "70%" in that one position, which the negative assertion below
+  // still catches, and "Capacity 70" on the line right below it (a legitimate, different string
+  // — no trailing '%') never collides with either assertion.
   it('prints the throughput value, not capacity, as the cover score', async () => {
     const text = await renderText('pdf');
-    expect(text).toContain('Throughput: 55%');
-    expect(text).not.toContain('Throughput: 70%');
+    expect(text).toContain('55%');
+    expect(text).not.toContain('70%');
   }, 30_000);
 
   it('NEVER prints a respondent name in the pdf audience', async () => {
@@ -122,6 +126,14 @@ describe('ReportDocument', () => {
     // unique, single-occurrence strings in this document) so an area name's earlier appearance
     // in Layer 1's AreaTable, or later one in Layer 4's Appendix, cannot mask a Layer-3-specific
     // drop or reorder — every name legitimately appears in all three places.
+    //
+    // This isolation is intentionally coupled to the exact wording of both headings (they are
+    // PDF-only strings — document.tsx's "The eight areas" has no screen equivalent to import a
+    // constant from, and "Appendix — all category scores" is this file's own copy of a heading
+    // shared.tsx's Appendix repeats independently). That coupling is deliberately NOT silent: if
+    // either heading's text is ever edited, `indexOf` returns -1 and the two `toBeGreaterThan`
+    // checks below fail immediately with a message naming exactly which heading went missing —
+    // never a silent pass with an empty or wrong slice.
     const dossierStart = text.indexOf('The eight areas');
     const dossierEnd = text.indexOf('Appendix — all category scores');
     expect(dossierStart, 'expected "The eight areas" heading in the PDF').toBeGreaterThan(-1);
@@ -187,6 +199,43 @@ describe('ReportDocument', () => {
       (async () =>
         renderReportDocument({
           view,
+          churchName: 'Grace Church',
+          brandColor: '#3A4A6B',
+          monogram: 'GC',
+          generatedAt: new Date('2026-07-18T00:00:00Z'),
+        }))(),
+    ).rejects.toThrow('view carries respondent names');
+  });
+
+  // Task 16 review round 2, Finding 3. The guard above only proves the OLD `dispersion` check
+  // fires — today `dispersion` and `system.disagreement` always carry the same names (view.ts
+  // populates both from the same flag, stripped identically for pdf/shared), so a guard that
+  // checked `dispersion` alone would already pass that test even if the `system.disagreement`
+  // check were deleted entirely, or never added. This test isolates the NEW check specifically:
+  // it forces `dispersion` empty while `system.disagreement.respondents` still carries real
+  // names, so only the `system.disagreement` half of the guard's `||` can catch it. If that half
+  // were a no-op (e.g. reverted to checking only `dispersion`), this test — not the one above —
+  // is what would go red.
+  it('throws when only system.disagreement (not dispersion) carries respondent names', async () => {
+    const d = diagnosis();
+    const blocks = fallbackProse(d, methodology);
+    const view = buildReportView(d, blocks, methodology, { audience: 'screen' });
+
+    // Precondition: the screen audience naturally carries the same names in both fields today.
+    expect(view.dispersion?.respondents.length).toBeGreaterThan(0);
+    expect(view.system.disagreement?.respondents.length).toBeGreaterThan(0);
+
+    // Force the divergence Finding 3 warns about: dispersion empty, system.disagreement still
+    // carrying names — the exact shape a future edit (or dispersion's eventual retirement)
+    // could produce if the two strip sites ever fall out of sync.
+    const divergedView: ReportView = { ...view, dispersion: undefined };
+    expect(divergedView.dispersion?.respondents.length).toBeUndefined();
+    expect(divergedView.system.disagreement?.respondents.length).toBeGreaterThan(0);
+
+    await expect(
+      (async () =>
+        renderReportDocument({
+          view: divergedView,
           churchName: 'Grace Church',
           brandColor: '#3A4A6B',
           monogram: 'GC',

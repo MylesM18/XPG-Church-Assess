@@ -91,11 +91,14 @@ export interface ReportDocumentProps {
  * app/app/[churchId]/diagnosis/report/cover.tsx's identical private helper: that
  * file returns DOM elements (h1/p/table), which @react-pdf/renderer's reconciler
  * cannot render, so the component itself cannot be reused here — only the pure
- * band logic can, and cover.tsx does not export it. Keep both in sync by hand;
- * tests/report/audience-parity.test.ts pins the numbers (0.75 / 0.5) that this
- * and cover.tsx's confidenceBand() must agree on.
+ * band logic can, and cover.tsx does not export it. Exported (only from this
+ * file — cover.tsx's own copy stays private) so tests/report/audience-parity.test.ts
+ * can pin the 0.75/0.5 thresholds by calling this directly and comparing it against
+ * cover.tsx's real behavior via its exported VerdictHeader component at the same
+ * boundary values — that test is what actually keeps the two copies in agreement;
+ * keep both in sync by hand if you ever touch either.
  */
-function confidenceBand(c: number): { label: string; low: boolean } {
+export function confidenceBand(c: number): { label: string; low: boolean } {
   if (c >= 0.75) return { label: 'High', low: false };
   if (c >= 0.5) return { label: 'Moderate', low: false };
   return { label: 'Low', low: true };
@@ -212,7 +215,7 @@ export function ReportDocument({
             no PDF/Share buttons here — those are screen-only admin chrome). */}
         <View style={s.coverSection}>
           <Text style={s.coverLabel}>Overall church health</Text>
-          <Text style={s.coverScore}>{`Throughput: ${view.cover.throughput}%`}</Text>
+          <Text style={s.coverScore}>{`${view.cover.throughput}%`}</Text>
           <Text style={s.coverSub}>{`Capacity ${view.cover.capacity}  ·  Gap ${view.cover.gap} pts`}</Text>
           <Text style={s.coverConstraint}>
             {view.cover.constraintName ? `Constraint: ${view.cover.constraintName}` : 'Constraint: none — every stage holding'}
