@@ -102,14 +102,26 @@ export const OffersSchema = z.object({
   no_constraint: OfferSchema,
 });
 
+// A z.record(...) here would validate at load with any subset of the four keys present —
+// `reading[kind][band]!` (lib/report/view.ts) would then read `undefined` for a missing band
+// and crash later on `.length`, well downstream of methodology load, where the missing owner
+// content is far harder to trace back to Task 14's copy.yaml. Naming the four keys makes a
+// missing band a load-time failure instead (see tests/methodology/dossier-reading-bands.test.ts).
+export const DossierReadingBandSchema = z.object({
+  severe: z.string().min(1),
+  broken: z.string().min(1),
+  watch: z.string().min(1),
+  holding: z.string().min(1),
+});
+
 export const CopySchema = z.object({
   version: z.string().min(1),
   blocks: z.record(z.string().min(1)),
   inserts: z.record(z.string().min(1)),
   dossier: z.object({
     reading: z.object({
-      stage: z.record(z.string().min(1)),
-      enabler: z.record(z.string().min(1)),
+      stage: DossierReadingBandSchema,
+      enabler: DossierReadingBandSchema,
     }),
     enabler_belief_only: z.string().min(1),
     calibration_spread: z.string().min(1),
@@ -133,6 +145,7 @@ export type BandBenchmark = z.infer<typeof BandBenchmarkSchema>;
 export type Benchmarks = z.infer<typeof BenchmarksSchema>;
 export type Offer = z.infer<typeof OfferSchema>;
 export type Offers = z.infer<typeof OffersSchema>;
+export type DossierReadingBand = z.infer<typeof DossierReadingBandSchema>;
 export type Copy = z.infer<typeof CopySchema>;
 
 export interface Methodology {

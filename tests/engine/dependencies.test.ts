@@ -61,8 +61,19 @@ describe('dependency map', () => {
     // statement: z.string().min(1) and readDependencies throws on an edge with no
     // authored entry, so a zero-length statement fails methodology LOAD long before
     // this test runs. Restating an upstream guarantee is an unfailable assertion.
+    //
+    // Identity against the SOURCE, not a shape check: whole-branch review finding M2 (T9-a).
+    // `not.toMatch(/TODO|TBD|\{|\}/)` cannot detect an invented statement — a synthesized
+    // string like "sys affects vol" contains no braces and no TODO/TBD marker, so it would
+    // have sailed through the old assertion. Task 10 is the owner authoring all 13
+    // statements; this is the test that actually protects her content from being silently
+    // replaced by a generated placeholder.
+    const authored = new Map(rules.dependencies.map((d) => [`${d.from}->${d.to}`, d.statement]));
     for (const edge of readDependencies(rules, scores, 45)) {
-      expect(edge.statement).not.toMatch(/TODO|TBD|\{|\}/);
+      const key = `${edge.from}->${edge.to}`;
+      const expectedStatement = authored.get(key);
+      expect(expectedStatement, `no authored statement in rules.yaml for edge "${key}"`).toBeDefined();
+      expect(edge.statement).toBe(expectedStatement);
     }
   });
 

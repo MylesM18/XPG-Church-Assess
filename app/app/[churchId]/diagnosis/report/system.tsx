@@ -25,15 +25,18 @@ const READ_LABEL: Record<string, string> = {
  * time" / "nothing to say").
  */
 function readSentence(fromName: string, toName: string, read: string): string {
-  const fLower = fromName.toLowerCase()
-  const tLower = toName.toLowerCase()
+  // Category names are slashed compounds ("Governance / Accountability", "Org Structure /
+  // Systems"), not common nouns — lowercasing them mid-sentence read as broken (whole-branch
+  // review finding M3 / T15-a): "Governance / Accountability is holding — so governance /
+  // accountability is not what's capping your org structure / systems." Use the display
+  // names as given throughout; do not re-case them.
   switch (read) {
     case 'load_bearing':
       return `${fromName} is weak here too — this dependency is active and part of what's costing you.`
     case 'clear':
-      return `${fromName} is holding — so ${fLower} is not what's capping your ${tLower}.`
+      return `${fromName} is holding — so ${fromName} is not what's capping your ${toName}.`
     case 'at_risk':
-      return `${toName} is holding for now, but ${fLower} is weak — it's running on borrowed time.`
+      return `${toName} is holding for now, but ${fromName} is weak — it's running on borrowed time.`
     default: // 'both_strong'
       return 'Both are holding — nothing to flag here.'
   }

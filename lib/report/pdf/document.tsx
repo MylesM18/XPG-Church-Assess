@@ -126,15 +126,16 @@ const DEP_READ_LABEL: Record<string, string> = {
 };
 
 function depReadSentence(fromName: string, toName: string, read: string): string {
-  const fLower = fromName.toLowerCase();
-  const tLower = toName.toLowerCase();
+  // Mirrors system.tsx's readSentence — see its comment (whole-branch review finding M3 /
+  // T15-a) for why the names are never lowercased: they are slashed compounds ("Governance /
+  // Accountability"), not common nouns.
   switch (read) {
     case 'load_bearing':
       return `${fromName} is weak here too — this dependency is active and part of what's costing you.`;
     case 'clear':
-      return `${fromName} is holding — so ${fLower} is not what's capping your ${tLower}.`;
+      return `${fromName} is holding — so ${fromName} is not what's capping your ${toName}.`;
     case 'at_risk':
-      return `${toName} is holding for now, but ${fLower} is weak — it's running on borrowed time.`;
+      return `${toName} is holding for now, but ${fromName} is weak — it's running on borrowed time.`;
     default: // 'both_strong'
       return 'Both are holding — nothing to flag here.';
   }

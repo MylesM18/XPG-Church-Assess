@@ -105,6 +105,9 @@ describe('buildReportView', () => {
     expect(v.evidence).toBeUndefined();
     expect(v.verdict).toBeTruthy();
     expect(v.appendix.categories.length).toBe(2);
+    // M4 (whole-branch review, T13-a): constraintName must be null, not the id 'null' or an
+    // empty string, when there is nothing to name.
+    expect(v.cover.constraintName).toBeNull();
   });
 
   it('drops respondent names for the shared audience but keeps the section', () => {
@@ -159,6 +162,39 @@ describe('buildReportView', () => {
       methodology, { audience: 'screen' });
     expect(v.system.gating).toBe('Address governance before anything else.');
     expect(v.system.gating).toBe(v.gating);
+  });
+
+  // M4 (whole-branch review, T13-a): cover.gatedBy and cover.constraintName had NO assertions
+  // anywhere — both would pass today with a raw id ('gov') where a display name belongs, since
+  // buildCover's `names.get(id) ?? id` silently falls back to the id when resolution fails.
+  // This file's own `diagnosis()`/`blocks()` factories use ids ('guest_experience',
+  // 'connections') that do not exist in the real production methodology (a pre-existing,
+  // separately-noted fixture drift — see progress.md), so reusing them here would make name
+  // resolution silently fail and the "not a raw id" assertions below would be worthless.
+  // Built with REAL production category ids ('guest', 'gov' — methodology/questions.yaml) so
+  // resolution can actually be exercised, not merely typechecked.
+  it('resolves gatedBy to display names and scores, not raw enabler ids', () => {
+    const withGating = diagnosis({
+      primary_constraint: { category_id: 'guest' },
+      evidence_trail: [],
+      categories: [
+        { category_id: 'guest', kind: 'stage', score: 30, belief: null, evidence: null,
+          gap: null, gap_class: null, cohort_percentile: null, state: 'broken', respondent_count: 2, excluded_partial: 0, questionEffects: [] },
+        { category_id: 'gov', kind: 'enabler', score: 31, belief: null, evidence: null,
+          gap: null, gap_class: null, cohort_percentile: null, state: 'gate', respondent_count: 2, excluded_partial: 0, questionEffects: [] },
+      ],
+      gating_conditions: [{ enabler_id: 'gov', note: 'Governance is below the gate line.' }],
+    });
+    const v = buildReportView(withGating, blocks(), methodology, { audience: 'screen' });
+
+    // Empirical: gatedBy must actually be populated before the assertions below mean
+    // anything — confirmed by running this fixture, not assumed from reading buildCover.
+    expect(v.cover.gatedBy).toHaveLength(1);
+    expect(v.cover.gatedBy[0]).toEqual({ name: 'Governance / Accountability', score: 31 });
+    expect(v.cover.gatedBy[0]?.name).not.toBe('gov');
+
+    expect(v.cover.constraintName).toBe('Guest Experience');
+    expect(v.cover.constraintName).not.toBe('guest');
   });
 });
 
