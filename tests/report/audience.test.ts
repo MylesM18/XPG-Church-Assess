@@ -51,4 +51,45 @@ describe('audience privacy', () => {
   it('shared still drops nextStep', () => {
     expect(buildReportView(d, blocks, methodology, { audience: 'shared' }).nextStep).toBeUndefined();
   });
+
+  /**
+   * The describe()-level fixture above makes every chain stage "holding", so
+   * d.primary_constraint is null and fallbackProse() (lib/ai/fallback.ts:33-39) takes its
+   * early-return branch — blocks.dispersion is never computed there (that only happens past
+   * line 78), so buildReportView's TOP-LEVEL `dispersion` field (view.ts:319-327, separate
+   * from `system.disagreement`) is undefined for every audience above and JSON.stringify
+   * drops it silently. That left this second strip site unexercised: a test asserting "no
+   * names in the view" over an always-undefined field can never fail no matter how that
+   * field's respondent-stripping is written.
+   *
+   * This fixture breaks `guest` (both respondents rate it 2, well under thresholds.break=45)
+   * so primary_constraint is non-null and fallbackProse reaches the branch that populates
+   * `dispersion` (lib/ai/fallback.ts:78-81), while `vol` stays asymmetric (2 vs 9, same as
+   * the describe()-level fixture) so the same disagreement flag still fires and feeds it.
+   * guest itself is symmetric (2 vs 2) so it contributes no disagreement of its own — verified
+   * empirically that d2.disagreement_flags contains exactly the vol flag, not guest.
+   */
+  it('pdf and shared also strip the top-level dispersion.respondents once it is actually populated', () => {
+    const d2 = diagnose(
+      ALL.flatMap((id) => [
+        ...answers(methodology, id, id === 'guest' ? 2 : id === 'vol' ? 2 : 8, 'Pastor Dana', 'u-1'),
+        ...answers(methodology, id, id === 'guest' ? 2 : id === 'vol' ? 9 : 7, 'Elder Sam', 'u-2'),
+      ]),
+      methodology,
+      { attendance_band: '100_249' },
+    );
+    const blocks2 = fallbackProse(d2, methodology);
+    // Prove the fixture actually exercises the field under test, rather than assuming it —
+    // the same discipline as the screen/disagreement test above. Without these two asserts,
+    // a regression that made blocks.dispersion undefined again would pass this test silently.
+    expect(d2.primary_constraint).not.toBeNull();
+    expect(blocks2.dispersion).toBeDefined();
+
+    for (const audience of ['pdf', 'shared'] as const) {
+      const v = buildReportView(d2, blocks2, methodology, { audience });
+      expect(v.dispersion).toBeDefined();
+      const json = JSON.stringify(v);
+      for (const name of NAMES) expect(json).not.toContain(name);
+    }
+  });
 });
