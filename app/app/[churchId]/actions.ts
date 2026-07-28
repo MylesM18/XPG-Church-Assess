@@ -4,8 +4,9 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { loadMethodology } from '@/lib/methodology/load'
 import { createClient } from '@/lib/supabase/server'
-import { coverage, type CoverageRow } from '@/lib/coverage/coverage'
-import { diagnose } from '@/lib/engine'
+import { normalize } from '@/lib/engine/normalize'
+import { assemble } from '@/lib/engine/assemble'
+import { diagnosisGate } from '@/lib/coverage/diagnosis-gate'
 import { isKnownBand } from '@/lib/engine/benchmark'
 import type { Response } from '@/lib/engine/types'
 import { responseHash } from '@/lib/report/response-hash'
@@ -30,30 +31,6 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
   const methodology = loadMethodology()
   const categories = methodology.questions.categories
 
-  // HARD GATE (spec §2): never diagnose a partial run — an unanswered category scores 0 → phantom constraint.
-  const { data: coverageData, error: coverageError } = await supabase.rpc('get_run_coverage', {
-    p_church_id: churchId,
-  })
-  if (coverageError) return { ok: false, error: coverageError.message }
-  const rows = (coverageData ?? []) as CoverageRow[]
-  if (coverage(rows, categories).coveredCount !== categories.length) {
-    return { ok: false, error: 'All 8 areas must be answered before generating a diagnosis.' }
-  }
-
-  const { data: church } = await supabase
-    .from('churches')
-    .select('attendance_band')
-    .eq('id', churchId)
-    .maybeSingle()
-  // Require a known attendance band before diagnosing: cohort benchmarks are keyed by it,
-  // and diagnose() (lib/engine/benchmark.ts) throws on an unknown band. Guard here so a
-  // blank/legacy band returns a friendly error instead of a 500. (M5a governance: require band.)
-  const band = church?.attendance_band ?? ''
-  if (!isKnownBand(methodology, band)) {
-    return { ok: false, error: 'Set your church’s weekend attendance band before generating a diagnosis.' }
-  }
-  const ctx = { attendance_band: band }
-
   // Raw per-respondent rows — server-side ONLY, never returned to the browser.
   const { data: raw, error: respError } = await supabase.rpc('get_run_responses', {
     p_church_id: churchId,
@@ -67,7 +44,38 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
     respondent_id: r.respondent_user_id ?? r.respondent_label,
   }))
 
-  const diagnosis = diagnose(responses, methodology, ctx)
+  // HARD GATE (spec §4.6): never diagnose a run where some area has zero respondents who
+  // completed every item in it — an incomplete area's fit is unscoreable (n === 0) → phantom
+  // constraint. normalize() here is the single pass shared with assemble() below, so the gate
+  // and the diagnosis never disagree about what "complete" means.
+  const normalized = normalize(responses, methodology)
+  const gate = diagnosisGate(normalized, categories)
+  if (!gate.ok) {
+    const names = gate.blockedAreas
+      .map((id) => categories.find((c) => c.id === id)?.name ?? id)
+      .join(', ')
+    return {
+      ok: false,
+      error: `Every area needs at least one person who answered all its questions. Still waiting on: ${names}.`,
+    }
+  }
+
+  const { data: church } = await supabase
+    .from('churches')
+    .select('attendance_band')
+    .eq('id', churchId)
+    .maybeSingle()
+  // Require a known attendance band before diagnosing: cohort benchmarks are keyed by it,
+  // and assemble() (via benchmarkFor() in lib/engine/benchmark.ts) throws on an unknown band.
+  // Guard here so a blank/legacy band returns a friendly error instead of a 500. (M5a
+  // governance: require band.)
+  const band = church?.attendance_band ?? ''
+  if (!isKnownBand(methodology, band)) {
+    return { ok: false, error: 'Set your church’s weekend attendance band before generating a diagnosis.' }
+  }
+  const ctx = { attendance_band: band }
+
+  const diagnosis = assemble(normalized, methodology, ctx)
   const hash = responseHash(responses, diagnosis.methodology_version)
 
   const { error: saveError } = await supabase.rpc('save_diagnosis', {
@@ -105,8 +113,9 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
         .limit(1)
         .maybeSingle()
       // An unresolvable run degrades to a cache MISS (generate), never a skip: generateDiagnosis
-      // is one-shot per church — save_diagnosis completes the run and get_run_coverage then
-      // reads nothing, so a second attempt never reaches this block. Forfeiting here on a
+      // is one-shot per church — save_diagnosis completes the run, so get_run_responses' own
+      // in_progress filter then returns nothing, normalize() sees zero responses, diagnosisGate
+      // blocks every area, and a second attempt never reaches this block. Forfeiting here on a
       // transient read failure would reproduce the very harm this scoping fixes. save_prose
       // resolves its own row from church_id + response_hash, so it needs no run id.
       let alreadyAi = false
