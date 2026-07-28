@@ -1,12 +1,15 @@
 begin;
-select plan(17);
+select plan(20);
 
 -- ── strip_respondents: pure function, tested against crafted payloads ──────
+-- These use the LEGACY key, dispersion_flags — rows persisted before Task 13's
+-- engine rename (Diagnosis.dispersion_flags -> disagreement_flags) still carry
+-- it verbatim, and strip_respondents must keep covering them (20260728000200).
 select is(
   strip_respondents('{"overall_score":55,"dispersion_flags":[{"category_id":"guest_experience","spread":2.2,"respondents":[{"label":"Dana Okafor","mean":3.1}]}]}'::jsonb)
     -> 'dispersion_flags' -> 0 -> 'respondents',
   '[]'::jsonb,
-  'strip_respondents empties the respondents array');
+  'strip_respondents empties the respondents array (legacy dispersion_flags key)');
 
 select is(
   strip_respondents('{"overall_score":55,"dispersion_flags":[{"category_id":"guest_experience","spread":2.2,"respondents":[{"label":"Dana Okafor","mean":3.1}]}]}'::jsonb)
@@ -44,6 +47,33 @@ select is(
       -> 'dispersion_flags'),
   2,
   'both flags survive stripping');
+
+-- ── the CURRENT key: disagreement_flags (Task 13 renamed the engine's field;
+-- this is what every diagnosis persisted from here on carries). Before
+-- 20260728000200, strip_respondents only ever checked for the literal key
+-- 'dispersion_flags' — these three assertions fail against that function,
+-- because `p_payload ? 'dispersion_flags'` is false for a disagreement_flags-
+-- keyed payload and the whole strip silently no-ops (the ELSE branch returns
+-- p_payload untouched). That is the fix this migration proves.
+select is(
+  strip_respondents('{"overall_score":55,"disagreement_flags":[{"category_id":"guest","spread":2.2,"respondents":[{"label":"Dana Okafor","mean":3.1}]}]}'::jsonb)
+    -> 'disagreement_flags' -> 0 -> 'respondents',
+  '[]'::jsonb,
+  'strip_respondents empties the respondents array (current disagreement_flags key)');
+
+select is(
+  strip_respondents('{"overall_score":55,"disagreement_flags":[{"category_id":"guest","spread":2.2,"respondents":[{"label":"Dana Okafor","mean":3.1}]}]}'::jsonb)
+    -> 'disagreement_flags' -> 0 -> 'spread',
+  '2.2'::jsonb,
+  'strip_respondents preserves spread on the flag (current disagreement_flags key)');
+
+select is(
+  (select count(*) from jsonb_array_elements(
+     strip_respondents('{"disagreement_flags":[{"respondents":[{"label":"A","mean":1}]},{"respondents":[{"label":"B","mean":2}]}]}'::jsonb)
+       -> 'disagreement_flags') as f
+   where f -> 'respondents' <> '[]'::jsonb),
+  0::bigint,
+  'every flag in a multi-flag payload is stripped (current disagreement_flags key)');
 
 -- ── evidence_trail[].refs: dispersion claims embed the same respondent names, paired
 -- with their individual mean score, in refs like "guest.Dana Okafor" -> 3.1. That is

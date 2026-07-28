@@ -115,6 +115,28 @@ describe('buildReportView', () => {
     expect(v.dispersion?.respondents).toEqual([]);
   });
 
+  // system.disagreement carries the identical respondent list as the top-level
+  // dispersion field (built independently from d.disagreement_flags[0], not from
+  // blocks.dispersion — see lib/report/view.ts's buildSystem), so it needs its own
+  // audience-gating coverage: nothing here proves it mirrors dispersion's stripping
+  // unless it is asserted directly. Mirrors the three tests immediately above.
+  it('keeps respondent names in system.disagreement for the screen audience', () => {
+    const v = buildReportView(diagnosis(WITH_DISPERSION), blocks(), methodology, { audience: 'screen' });
+    expect(v.system.disagreement?.respondents.map((r) => r.label)).toEqual(['Dana Okafor', 'Sam Reyes']);
+  });
+
+  it('drops respondent names from system.disagreement for the pdf audience but keeps the section', () => {
+    const v = buildReportView(diagnosis(WITH_DISPERSION), blocks(), methodology, { audience: 'pdf' });
+    expect(v.system.disagreement).toBeDefined();
+    expect(v.system.disagreement?.respondents).toEqual([]);
+  });
+
+  it('drops respondent names from system.disagreement for the shared audience but keeps the section', () => {
+    const v = buildReportView(diagnosis(WITH_DISPERSION), blocks(), methodology, { audience: 'shared' });
+    expect(v.system.disagreement).toBeDefined();
+    expect(v.system.disagreement?.respondents).toEqual([]);
+  });
+
   it('drops the next-step CTA for the shared audience', () => {
     const v = buildReportView(diagnosis(), blocks(), methodology, { audience: 'shared' });
     expect(v.nextStep).toBeUndefined();
@@ -264,12 +286,16 @@ describe('ReportView shape', () => {
       withForcedBlindSpot, fallbackProse(d, fixtureMethodology), fixtureMethodology, { audience: 'screen' },
     );
     const area = v2.areas.find((a) => a.category_id === 'sys')!;
-    const sysName = fixtureMethodology.questions.categories.find((c) => c.id === 'sys')!.name;
+    // Not a hardcoded sentence: copy.blocks.blind_spot is existing XPG copy Task 14
+    // does not reword (it is not part of the dossier scaffold), but pinning the
+    // exact rendered string here would still break on any future edit to that
+    // template. The belief/evidence/gap numbers are the load-bearing part —
+    // they are what proves the blind-spot branch actually ran, and this
+    // discriminates mutation M1 identically to the literal-string version.
     expect(area.watchFor).not.toBe(fixtureMethodology.copy.dossier.enabler_belief_only);
-    expect(area.watchFor).toBe(
-      `You rated ${sysName} highly, but the countable side tells a different story. ` +
-      'Belief sits at 80, the evidence at 20, a gap of 60 points.',
-    );
+    expect(area.watchFor).toContain('80');
+    expect(area.watchFor).toContain('20');
+    expect(area.watchFor).toContain('60');
   });
 
   it('interpolates the calibration spread into calibrationText rather than leaving the token literal', () => {

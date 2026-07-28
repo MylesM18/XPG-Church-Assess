@@ -1,8 +1,9 @@
 // app/r/[shareToken]/page.tsx
 // Public, tokenized, read-only report. No auth. Rendered with audience 'shared', which is
 // the SECOND of two independent respondent-name strips — get_shared_report already removed
-// them in SQL (strip_respondents empties both disagreement_flags[].respondents and
-// evidence_trail[].refs). Both must fail before a name can leak.
+// them in SQL (strip_respondents empties disagreement_flags[].respondents — and, for rows
+// persisted before Task 13's engine rename, the legacy dispersion_flags[].respondents too
+// (20260728000200) — plus evidence_trail[].refs). Both must fail before a name can leak.
 //
 // Those two strips cover `payload` and nothing else, so this page renders deterministic
 // fallbackProse unconditionally rather than reading AI prose. That is not belt-and-braces:
