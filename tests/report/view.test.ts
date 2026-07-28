@@ -26,6 +26,7 @@ function diagnosis(over: Partial<Diagnosis> = {}): Diagnosis {
     blind_spots: [],
     dispersion_flags: [],
     dependencies: [],
+    correlations: [],
     offer: { call_type: 'Diagnostic call', hook: 'Lets walk the chain together.' },
     confidence: 0.8,
     evidence_trail: [

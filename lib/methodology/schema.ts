@@ -64,6 +64,13 @@ export const RulesSchema = z.object({
     low_response_penalty: z.number(),
     floor: z.number(),
   }),
+  correlation: z.object({
+    min_n: z.number().int().min(2),
+    min_areas_per_person: z.number().int().min(3),
+    practical_floor: z.number().min(0).max(1),
+    max_unexpected: z.number().int().min(0),
+    alpha: z.number().min(0).max(1),
+  }),
 });
 
 export const BandBenchmarkSchema = z.object({

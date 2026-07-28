@@ -49,3 +49,9 @@ constraint_logic: |
 confidence:
   low_response_penalty: 0.15
   floor: 0.4
+correlation:
+  min_n: 18                 # ~80% power to distinguish r ~ 0.6 from zero
+  min_areas_per_person: 4   # leave-two-out style must still rest on >= 2 areas
+  practical_floor: 0.5      # |r| below this is not reported however significant
+  max_unexpected: 2
+  alpha: 0.05

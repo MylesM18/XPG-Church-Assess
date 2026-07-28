@@ -2,6 +2,7 @@ import type { CategoryKind, Offer } from '../methodology/schema';
 import type { AreaFit } from './fit';
 import type { Calibration } from './calibration';
 import type { DependencyEdge } from './dependencies';
+import type { CorrelationAnnotation } from './correlation';
 
 export interface Response {
   category_id: string;
@@ -87,6 +88,7 @@ export interface Diagnosis {
   dispersion_flags: DispersionFlag[];
   calibration: Calibration;
   dependencies: DependencyEdge[];
+  correlations: CorrelationAnnotation[];
   offer: Offer;
   confidence: number;
   evidence_trail: EvidenceReceipt[];

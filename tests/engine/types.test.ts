@@ -18,6 +18,7 @@ describe('engine types', () => {
       dispersion_flags: [],
       calibration: { people: [], spread: 0 },
       dependencies: [],
+      correlations: [],
       offer: { type: 't', call_type: 'c', hook: 'h' },
       confidence: 1,
       evidence_trail: [],

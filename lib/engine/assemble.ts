@@ -17,6 +17,7 @@ import { calibrationFrom, type Calibration } from './calibration';
 import { analyzeConstraint, type ConstraintResult } from './constraint';
 import { throughput, capacity, gap } from './throughput';
 import { readDependencies } from './dependencies';
+import { correlate } from './correlation';
 
 interface Thresholds {
   break: number;
@@ -197,6 +198,11 @@ export function assemble(
 
   const constraint = analyzeConstraint(scores, generosityMeans, methodology, categoryNames);
   const dependencies = readDependencies(methodology.rules, scores, t.break);
+  const correlations = correlate(
+    methodology.questions.categories.map(cat => normalized.get(cat.id)!.fit),
+    calibration,
+    methodology.rules,
+  );
 
   const chainScores = methodology.rules.chain.map(id => scores.get(id) ?? 0);
   const capacityValue = capacity([...scores.values()]);
@@ -217,6 +223,7 @@ export function assemble(
     dispersion_flags,
     calibration,
     dependencies,
+    correlations,
     offer: selectOffer(constraint, methodology),
     confidence: computeConfidence(constraint, categories, methodology),
     evidence_trail: buildEvidenceTrail(constraint, blind_spots, dispersion_flags, normalized, methodology),
