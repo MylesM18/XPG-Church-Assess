@@ -38,7 +38,8 @@ export interface DiagnosisCategory {
   gap_class: GapClass;
   cohort_percentile: number | null;
   state: CategoryState;
-  respondent_count: number;
+  respondent_count: number; // complete respondents in this area (= fit.n)
+  excluded_partial: number; // people with unfinished answers here that did not count
 }
 
 export interface BlindSpot {

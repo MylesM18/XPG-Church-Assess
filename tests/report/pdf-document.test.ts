@@ -18,9 +18,9 @@ function diagnosis(): Diagnosis {
     gap: 15,
     categories: [
       { category_id: 'guest_experience', kind: 'stage', score: 30, belief: null, evidence: null,
-        gap: null, gap_class: null, cohort_percentile: null, state: 'broken', respondent_count: 2 },
+        gap: null, gap_class: null, cohort_percentile: null, state: 'broken', respondent_count: 2, excluded_partial: 0 },
       { category_id: 'connections', kind: 'stage', score: 70, belief: null, evidence: null,
-        gap: null, gap_class: null, cohort_percentile: null, state: 'ok', respondent_count: 2 },
+        gap: null, gap_class: null, cohort_percentile: null, state: 'ok', respondent_count: 2, excluded_partial: 0 },
     ],
     primary_constraint: { category_id: 'guest_experience' },
     contributing: [],

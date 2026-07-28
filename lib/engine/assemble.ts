@@ -180,6 +180,7 @@ export function assemble(
       cohort_percentile,
       state,
       respondent_count: norm.fit.n,
+      excluded_partial: norm.fit.excludedPartial,
     });
 
     if (g.gap_class === 'blind_spot' && g.belief !== null && g.evidence !== null && g.gap !== null) {

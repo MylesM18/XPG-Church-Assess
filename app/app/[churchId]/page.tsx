@@ -11,6 +11,7 @@ import { GenerateButton } from './generate-button'
 import { RefreshOnFocus } from './refresh-on-focus'
 import { InviteMemberForm } from './access/invite-member-form'
 import { buildMemberMatrix, type MatrixMember, type MemberCategoryCoverageRow, type MemberMatrixRow } from '@/lib/coverage/member-matrix'
+import { partialNudges } from '@/lib/coverage/partial-nudge'
 import { MemberCoverageMatrix } from './member-coverage-matrix'
 
 function gatesLabel(gates: 'all' | string[] | undefined): string {
@@ -122,6 +123,14 @@ export default async function DashboardPage({
   const blockedAreaNames = dashboardGate.blockedAreas
     .map((id) => categories.find((c) => c.id === id)?.name ?? id)
     .join(', ')
+
+  // A partial respondent (started an area, didn't finish it) is dropped from that area's score,
+  // not down-weighted (spec §4.5) — so the admin should know what it cost. Derived from the
+  // member matrix rather than the diagnosis, so it shows up before a diagnosis exists.
+  const partialNudgeRows = partialNudges(memberMatrix, categories).map((n) => ({
+    ...n,
+    name: categories.find((c) => c.id === n.category_id)?.name ?? n.category_id,
+  }))
 
   let hasDiagnosis = false
   if (isAdmin) {
@@ -247,6 +256,18 @@ export default async function DashboardPage({
 
       {isAdmin && (
         <MemberCoverageMatrix matrix={memberMatrix} categories={categories} currentUserId={user?.id ?? null} />
+      )}
+
+      {isAdmin && partialNudgeRows.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {partialNudgeRows.map((n) => (
+            <p key={n.category_id} className="font-body text-sm text-ink-soft">
+              {n.count === 1
+                ? `1 person has unfinished answers in ${n.name} that aren't counting.`
+                : `${n.count} people have unfinished answers in ${n.name} that aren't counting.`}
+            </p>
+          ))}
+        </div>
       )}
     </main>
   )
