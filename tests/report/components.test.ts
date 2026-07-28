@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { isValidElement, type ReactElement } from 'react';
 import { AreaDossier } from '../../app/app/[churchId]/diagnosis/report/dossier';
 import {
+  Appendix,
   ReportBody,
   StaleMethodologyNotice,
   SharedStaleMethodologyNotice,
@@ -160,5 +161,25 @@ describe('SharedStaleMethodologyNotice', () => {
     expect(types, 'expected an <h1> in the tree').toContain('h1');
     expect(types, 'must not be demoted back to <h2>').not.toContain('h2');
     expect(textOf(tree)).toMatch(/This shared report isn.t ready yet/);
+  });
+});
+
+// --- Appendix: the benchmark + dependency disclosure caveats (Task 10, b1) -------------------
+//
+// The ReportBody tests above never see Appendix's caveat <p>s: walk()/textOf() descend only an
+// element's `children`, and Appendix receives both notes as PROPS, so its body is never invoked
+// by them (which is also why adding the second caveat breaks no existing test). This calls the
+// component directly so its rendered text is actually asserted — both notes must be present.
+describe('Appendix', () => {
+  it('renders both the benchmark note and the dependency disclosure note', () => {
+    const tree = Appendix({
+      categories: view.appendix.categories,
+      stages: view.stages,
+      benchmarkNote: 'Benchmarks are provisional priors.',
+      dependencyNote: 'Dependencies are a working model.',
+    });
+    const text = textOf(tree);
+    expect(text).toContain('Benchmarks are provisional priors.');
+    expect(text).toContain('Dependencies are a working model.');
   });
 });

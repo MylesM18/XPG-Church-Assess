@@ -182,6 +182,7 @@ export default async function SharedReportPage({
         categories={view.appendix.categories}
         stages={view.stages}
         benchmarkNote={view.appendix.benchmarkNote}
+        dependencyNote={view.appendix.dependencyNote}
       />
 
       <p className="font-body text-sm text-ink-soft">

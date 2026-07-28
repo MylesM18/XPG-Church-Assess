@@ -169,6 +169,14 @@ describe('ReportDocument', () => {
     expect(text.length).toBeGreaterThan(200);
   }, 30_000);
 
+  // The dependency disclosure caveat (inserts.dependency_note) sits beside the benchmark caveat
+  // in the appendix. 'working model' is unique to it (the benchmark note reads "provisional
+  // priors"), so this asserts the dependency <Text> actually renders. Real pdf-parse extraction.
+  it('renders the dependency disclosure note in the appendix', async () => {
+    const text = await renderText('pdf');
+    expect(text).toContain('working model');
+  }, 30_000);
+
   // The 'pdf' audience rendering successfully (and the sibling tests above
   // proving no respondent name is present in that output) is already covered
   // by the tests above, so it isn't repeated here. This test proves the

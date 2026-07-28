@@ -59,7 +59,7 @@ export interface ReportView {
   gating?: string;
   dispersion?: { text: string; respondents: Array<{ label: string; mean: number }> };
   nextStep?: { callType: string; hook: string; text: string };
-  appendix: { categories: Array<DiagnosisCategory & { name: string }>; benchmarkNote: string };
+  appendix: { categories: Array<DiagnosisCategory & { name: string }>; benchmarkNote: string; dependencyNote: string };
   cover: CoverView;
   areas: AreaDossierView[];
   system: SystemView;
@@ -348,6 +348,7 @@ export function buildReportView(
     appendix: {
       categories: d.categories.map((c) => ({ ...c, name: names.get(c.category_id) ?? c.category_id })),
       benchmarkNote: blocks.benchmark_note,
+      dependencyNote: blocks.dependency_note,
     },
 
     cover: buildCover(d, methodology),

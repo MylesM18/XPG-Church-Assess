@@ -46,6 +46,7 @@ function blocks(over: Partial<ReportBlocks> = {}): ReportBlocks {
     verdict: 'Guest Experience is the constraint. It scored 30 out of 100.',
     next_step: 'Start with the first weekend touchpoint.',
     benchmark_note: 'Benchmarks are provisional priors.',
+    dependency_note: 'Dependencies are a working model.',
     ...over,
   };
 }
@@ -195,6 +196,15 @@ describe('buildReportView', () => {
 
     expect(v.cover.constraintName).toBe('Guest Experience');
     expect(v.cover.constraintName).not.toBe('guest');
+  });
+
+  // Coverage lock for the session-19 view.ts threading: appendix.dependencyNote must mirror
+  // blocks.dependency_note verbatim. Goes red if the `dependencyNote: blocks.dependency_note`
+  // line is ever dropped from buildReportView (it would then be undefined, not the note string).
+  it('threads the dependency note onto the appendix', () => {
+    const b = blocks();
+    const v = buildReportView(diagnosis(), b, methodology, { audience: 'screen' });
+    expect(v.appendix.dependencyNote).toBe(b.dependency_note);
   });
 });
 

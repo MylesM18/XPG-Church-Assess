@@ -21,17 +21,23 @@ describe('offers.yaml', () => {
 });
 
 describe('copy.yaml', () => {
-  it('has the seven blocks and three inserts', () => {
+  it('has the seven blocks and four inserts', () => {
     expect(Object.keys(copy.blocks).sort()).toEqual(
       ['blind_spot', 'cost', 'do_not_work_on', 'evidence', 'next_step', 'verdict', 'verdict_no_constraint'],
     );
-    expect(Object.keys(copy.inserts).sort()).toEqual(['benchmark_note', 'dispersion', 'gating']);
+    expect(Object.keys(copy.inserts).sort()).toEqual(['benchmark_note', 'dependency_note', 'dispersion', 'gating']);
   });
   it('verdict references the primary-name token', () => {
     expect(copy.blocks.verdict).toContain('{primary_name}');
   });
   it('the benchmark note states scores are vs provisional priors', () => {
     expect(copy.inserts.benchmark_note!.toLowerCase()).toContain('prior');
+  });
+  it('the dependency note discloses a working model, not an observed causal finding', () => {
+    expect(copy.inserts.dependency_note).toBeTruthy();
+    const note = (copy.inserts.dependency_note ?? '').toLowerCase();
+    expect(note).toContain('working model');
+    expect(note).toContain('not an observed causal finding');
   });
   it('contains no em-dashes anywhere (register rule)', () => {
     const all = [...Object.values(copy.blocks), ...Object.values(copy.inserts)].join('\n');

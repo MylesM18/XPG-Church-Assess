@@ -11,6 +11,7 @@ inserts:
   gating: "Before this can hold, address {gating_list}. These are the ground the fix stands on."
   dispersion: "Your leaders do not agree on {disp_name}. Answers ranged across {disp_spread} points. That disagreement is itself the finding."
   benchmark_note: "Benchmarks are XPG provisional priors, not an observed cohort yet."
+  dependency_note: "Dependencies are XPG's working model of how these areas compound, not an observed causal finding."
 # DOSSIER COPY IS XPG METHODOLOGY (spec §10).
 # The values below are PLACEHOLDERS pending Natalie's authoring — see Task 14.
 # DO NOT SHIP TO A CUSTOMER WITH THESE IN PLACE.

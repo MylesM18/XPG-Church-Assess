@@ -49,11 +49,12 @@ export function NextStep({
  * shared cannot drift apart on section content (lib/report/view.ts).
  */
 export function Appendix({
-  categories, stages, benchmarkNote,
+  categories, stages, benchmarkNote, dependencyNote,
 }: {
   categories: Array<DiagnosisCategory & { name: string }>
   stages: StageView[]
   benchmarkNote: string
+  dependencyNote: string
 }) {
   const chainIds = stages.map((s) => s.category_id)
   return (
@@ -72,6 +73,7 @@ export function Appendix({
         })}
       </ul>
       <p className="font-body text-xs text-ink-soft">{benchmarkNote}</p>
+      <p className="font-body text-xs text-ink-soft">{dependencyNote}</p>
     </section>
   )
 }
@@ -197,7 +199,7 @@ export function ReportBody({
       {view.nextStep && (
         <NextStep callType={view.nextStep.callType} hook={view.nextStep.hook} nextStep={view.nextStep.text} />
       )}
-      <Appendix categories={view.appendix.categories} stages={view.stages} benchmarkNote={view.appendix.benchmarkNote} />
+      <Appendix categories={view.appendix.categories} stages={view.stages} benchmarkNote={view.appendix.benchmarkNote} dependencyNote={view.appendix.dependencyNote} />
     </>
   )
 }

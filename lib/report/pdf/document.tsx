@@ -376,6 +376,7 @@ export function ReportDocument({
             );
           })}
           <Text style={s.caveat}>{view.appendix.benchmarkNote}</Text>
+          <Text style={s.caveat}>{view.appendix.dependencyNote}</Text>
         </View>
 
         <View style={s.footer} fixed>

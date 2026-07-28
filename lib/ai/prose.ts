@@ -1,8 +1,8 @@
 import { z } from 'zod/v4';
 
 /**
- * Mirrors the shipped 9-field ReportBlocks contract (lib/ai/fallback.ts).
- * Required: verdict, next_step, benchmark_note. The 6 optional fields are
+ * Mirrors the shipped 10-field ReportBlocks contract (lib/ai/fallback.ts).
+ * Required: verdict, next_step, benchmark_note, dependency_note. The 6 optional fields are
  * `.nullable()` (present-but-null) rather than `.optional()`: Anthropic strict
  * structured outputs emit every property, so the model returns null for an
  * absent field. passesFactCheck (Task 2) treats null/undefined/'' identically,
@@ -18,6 +18,7 @@ export const ReportBlocksSchema = z.object({
   gating: z.string().nullable(),
   dispersion: z.string().nullable(),
   benchmark_note: z.string(),
+  dependency_note: z.string(),
 });
 
 export type ParsedBlocks = z.infer<typeof ReportBlocksSchema>;
@@ -153,6 +154,7 @@ function toReportBlocks(p: ParsedBlocks): ReportBlocks {
     gating: p.gating ?? undefined,
     dispersion: p.dispersion ?? undefined,
     benchmark_note: p.benchmark_note,
+    dependency_note: p.dependency_note,
   };
 }
 
