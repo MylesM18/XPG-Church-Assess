@@ -1,7 +1,13 @@
 // app/app/[churchId]/diagnosis/report/system.tsx
 import type { SystemView } from '@/lib/report/view'
+import type { EdgeRead } from '@/lib/engine/dependencies'
 
-const READ_ORDER = ['load_bearing', 'at_risk', 'clear', 'both_strong'] as const
+// `satisfies readonly EdgeRead[]`, not just `as const`: SystemView.dependencies[].read is
+// widened to plain `string` (lib/report/view.ts), so without this every value here was
+// unchecked against the real EdgeRead union — a typo'd or since-renamed read value would
+// compile silently and that edge would simply vanish from every group in DependencyMap below,
+// never rendered, with nothing to catch it. This makes an invalid entry a compile error instead.
+const READ_ORDER = ['load_bearing', 'at_risk', 'clear', 'both_strong'] as const satisfies readonly EdgeRead[]
 
 const READ_LABEL: Record<string, string> = {
   load_bearing: 'Load-bearing',
@@ -112,15 +118,19 @@ export function DependencyMap({ system }: { system: SystemView }) {
 
 /**
  * Rating-style spread, unnamed on every surface (spec §7.5 decision 7): only a
- * number and a pre-interpolated sentence cross this component's props, so it
- * cannot carry a respondent name even by accident.
+ * pre-interpolated sentence crosses this component's props, so it cannot carry
+ * a respondent name even by accident. `spread` stays part of the signature
+ * (matching the interface `Calibration({ spread, text })`) even though the
+ * body no longer prints it a second time: `text` already has it interpolated
+ * (methodology/copy.yaml's `calibration_spread` template, applied in
+ * lib/report/view.ts's `calibrationText`), so a second "Spread: N points"
+ * line here was a duplicate of the same number, not a second fact.
  */
-export function Calibration({ spread, text }: { spread: number; text: string }) {
+export function Calibration({ text }: { spread: number; text: string }) {
   return (
     <section className="flex flex-col gap-1">
       <h2 className="font-display text-xl text-ink">Calibration</h2>
       <p className="font-body text-ink">{text}</p>
-      <p className="font-body text-sm text-ink-soft">{`Spread: ${spread} points`}</p>
     </section>
   )
 }

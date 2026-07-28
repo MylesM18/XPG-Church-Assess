@@ -73,7 +73,7 @@ export default async function SharedReportPage({
         >
           {brand.monogram}
         </div>
-        <p className="font-display text-lg text-ink">{row.church_name}</p>
+        <h1 className="font-display text-lg text-ink">{row.church_name}</h1>
       </div>
 
       <VerdictHeader verdict={view.verdict} confidence={view.confidence} />

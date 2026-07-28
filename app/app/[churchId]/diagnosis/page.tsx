@@ -89,31 +89,36 @@ export default async function DiagnosisPage({
         <p className="font-display text-lg text-ink">{church.name}</p>
       </div>
 
-      <div className="flex flex-col gap-4">
-        <a
-          href={`/api/report/${run!.id}/pdf`}
-          className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-        >
-          Download PDF
-        </a>
-
-        {isAdmin && (
-          <ShareControl
-            churchId={churchId}
-            runId={run!.id}
-            existingLink={existingShareToken ? shareLink(APP_URL, existingShareToken) : null}
-          />
-        )}
-      </div>
-
       {/* diagnoses.payload is cached JSONB — a pre-reform row is methodology_version '0.1.0'
           and carries no throughput/cover/areas/system. ReportBody holds that comparison and
-          the branch it drives (spec §5.4); this page only fetches data and delegates. */}
+          the branch it drives (spec §5.4); this page only fetches data and delegates. The PDF/
+          Share controls are passed in as layer1Actions rather than rendered here directly, so
+          they land at the spec §7 Layer 1 position (after AreaTable, before ChainWalk) instead
+          of above the whole report — they need run.id/isAdmin/the share token, which is why
+          they're built here and not inside ReportBody itself. */}
       <ReportBody
         storedVersion={diagnosis.methodology_version}
         currentVersion={methodology.questions.version}
         view={view}
         churchId={churchId}
+        layer1Actions={
+          <div className="flex flex-col gap-4">
+            <a
+              href={`/api/report/${run!.id}/pdf`}
+              className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              Download PDF
+            </a>
+
+            {isAdmin && (
+              <ShareControl
+                churchId={churchId}
+                runId={run!.id}
+                existingLink={existingShareToken ? shareLink(APP_URL, existingShareToken) : null}
+              />
+            )}
+          </div>
+        }
       />
     </main>
   )

@@ -10,13 +10,6 @@ import { ChainWalk, EvidenceReceipt, CostSection } from './chain'
 import { DependencyMap, Calibration, Disagreement, GatingFlags } from './system'
 import { AreaDossier } from './dossier'
 
-// Confidence band — UI-only presentation mapping, explicitly separate from methodology YAML (spec §7).
-export function confidenceBand(c: number): { label: string; low: boolean } {
-  if (c >= 0.75) return { label: 'High', low: false }
-  if (c >= 0.5) return { label: 'Moderate', low: false }
-  return { label: 'Low', low: true }
-}
-
 export function EmptyState({ churchId }: { churchId: string }) {
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col items-start gap-4 px-6 py-16">
@@ -119,12 +112,22 @@ export function StaleMethodologyNotice({
  * branching logic of its own.
  */
 export function ReportBody({
-  storedVersion, currentVersion, view, churchId,
+  storedVersion, currentVersion, view, churchId, layer1Actions,
 }: {
   storedVersion: string
   currentVersion: string
   view: ReportView
   churchId: string
+  /**
+   * Screen chrome (PDF/Share buttons) that sits at the tail of Layer 1, per
+   * spec §7's fixed order `CoverCard · VerdictHeader · AreaTable · [PDF/Share
+   * buttons]`. Optional and rendered only on the fresh branch: page.tsx owns
+   * these controls (they need `run.id`/`isAdmin`/the share token, none of
+   * which belong on this otherwise-pure component's props), but ReportBody
+   * owns the stale-vs-fresh decision and therefore the only place that can
+   * put them in the spec's exact position relative to the four layers.
+   */
+  layer1Actions?: ReactNode
 }) {
   if (storedVersion !== currentVersion) {
     return (
@@ -140,6 +143,7 @@ export function ReportBody({
       <CoverCard cover={view.cover} />
       <VerdictHeader verdict={view.verdict} confidence={view.confidence} />
       <AreaTable areas={view.areas} />
+      {layer1Actions}
 
       {/* Layer 2 — how your system behaves */}
       <ChainWalk stages={view.stages} />

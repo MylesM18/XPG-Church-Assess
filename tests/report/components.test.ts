@@ -53,6 +53,15 @@ describe('AreaDossier', () => {
     for (const label of ['Reading', 'Inside it', 'Agreement', 'Position', 'Depends on', 'Watch for']) {
       expect(text).toContain(label);
     }
+    // Values, not just labels: a field() that rendered <dt>{label}</dt> and dropped the <dd>
+    // entirely would still pass every assertion above — the label loop only proves the LABEL
+    // text is present, never that its value is. Pin all six values explicitly.
+    expect(text).toContain('Discipleship is holding but not compounding.'); // reading
+    expect(text).toContain('D3 sits 18 points below the rest of this area.'); // insideIt
+    expect(text).toContain('Tight — your leaders read this area the same way.'); // agreement
+    expect(text).toContain('p62 of the benchmark prior'); // position
+    expect(text).toContain('Systems (74) gates this · feeds Volunteers (48)'); // dependsOn, joined
+    expect(text).toContain('Belief runs 22 points ahead of the countable evidence.'); // watchFor
     // inline, not collapsed — no accordion element anywhere in the tree (spec §7.8)
     expect(walk(tree).some((n) => n.type === 'details')).toBe(false);
   });
@@ -62,6 +71,17 @@ describe('AreaDossier', () => {
     for (const label of ['Reading', 'Inside it', 'Agreement', 'Position', 'Depends on', 'Watch for']) {
       expect(text).toContain(label);
     }
+    // Occurrence-count equality, not a presence check: exactly the three nulled fields
+    // (insideIt, agreement, watchFor) must render the explicit unavailability line — a field()
+    // that dropped a <dd> silently (rendering neither the value nor "Not available...") would
+    // pass the label loop above but fail this count.
+    const unavailableCount = (text.match(/Not available for this area\./g) ?? []).length;
+    expect(unavailableCount).toBe(3);
+    // And the three fields that were NOT nulled must still show their real values, not a blank
+    // and not the unavailability line either.
+    expect(text).toContain('Discipleship is holding but not compounding.'); // reading — untouched
+    expect(text).toContain('p62 of the benchmark prior'); // position — untouched
+    expect(text).toContain('Systems (74) gates this · feeds Volunteers (48)'); // dependsOn — untouched
   });
 });
 

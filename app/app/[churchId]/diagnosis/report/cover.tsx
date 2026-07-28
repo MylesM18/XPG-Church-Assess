@@ -1,10 +1,23 @@
 // app/app/[churchId]/diagnosis/report/cover.tsx
-import { confidenceBand } from './shared'
 import type { CoverView, AreaDossierView } from '@/lib/report/view'
+
+// Confidence band — UI-only presentation mapping, explicitly separate from methodology YAML
+// (spec §7). Defined here rather than in shared.tsx: its only consumer is VerdictHeader below,
+// and shared.tsx already imports CoverCard/VerdictHeader/AreaTable from this file for
+// ReportBody's assembly — defining it in shared.tsx and importing it back here made this
+// module and shared.tsx import each other (shared.tsx -> cover.tsx -> shared.tsx). It happened
+// to be safe (both references are inside function bodies, never at module-init time — the value
+// itself is stable regardless), but it was needless: co-locating this with its one caller
+// removes the cycle instead of merely tolerating it.
+function confidenceBand(c: number): { label: string; low: boolean } {
+  if (c >= 0.75) return { label: 'High', low: false }
+  if (c >= 0.5) return { label: 'Moderate', low: false }
+  return { label: 'Low', low: true }
+}
 
 /**
  * Coarse, UI-only score band for the Layer 1 roll-up table — same spirit as
- * confidenceBand() below: presentation only, explicitly separate from the
+ * confidenceBand() above: presentation only, explicitly separate from the
  * methodology YAML (spec §7). It reuses the two numbers that already ARE the
  * methodology's own thresholds (methodology/rules.yaml thresholds.severe=25,
  * thresholds.break=thresholds.gate=45) because those are the stable, meaningful
