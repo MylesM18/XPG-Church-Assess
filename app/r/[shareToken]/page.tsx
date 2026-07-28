@@ -26,7 +26,7 @@ import { CoverCard, VerdictHeader, AreaTable } from '@/app/app/[churchId]/diagno
 import { ChainWalk, EvidenceReceipt, CostSection } from '@/app/app/[churchId]/diagnosis/report/chain'
 import { DependencyMap, Calibration, Disagreement, GatingFlags } from '@/app/app/[churchId]/diagnosis/report/system'
 import { AreaDossier } from '@/app/app/[churchId]/diagnosis/report/dossier'
-import { NextStep, Appendix } from '@/app/app/[churchId]/diagnosis/report/shared'
+import { NextStep, Appendix, SharedStaleMethodologyNotice } from '@/app/app/[churchId]/diagnosis/report/shared'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -76,11 +76,11 @@ export default async function SharedReportPage({
   if (resolution.stale) {
     // No admin action is offered here (unlike StaleMethodologyNotice on the authenticated
     // page): GenerateButton's regenerate action is admin-only, and a public visitor holding a
-    // forwarded link cannot take it. Deliberately not an <h1>: tests/a11y/shared-report-heading
-    // -test.ts statically counts this file's own <h1> occurrences regardless of which runtime
-    // branch executes, and the fresh branch below still unconditionally contains the literal
-    // text <CoverCard> — the page's one true <h1> — so a second literal <h1> here would break
-    // that count on every reading of this file, not only when this branch actually renders.
+    // forwarded link cannot take it. SharedStaleMethodologyNotice (report/shared.tsx) supplies
+    // this branch's <h1> from ANOTHER file — exactly how <CoverCard> supplies the fresh branch's
+    // <h1> below — so this file's own literal <h1> count stays 0 either way, and
+    // tests/a11y/shared-report-heading.test.ts (which sums this file's <h1>s with cover.tsx's
+    // and requires exactly one) holds regardless of which branch actually renders.
     return (
       <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
         <div className="flex items-center gap-3">
@@ -92,13 +92,7 @@ export default async function SharedReportPage({
           </div>
           <p className="font-display text-lg text-ink">{row.church_name}</p>
         </div>
-        <section className="flex flex-col items-start gap-4 rounded-lg border border-line bg-paper p-6">
-          <h2 className="font-display text-xl text-ink">This shared report is out of date</h2>
-          <p className="font-body text-ink-soft">
-            This link was generated under an earlier version of the assessment and can no longer
-            be displayed. Ask a church admin to regenerate the diagnosis and share a fresh link.
-          </p>
-        </section>
+        <SharedStaleMethodologyNotice />
         <p className="font-body text-sm text-ink-soft">
           Shared read-only view. This link expires and can be revoked at any time.
         </p>
