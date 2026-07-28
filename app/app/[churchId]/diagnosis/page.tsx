@@ -12,10 +12,8 @@ import {
   VerdictHeader,
   ChainWalk,
   EvidenceReceipt,
-  BlindSpots,
   CostSection,
   GatingFlags,
-  GenerositySplit,
   Disagreement,
   NextStep,
   Appendix,
@@ -120,10 +118,8 @@ export default async function DiagnosisPage({
       <ChainWalk stages={view.stages} />
 
       {view.evidence && <EvidenceReceipt text={view.evidence.text} refs={view.evidence.refs} />}
-      {view.blindSpot && <BlindSpots text={view.blindSpot} />}
       {view.cost && <CostSection cost={view.cost.cost} doNotWorkOn={view.cost.doNotWorkOn} />}
       {view.gating && <GatingFlags text={view.gating} />}
-      {view.generosityMode !== null && <GenerositySplit mode={view.generosityMode} />}
       {view.dispersion && (
         <Disagreement text={view.dispersion.text} respondents={view.dispersion.respondents} />
       )}

@@ -6,7 +6,7 @@ import type {
   DiagnosisCategory,
   CategoryState,
   BlindSpot,
-  DispersionFlag,
+  DisagreementFlag,
   EvidenceReceipt,
 } from './types';
 import { scoreFromFit } from './fit';
@@ -91,7 +91,7 @@ function computeConfidence(
 function buildEvidenceTrail(
   constraint: ConstraintResult,
   blindSpots: BlindSpot[],
-  dispersionFlags: DispersionFlag[],
+  disagreementFlags: DisagreementFlag[],
   normalized: Map<string, NormalizedCategory>,
   methodology: Methodology,
 ): EvidenceReceipt[] {
@@ -117,7 +117,7 @@ function buildEvidenceTrail(
     });
   }
 
-  for (const d of dispersionFlags) {
+  for (const d of disagreementFlags) {
     trail.push({
       claim: `dispersion:${d.category_id}`,
       refs: d.respondents.map(r => ({
@@ -154,7 +154,7 @@ export function assemble(
   const scores = new Map<string, number>();
   const categories: DiagnosisCategory[] = [];
   const blind_spots: BlindSpot[] = [];
-  const dispersion_flags: DispersionFlag[] = [];
+  const disagreement_flags: DisagreementFlag[] = [];
 
   const calibration: Calibration = calibrationFrom(
     methodology.questions.categories.map(c => normalized.get(c.id)!.fit),
@@ -181,6 +181,7 @@ export function assemble(
       state,
       respondent_count: norm.fit.n,
       excluded_partial: norm.fit.excludedPartial,
+      questionEffects: norm.fit.questionEffects,
     });
 
     if (g.gap_class === 'blind_spot' && g.belief !== null && g.evidence !== null && g.gap !== null) {
@@ -188,7 +189,7 @@ export function assemble(
     }
 
     const disp = disagreementFor(norm.fit, calibration, norm.respondentMeans, t.dispersion);
-    if (disp) dispersion_flags.push(disp);
+    if (disp) disagreement_flags.push(disp);
   }
 
   const genNorm = normalized.get('gen')!;
@@ -221,12 +222,12 @@ export function assemble(
     gating_conditions: constraint.gating_conditions,
     generosity_mode: constraint.generosity_mode,
     blind_spots,
-    dispersion_flags,
+    disagreement_flags,
     calibration,
     dependencies,
     correlations,
     offer: selectOffer(constraint, methodology),
     confidence: computeConfidence(constraint, categories, methodology),
-    evidence_trail: buildEvidenceTrail(constraint, blind_spots, dispersion_flags, normalized, methodology),
+    evidence_trail: buildEvidenceTrail(constraint, blind_spots, disagreement_flags, normalized, methodology),
   };
 }

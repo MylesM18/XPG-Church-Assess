@@ -1,7 +1,6 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import type { ReportView } from '../view';
 import { registerReportFonts, FONT_DISPLAY, FONT_BODY } from './fonts';
-import { GENEROSITY_COPY } from '../copy';
 
 registerReportFonts();
 
@@ -95,13 +94,6 @@ export function ReportDocument({
           </View>
         )}
 
-        {view.blindSpot && (
-          <View style={s.section}>
-            <Text style={s.h2}>Blind spots</Text>
-            <Text>{view.blindSpot}</Text>
-          </View>
-        )}
-
         {view.cost && (
           <View style={s.section}>
             <Text style={s.h2}>What it is costing you</Text>
@@ -114,13 +106,6 @@ export function ReportDocument({
           <View style={s.section}>
             <Text style={s.h2}>Conditions to clear first</Text>
             <Text>{view.gating}</Text>
-          </View>
-        )}
-
-        {view.generosityMode !== null && (
-          <View style={s.section}>
-            <Text style={s.h2}>Generosity</Text>
-            <Text>{GENEROSITY_COPY[view.generosityMode]}</Text>
           </View>
         )}
 

@@ -3,6 +3,7 @@ import type { AreaFit } from './fit';
 import type { Calibration } from './calibration';
 import type { DependencyEdge } from './dependencies';
 import type { CorrelationAnnotation } from './correlation';
+import type { DisagreementFlag } from './disagreement';
 
 export interface Response {
   category_id: string;
@@ -40,6 +41,7 @@ export interface DiagnosisCategory {
   state: CategoryState;
   respondent_count: number; // complete respondents in this area (= fit.n)
   excluded_partial: number; // people with unfinished answers here that did not count
+  questionEffects: Array<{ item_id: string; effect: number }>; // = fit.questionEffects → dossier "Inside it" (spec §7.2)
 }
 
 export interface BlindSpot {
@@ -49,9 +51,7 @@ export interface BlindSpot {
   gap: number;
 }
 
-export type { DisagreementFlag } from './disagreement';
-/** @deprecated use DisagreementFlag — kept until the report layer is reshaped (Task 13). */
-export type DispersionFlag = import('./disagreement').DisagreementFlag;
+export type { DisagreementFlag };
 
 export interface DoNotWorkOn {
   category_id: string;
@@ -86,7 +86,7 @@ export interface Diagnosis {
   gating_conditions: GatingCondition[];
   generosity_mode: GenerosityMode;
   blind_spots: BlindSpot[];
-  dispersion_flags: DispersionFlag[];
+  disagreement_flags: DisagreementFlag[];
   calibration: Calibration;
   dependencies: DependencyEdge[];
   correlations: CorrelationAnnotation[];

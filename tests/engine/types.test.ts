@@ -15,7 +15,7 @@ describe('engine types', () => {
       gating_conditions: [],
       generosity_mode: null,
       blind_spots: [],
-      dispersion_flags: [],
+      disagreement_flags: [],
       calibration: { people: [], spread: 0 },
       dependencies: [],
       correlations: [],

@@ -1,7 +1,7 @@
 // app/r/[shareToken]/page.tsx
 // Public, tokenized, read-only report. No auth. Rendered with audience 'shared', which is
 // the SECOND of two independent respondent-name strips — get_shared_report already removed
-// them in SQL (strip_respondents empties both dispersion_flags[].respondents and
+// them in SQL (strip_respondents empties both disagreement_flags[].respondents and
 // evidence_trail[].refs). Both must fail before a name can leak.
 //
 // Those two strips cover `payload` and nothing else, so this page renders deterministic
@@ -25,10 +25,8 @@ import {
   VerdictHeader,
   ChainWalk,
   EvidenceReceipt,
-  BlindSpots,
   CostSection,
   GatingFlags,
-  GenerositySplit,
   Disagreement,
   NextStep,
   Appendix,
@@ -85,10 +83,8 @@ export default async function SharedReportPage({
       <ChainWalk stages={view.stages} />
 
       {view.evidence && <EvidenceReceipt text={view.evidence.text} refs={view.evidence.refs} />}
-      {view.blindSpot && <BlindSpots text={view.blindSpot} />}
       {view.cost && <CostSection cost={view.cost.cost} doNotWorkOn={view.cost.doNotWorkOn} />}
       {view.gating && <GatingFlags text={view.gating} />}
-      {view.generosityMode !== null && <GenerositySplit mode={view.generosityMode} />}
       {view.dispersion && (
         <Disagreement text={view.dispersion.text} respondents={view.dispersion.respondents} />
       )}

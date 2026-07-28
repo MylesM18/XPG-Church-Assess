@@ -3,6 +3,9 @@ import { buildReportView } from '@/lib/report/view';
 import { loadMethodology } from '@/lib/methodology/load';
 import type { Diagnosis } from '@/lib/engine/types';
 import type { ReportBlocks } from '@/lib/ai/fallback';
+import { loadFixtureMethodology, answers } from '../engine/helpers';
+import { diagnose } from '../../lib/engine';
+import { fallbackProse } from '../../lib/ai/fallback';
 
 const methodology = loadMethodology();
 
@@ -14,9 +17,9 @@ function diagnosis(over: Partial<Diagnosis> = {}): Diagnosis {
     gap: 5,
     categories: [
       { category_id: 'guest_experience', kind: 'stage', score: 30, belief: null, evidence: null,
-        gap: null, gap_class: null, cohort_percentile: null, state: 'broken', respondent_count: 2, excluded_partial: 0 },
+        gap: null, gap_class: null, cohort_percentile: null, state: 'broken', respondent_count: 2, excluded_partial: 0, questionEffects: [] },
       { category_id: 'connections', kind: 'stage', score: 70, belief: null, evidence: null,
-        gap: null, gap_class: null, cohort_percentile: null, state: 'ok', respondent_count: 2, excluded_partial: 0 },
+        gap: null, gap_class: null, cohort_percentile: null, state: 'ok', respondent_count: 2, excluded_partial: 0, questionEffects: [] },
     ],
     primary_constraint: { category_id: 'guest_experience' },
     contributing: [],
@@ -24,7 +27,8 @@ function diagnosis(over: Partial<Diagnosis> = {}): Diagnosis {
     gating_conditions: [],
     generosity_mode: null,
     blind_spots: [],
-    dispersion_flags: [],
+    disagreement_flags: [],
+    calibration: { people: [], spread: 0 },
     dependencies: [],
     correlations: [],
     offer: { call_type: 'Diagnostic call', hook: 'Lets walk the chain together.' },
@@ -47,7 +51,7 @@ function blocks(over: Partial<ReportBlocks> = {}): ReportBlocks {
 }
 
 const WITH_DISPERSION = {
-  dispersion_flags: [{
+  disagreement_flags: [{
     category_id: 'guest_experience',
     respondents: [{ label: 'Dana Okafor', mean: 3.1 }, { label: 'Sam Reyes', mean: 7.4 }],
     spread: 2.2,
@@ -74,7 +78,6 @@ describe('buildReportView', () => {
   it('omits optional sections whose blocks are absent', () => {
     const v = buildReportView(diagnosis(), blocks(), methodology, { audience: 'screen' });
     expect(v.evidence).toBeUndefined();
-    expect(v.blindSpot).toBeUndefined();
     expect(v.cost).toBeUndefined();
     expect(v.gating).toBeUndefined();
     expect(v.dispersion).toBeUndefined();
@@ -127,5 +130,150 @@ describe('buildReportView', () => {
   it('keeps the next-step CTA for the screen audience', () => {
     const v = buildReportView(diagnosis(), blocks(), methodology, { audience: 'screen' });
     expect(v.nextStep?.text).toBe('Start with the first weekend touchpoint.');
+  });
+
+  it('mirrors the gating note onto system.gating', () => {
+    const v = buildReportView(diagnosis(), blocks({ gating: 'Address governance before anything else.' }),
+      methodology, { audience: 'screen' });
+    expect(v.system.gating).toBe('Address governance before anything else.');
+    expect(v.system.gating).toBe(v.gating);
+  });
+});
+
+const ALL = ['guest', 'conn', 'disc', 'vol', 'gen', 'gov', 'comm', 'sys'];
+const CHAIN_THEN_ENABLERS = ['guest', 'conn', 'disc', 'vol', 'gen', 'gov', 'comm', 'sys'];
+
+describe('ReportView shape', () => {
+  const fixtureMethodology = loadFixtureMethodology();
+
+  /**
+   * Every item at `base` except the third, which sits 3 points lower.
+   * A single scalar per area makes every column mean equal mu, so every
+   * fit.questionEffects entry is exactly 0 and `insideIt` ("D3 sits 18 pts below
+   * the rest") is structurally unexercisable. Build the FULL record — answers()
+   * defaults any item missing from the map to 5, not to `base`.
+   */
+  const varied = (id: string, base: number): Record<string, number> =>
+    Object.fromEntries(
+      fixtureMethodology.questions.categories
+        .find((c) => c.id === id)!
+        .items.map((it, i) => [it.id, i === 2 ? base - 3 : base]),
+    );
+
+  const d = diagnose(
+    ALL.flatMap((id) => [
+      ...answers(fixtureMethodology, id, varied(id, id === 'vol' ? 4 : 8), 'Pastor', 'u-1'),
+      ...answers(fixtureMethodology, id, varied(id, id === 'vol' ? 5 : 7), 'Elder', 'u-2'),
+    ]),
+    fixtureMethodology,
+    // NOTE: the plan/brief text for this fixture literally reads '100-249' (hyphen).
+    // methodology/benchmarks.yaml keys attendance bands with an UNDERSCORE
+    // ('100_249', confirmed against every other fixture in this suite, e.g.
+    // tests/engine/excluded-partial.test.ts). benchmarkFor() throws on an unknown
+    // band, so the hyphenated literal would crash diagnose() before this file's
+    // own tests ever ran. Corrected here; intent (100-249 attendance) unchanged.
+    { attendance_band: '100_249' },
+  );
+  const view = buildReportView(d, fallbackProse(d, fixtureMethodology), fixtureMethodology, { audience: 'screen' });
+
+  it('carries all three cover numbers', () => {
+    expect(view.cover.throughput).toBe(d.throughput);
+    expect(view.cover.capacity).toBe(d.capacity);
+    expect(view.cover.gap).toBe(d.capacity - d.throughput);
+  });
+
+  it('has exactly eight dossiers in fixed chain-then-enabler order', () => {
+    expect(view.areas).toHaveLength(8);
+    expect(view.areas.map((a) => a.category_id)).toEqual(CHAIN_THEN_ENABLERS);
+  });
+
+  it('populates every one of the six dossier fields or explicitly marks it unavailable', () => {
+    // Occurrence-count equality, not a presence check (spec §9.3). The shape test
+    // `field === null || typeof field === 'string'` is satisfied by an implementation
+    // that returns null for all four fields on all eight areas — i.e. "populated OR
+    // unavailable" met entirely by "unavailable". Count instead.
+    expect(view.areas).toHaveLength(8);
+    for (const area of view.areas) {
+      expect(area.reading.length).toBeGreaterThan(0);         // works at N=1
+      expect(area.dependsOn.length).toBeGreaterThan(0);       // works at N=1
+      expect(area.name.length).toBeGreaterThan(0);
+    }
+    // Every area has n = 2 and a non-zero questionEffects spread (the fixture varies
+    // one item per area), so insideIt is derivable everywhere; agreement needs n >= 2,
+    // also everywhere; the benchmark ships today, so position is everywhere too.
+    expect(view.areas.filter((a) => a.insideIt !== null)).toHaveLength(8);
+    expect(view.areas.filter((a) => a.agreement !== null)).toHaveLength(8);
+    expect(view.areas.filter((a) => a.position !== null)).toHaveLength(8);
+    // watchFor is legitimately absent on some areas — but absent must mean null,
+    // never undefined and never '', because absent is a decision the renderer sees.
+    for (const area of view.areas) {
+      expect(area.watchFor === null || (typeof area.watchFor === 'string' && area.watchFor.length > 0)).toBe(true);
+    }
+    // gov/comm/sys always carry the enabler note, gen always carries the generosity
+    // note, so at least four of the eight are non-null on any data.
+    expect(view.areas.filter((a) => a.watchFor !== null).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('names the enabler blind-spot hole rather than leaving it empty', () => {
+    // gov, comm and sys are 100% belief items, so gapFor() structurally returns
+    // evidence: null and blind-spot detection is impossible for all three.
+    // Compare against the LOADED value, not a literal. Task 14 Step 1 explicitly
+    // invites the owner to reword this note; a hardcoded /perception only/i would
+    // break a test in a task she is not editing.
+    for (const id of ['gov', 'comm', 'sys']) {
+      const area = view.areas.find((a) => a.category_id === id)!;
+      expect(area.watchFor).toBe(fixtureMethodology.copy.dossier.enabler_belief_only);
+    }
+  });
+
+  it('renders all 13 dependency edges with resolved display names', () => {
+    expect(view.system.dependencies).toHaveLength(13);
+    for (const e of view.system.dependencies) {
+      expect(e.fromName).not.toBe(e.from); // resolved through questions.yaml names
+      expect(e.statement.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('no longer exposes a top-level blindSpot or generosityMode', () => {
+    expect('blindSpot' in view).toBe(false);
+    expect('generosityMode' in view).toBe(false);
+  });
+
+  // --- Additional coverage beyond the brief's literal Step 1 block ---------------
+  // The tests above run entirely on real diagnose() output. gov/comm/sys can never
+  // structurally carry a blind spot there (no evidence items in the methodology, so
+  // gapFor() always returns evidence: null for them — see the previous test's own
+  // comment), which means a watchFor priority-order bug that only swaps the
+  // blind-spot check against the enabler-limit check is invisible to any test built
+  // solely on this fixture: both orderings reach the same branch for every real
+  // category, because the two conditions never coexist in real engine output. These
+  // two tests close that gap directly.
+
+  it('prioritizes a blind-spot note over the enabler-limit note when both are structurally present', () => {
+    // sys is an enabler (gov/comm/sys are 100% belief items in the real
+    // methodology, so it can never carry a REAL blind spot) — forcing one here via
+    // a Diagnosis override isolates watchFor's PRIORITY ORDER from that structural
+    // impossibility. buildReportView takes Diagnosis as plain data, so this is a
+    // legitimate unit-level probe of the function's contract, not a scenario that
+    // has to be reachable through the real engine.
+    const withForcedBlindSpot: Diagnosis = {
+      ...d,
+      blind_spots: [...d.blind_spots, { category_id: 'sys', belief: 80, evidence: 20, gap: 60 }],
+    };
+    const v2 = buildReportView(
+      withForcedBlindSpot, fallbackProse(d, fixtureMethodology), fixtureMethodology, { audience: 'screen' },
+    );
+    const area = v2.areas.find((a) => a.category_id === 'sys')!;
+    const sysName = fixtureMethodology.questions.categories.find((c) => c.id === 'sys')!.name;
+    expect(area.watchFor).not.toBe(fixtureMethodology.copy.dossier.enabler_belief_only);
+    expect(area.watchFor).toBe(
+      `You rated ${sysName} highly, but the countable side tells a different story. ` +
+      'Belief sits at 80, the evidence at 20, a gap of 60 points.',
+    );
+  });
+
+  it('interpolates the calibration spread into calibrationText rather than leaving the token literal', () => {
+    expect(view.system.calibrationText).not.toMatch(/\{spread\}/);
+    expect(view.system.calibrationText).toContain(String(d.calibration.spread));
   });
 });

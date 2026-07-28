@@ -1,9 +1,45 @@
-import type { Diagnosis, DiagnosisCategory, EvidenceRef, GenerosityMode } from '../engine/types';
+import type { Diagnosis, DiagnosisCategory, DisagreementFlag, EvidenceRef } from '../engine/types';
+import type { CorrelationAnnotation } from '../engine/correlation';
 import type { ReportBlocks } from '../ai/fallback';
 import type { Methodology } from '../methodology/schema';
 import { chainWalk, type StageView } from './chain-walk';
 
 export type ReportAudience = 'screen' | 'pdf' | 'shared';
+
+export interface CoverView {
+  throughput: number;
+  capacity: number;
+  gap: number;
+  constraintName: string | null;
+  gatedBy: Array<{ name: string; score: number }>;
+}
+
+export interface AreaDossierView {
+  category_id: string;
+  name: string;
+  score: number;
+  n: number;
+  reading: string;
+  insideIt: string | null;
+  agreement: string | null;
+  position: string | null;
+  dependsOn: string[];
+  watchFor: string | null;
+}
+
+export interface SystemView {
+  dependencies: Array<{
+    from: string; to: string; kind: string; statement: string;
+    read: string; fromName: string; toName: string;
+    fromScore: number; toScore: number;
+  }>;
+  correlations: CorrelationAnnotation[];
+  calibrationSpread: number;
+  calibrationText: string; // the rendered sentence — Calibration({ spread, text }) needs it,
+                           // and Task 17 can only prove "no names on any surface" if it is here
+  disagreement?: { text: string; respondents: Array<{ label: string; mean: number }> };
+  gating?: string;
+}
 
 export interface ReportView {
   verdict: string;
@@ -13,13 +49,218 @@ export interface ReportView {
   confidence: number;
   stages: StageView[];
   evidence?: { text: string; refs: EvidenceRef[] };
-  blindSpot?: string;
   cost?: { cost: string; doNotWorkOn?: string };
   gating?: string;
-  generosityMode: GenerosityMode;
   dispersion?: { text: string; respondents: Array<{ label: string; mean: number }> };
   nextStep?: { callType: string; hook: string; text: string };
   appendix: { categories: Array<DiagnosisCategory & { name: string }>; benchmarkNote: string };
+  cover: CoverView;
+  areas: AreaDossierView[];
+  system: SystemView;
+}
+
+/**
+ * {token} substitution, identical contract to lib/ai/fallback.ts's private `interp`
+ * (missing keys are left as the literal token — fail-open, never throws). Kept as
+ * its own copy rather than importing fallback.ts's: that module's export surface is
+ * the AI-prose draft/reword pipeline, and the dossier layer reading from it would
+ * couple two things that change for different reasons.
+ */
+function interp(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k: string) => (k in vars ? vars[k]! : `{${k}}`));
+}
+
+const ENABLER_BELIEF_ONLY_IDS = new Set(['gov', 'comm', 'sys']);
+
+type ReadingBand = 'severe' | 'broken' | 'watch' | 'holding';
+
+/**
+ * Reading band from score + state (spec §7.2 table). `state` is 'broken' (stage)
+ * or 'gate' (enabler) for every "not holding" category — thresholds.severe splits
+ * that single state into the finer severe/broken bands the copy needs. 'watch'
+ * and 'ok' pass straight through to 'watch'/'holding'.
+ */
+function readingBand(state: DiagnosisCategory['state'], score: number, severeThreshold: number): ReadingBand {
+  if (state === 'broken' || state === 'gate') return score < severeThreshold ? 'severe' : 'broken';
+  if (state === 'watch') return 'watch';
+  return 'holding';
+}
+
+/** Largest-magnitude question effect, rendered as "{item_id} sits {n} pts {below|above} the rest".
+ *  Data-driven, not XPG voice — spec §7.2's own example ("D3 sits 18 pts below the rest"). */
+function insideItFor(n: number, questionEffects: Array<{ item_id: string; effect: number }>): string | null {
+  if (n === 0 || questionEffects.length === 0) return null;
+  const largest = questionEffects.reduce((max, cur) => (Math.abs(cur.effect) > Math.abs(max.effect) ? cur : max));
+  const pts = Math.round(Math.abs(largest.effect) * 10);
+  const direction = largest.effect < 0 ? 'below' : 'above';
+  return `${largest.item_id} sits ${pts} pts ${direction} the rest`;
+}
+
+/** Residual spread after rater style is removed (spec §4.2/§7.2): tight when no
+ *  disagreement flag fired for this area, split (with the measured spread) when
+ *  one did. Needs n >= 2 — a single respondent has no spread to measure. */
+function agreementFor(n: number, flag: DisagreementFlag | undefined): string | null {
+  if (n < 2) return null;
+  return flag
+    ? `Split — spread of ${flag.spread} points after removing rater style`
+    : 'Tight — no significant spread once rater style is removed';
+}
+
+function positionFor(cohortPercentile: number | null): string | null {
+  return cohortPercentile === null ? null : `p${cohortPercentile} of the benchmark prior`;
+}
+
+/** Every authored dependency edge touching this area, as one short phrase per
+ *  edge (spec §7.2: "Systems (74) gates this · feeds Volunteers (48)"). The
+ *  renderer joins the array; this only produces the pieces. */
+function dependsOnFor(
+  categoryId: string,
+  dependencies: Diagnosis['dependencies'],
+  names: Map<string, string>,
+): string[] {
+  const out: string[] = [];
+  for (const e of dependencies) {
+    const verb = e.kind === 'gate' ? 'gates' : 'feeds';
+    if (e.to === categoryId) {
+      out.push(`${names.get(e.from) ?? e.from} (${e.fromScore}) ${verb} this`);
+    } else if (e.from === categoryId) {
+      out.push(`${verb} ${names.get(e.to) ?? e.to} (${e.toScore})`);
+    }
+  }
+  return out;
+}
+
+/**
+ * Priority order (spec §7.2/§7.3, brief line 224): the blind-spot gap for this
+ * area, THEN the enabler belief-only limit (gov/comm/sys), THEN the generosity
+ * mode note (gen), THEN null. All three sentence sources are copy.yaml lookups
+ * (or the existing blocks.blind_spot template, reused per-area) — none invented
+ * in TypeScript. gov/comm/sys structurally never reach the first branch (no
+ * evidence items in the methodology, so a blind spot is impossible there), but
+ * the ORDER still matters as the function's contract, not just its output on
+ * today's data — see tests/report/view.test.ts's forced-blind-spot coverage.
+ */
+function watchForFor(
+  categoryId: string,
+  d: Diagnosis,
+  methodology: Methodology,
+  names: Map<string, string>,
+): string | null {
+  const bs = d.blind_spots.find((b) => b.category_id === categoryId);
+  if (bs) {
+    return interp(methodology.copy.blocks.blind_spot!, {
+      bs_name: names.get(categoryId) ?? categoryId,
+      bs_belief: String(bs.belief),
+      bs_evidence: String(bs.evidence),
+      bs_gap: String(bs.gap),
+    });
+  }
+  if (ENABLER_BELIEF_ONLY_IDS.has(categoryId)) {
+    return methodology.copy.dossier.enabler_belief_only;
+  }
+  if (categoryId === 'gen') {
+    return d.generosity_mode ? methodology.copy.dossier.generosity[d.generosity_mode] : null;
+  }
+  return null;
+}
+
+function buildCover(d: Diagnosis, methodology: Methodology): CoverView {
+  const names = new Map(methodology.questions.categories.map((c) => [c.id, c.name]));
+  const scores = new Map(d.categories.map((c) => [c.category_id, c.score]));
+  const primaryId = d.primary_constraint?.category_id ?? null;
+
+  return {
+    throughput: d.throughput,
+    capacity: d.capacity,
+    gap: d.capacity - d.throughput,
+    constraintName: primaryId ? (names.get(primaryId) ?? primaryId) : null,
+    gatedBy: d.gating_conditions.map((g) => ({
+      name: names.get(g.enabler_id) ?? g.enabler_id,
+      score: scores.get(g.enabler_id) ?? 0,
+    })),
+  };
+}
+
+/**
+ * Iterates [...rules.chain, ...Object.keys(rules.enablers)] — never sorted by
+ * score — so the eight dossiers land in the same fixed order on every report
+ * and two assessments 90 days apart are directly comparable side by side (spec
+ * §7 Layer 3). `kind` (stage vs enabler) is read off THIS LIST, not off the
+ * matched category, so a category missing from `d.categories` still resolves
+ * to a sensible fallback dossier instead of throwing — the same defensive
+ * posture chain-walk.ts already takes on the identical chain-iteration shape.
+ */
+function buildAreas(d: Diagnosis, methodology: Methodology): AreaDossierView[] {
+  const { chain, enablers, thresholds } = methodology.rules;
+  const ids = [...chain, ...Object.keys(enablers)];
+  const chainSet = new Set(chain);
+  const names = new Map(methodology.questions.categories.map((c) => [c.id, c.name]));
+  const catById = new Map(d.categories.map((c) => [c.category_id, c]));
+  const flagById = new Map(d.disagreement_flags.map((f) => [f.category_id, f]));
+
+  return ids.map((categoryId) => {
+    const cat = catById.get(categoryId);
+    const kind: 'stage' | 'enabler' = chainSet.has(categoryId) ? 'stage' : 'enabler';
+    const score = cat?.score ?? 0;
+    const n = cat?.respondent_count ?? 0;
+    const state = cat?.state ?? 'ok';
+    const band = readingBand(state, score, thresholds.severe);
+
+    return {
+      category_id: categoryId,
+      name: names.get(categoryId) ?? categoryId,
+      score,
+      n,
+      reading: methodology.copy.dossier.reading[kind][band]!,
+      insideIt: insideItFor(n, cat?.questionEffects ?? []),
+      agreement: agreementFor(n, flagById.get(categoryId)),
+      position: positionFor(cat?.cohort_percentile ?? null),
+      dependsOn: dependsOnFor(categoryId, d.dependencies, names),
+      watchFor: watchForFor(categoryId, d, methodology, names),
+    };
+  });
+}
+
+function buildSystem(
+  d: Diagnosis,
+  blocks: ReportBlocks,
+  methodology: Methodology,
+  opts: { audience: ReportAudience },
+): SystemView {
+  const names = new Map(methodology.questions.categories.map((c) => [c.id, c.name]));
+  const flag = d.disagreement_flags[0];
+
+  return {
+    dependencies: d.dependencies.map((e) => ({
+      from: e.from,
+      to: e.to,
+      kind: e.kind,
+      statement: e.statement,
+      read: e.read,
+      fromName: names.get(e.from) ?? e.from,
+      toName: names.get(e.to) ?? e.to,
+      fromScore: e.fromScore,
+      toScore: e.toScore,
+    })),
+    correlations: d.correlations,
+    calibrationSpread: d.calibration.spread,
+    calibrationText: interp(methodology.copy.dossier.calibration_spread, {
+      spread: String(d.calibration.spread),
+    }),
+    disagreement: flag
+      ? {
+          text: interp(methodology.copy.inserts.dispersion!, {
+            disp_name: names.get(flag.category_id) ?? flag.category_id,
+            disp_spread: String(flag.spread),
+          }),
+          respondents:
+            opts.audience === 'pdf' || opts.audience === 'shared' ? [] : flag.respondents,
+        }
+      : undefined,
+    // Layer 2's "GatingFlags kept" (spec §7 table) — same source as the
+    // existing top-level `gating` field below, just also reachable from `system`.
+    gating: blocks.gating,
+  };
 }
 
 /**
@@ -27,12 +268,18 @@ export interface ReportView {
  * document consume this so section content and ordering cannot drift apart;
  * only layout primitives differ between them.
  *
- * audience 'pdf' and 'shared' both empty dispersion.respondents. Each leaves the
- * permission wall, so the per-person name-to-score list must not travel with
- * them. The field stays present-but-empty so the narrative still renders.
+ * audience 'pdf' and 'shared' both empty dispersion.respondents (and, identically,
+ * system.disagreement.respondents). Each leaves the permission wall, so the
+ * per-person name-to-score list must not travel with them. The field stays
+ * present-but-empty so the narrative still renders.
  *
  * audience 'shared' additionally drops nextStep: the CTA is an admin action, and
  * a board member reading a forwarded link cannot take it.
+ *
+ * cover/areas/system are the Layer 1/2/3 additions (spec §7.4): eight area
+ * dossiers in fixed chain-then-enabler order, never sorted by score. Names never
+ * reach system.calibrationText or any dossier field — every sentence is built
+ * from copy.yaml templates plus scores/ids, the same discipline Task 17 audits.
  */
 export function buildReportView(
   d: Diagnosis,
@@ -46,7 +293,7 @@ export function buildReportView(
     ? d.evidence_trail.find((r) => r.claim === `primary_constraint:${primaryId}`)
     : undefined;
 
-  const flag = d.dispersion_flags[0];
+  const flag = d.disagreement_flags[0];
 
   // Same resolution pattern chain-walk.ts uses, so the chain section and the
   // appendix never disagree on how a category_id is displayed.
@@ -64,14 +311,11 @@ export function buildReportView(
       ? { text: blocks.evidence, refs: receipt?.refs ?? [] }
       : undefined,
 
-    blindSpot: blocks.blind_spot,
-
     cost: blocks.cost
       ? { cost: blocks.cost, doNotWorkOn: blocks.do_not_work_on }
       : undefined,
 
     gating: blocks.gating,
-    generosityMode: d.generosity_mode,
 
     dispersion: blocks.dispersion
       ? {
@@ -91,5 +335,9 @@ export function buildReportView(
       categories: d.categories.map((c) => ({ ...c, name: names.get(c.category_id) ?? c.category_id })),
       benchmarkNote: blocks.benchmark_note,
     },
+
+    cover: buildCover(d, methodology),
+    areas: buildAreas(d, methodology),
+    system: buildSystem(d, blocks, methodology, opts),
   };
 }

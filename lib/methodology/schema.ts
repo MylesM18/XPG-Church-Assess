@@ -106,6 +106,19 @@ export const CopySchema = z.object({
   version: z.string().min(1),
   blocks: z.record(z.string().min(1)),
   inserts: z.record(z.string().min(1)),
+  dossier: z.object({
+    reading: z.object({
+      stage: z.record(z.string().min(1)),
+      enabler: z.record(z.string().min(1)),
+    }),
+    enabler_belief_only: z.string().min(1),
+    calibration_spread: z.string().min(1),
+    generosity: z.object({
+      breadth: z.string().min(1),
+      depth: z.string().min(1),
+      both: z.string().min(1),
+    }),
+  }),
 });
 
 export type Signal = z.infer<typeof SignalSchema>;

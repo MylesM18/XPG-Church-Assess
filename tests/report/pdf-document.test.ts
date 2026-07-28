@@ -18,9 +18,9 @@ function diagnosis(): Diagnosis {
     gap: 15,
     categories: [
       { category_id: 'guest_experience', kind: 'stage', score: 30, belief: null, evidence: null,
-        gap: null, gap_class: null, cohort_percentile: null, state: 'broken', respondent_count: 2, excluded_partial: 0 },
+        gap: null, gap_class: null, cohort_percentile: null, state: 'broken', respondent_count: 2, excluded_partial: 0, questionEffects: [] },
       { category_id: 'connections', kind: 'stage', score: 70, belief: null, evidence: null,
-        gap: null, gap_class: null, cohort_percentile: null, state: 'ok', respondent_count: 2, excluded_partial: 0 },
+        gap: null, gap_class: null, cohort_percentile: null, state: 'ok', respondent_count: 2, excluded_partial: 0, questionEffects: [] },
     ],
     primary_constraint: { category_id: 'guest_experience' },
     contributing: [],
@@ -28,7 +28,7 @@ function diagnosis(): Diagnosis {
     gating_conditions: [],
     generosity_mode: null,
     blind_spots: [],
-    dispersion_flags: [{
+    disagreement_flags: [{
       category_id: 'guest_experience',
       respondents: [{ label: SENTINEL, mean: 3.1 }, { label: 'Sam Reyes', mean: 7.4 }],
       spread: 2.2,

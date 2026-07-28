@@ -28,7 +28,7 @@ const dHealthy = diagnose(
 const draft3 = fallbackProse(dHealthy, m);
 
 // Two respondents who disagree sharply on one category, so the engine really emits
-// dispersion_flags[].respondents[] carrying their labels. A respondent-anonymity test built
+// disagreement_flags[].respondents[] carrying their labels. A respondent-anonymity test built
 // on a fixture with an EMPTY respondents array would pass because the loop never runs.
 const NAMED = 'Priscilla Vandermeer';
 function cat2(id: string, a: number, b: number): Response[] {
@@ -129,7 +129,7 @@ describe('passesFactCheck', () => {
 
   it('(k) rejects a reword that names an individual respondent (respondent anonymity)', () => {
     // Precondition: the fixture genuinely carries the label, so the gate's loop can fire.
-    expect(dNamed.dispersion_flags.some(f => f.respondents.some(r => r.label === NAMED))).toBe(true);
+    expect(dNamed.disagreement_flags.some(f => f.respondents.some(r => r.label === NAMED))).toBe(true);
     expect(draftNamed.evidence).toBeDefined();
     // Nothing downstream strips prose, so a reword that names an individual would reach the
     // public /r/[shareToken] page unfiltered. Fail closed to deterministic prose instead.

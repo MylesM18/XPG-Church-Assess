@@ -75,7 +75,7 @@ export function fallbackProse(d: Diagnosis, methodology: Methodology): ReportBlo
     ? interp(inserts.gating!, { gating_list: listJoin(d.gating_conditions.map(g => nameOf(g.enabler_id))) })
     : undefined;
 
-  const disp = d.dispersion_flags[0];
+  const disp = d.disagreement_flags[0];
   const dispersion = disp
     ? interp(inserts.dispersion!, { disp_name: nameOf(disp.category_id), disp_spread: String(disp.spread) })
     : undefined;

@@ -11,3 +11,24 @@ inserts:
   gating: "Before this can hold, address {gating_list}. These are the ground the fix stands on."
   dispersion: "Your leaders do not agree on {disp_name}. Answers ranged across {disp_spread} points. That disagreement is itself the finding."
   benchmark_note: "Benchmarks are XPG provisional priors, not an observed cohort yet."
+# DOSSIER COPY IS XPG METHODOLOGY (spec §10).
+# The values below are PLACEHOLDERS pending Natalie's authoring — see Task 14.
+# DO NOT SHIP TO A CUSTOMER WITH THESE IN PLACE.
+dossier:
+  reading:
+    stage:
+      severe:  "<owner text>"
+      broken:  "<owner text>"
+      watch:   "<owner text>"
+      holding: "<owner text>"
+    enabler:
+      severe:  "<owner text>"
+      broken:  "<owner text>"
+      watch:   "<owner text>"
+      holding: "<owner text>"
+  enabler_belief_only: "<owner text>"
+  calibration_spread: "<owner text with {spread}>"
+  generosity:
+    breadth: "Breadth: your givers are generous — there just aren’t enough of them yet. This routes upstream to connection."
+    depth: "Depth: most of your people give, but few have been taught why. The opportunity is discipleship around generosity."
+    both: "Both breadth and depth are low: few givers, and little teaching behind the giving."
