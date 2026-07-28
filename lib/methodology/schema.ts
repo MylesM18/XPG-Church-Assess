@@ -31,6 +31,15 @@ export const QuestionsSchema = z.object({
 
 export const GatesSchema = z.union([z.literal('all'), z.array(z.string()).min(1)]);
 
+export const DependencyEdgeKindSchema = z.enum(['sequence', 'gate']);
+
+export const DependencySchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+  kind: DependencyEdgeKindSchema,
+  statement: z.string().min(1),
+});
+
 export const RulesSchema = z.object({
   version: z.string().min(1),
   chain: z.array(z.string()).length(5),
@@ -42,6 +51,7 @@ export const RulesSchema = z.object({
   throughput: z.object({
     min_weight: z.number().min(0).max(1),
   }),
+  dependencies: z.array(DependencySchema).length(13),
   thresholds: z.object({
     break: z.number(),
     severe: z.number(),
@@ -98,6 +108,7 @@ export type Item = z.infer<typeof ItemSchema>;
 export type Category = z.infer<typeof CategorySchema>;
 export type Questions = z.infer<typeof QuestionsSchema>;
 export type Rules = z.infer<typeof RulesSchema>;
+export type Dependency = z.infer<typeof DependencySchema>;
 export type BandBenchmark = z.infer<typeof BandBenchmarkSchema>;
 export type Benchmarks = z.infer<typeof BenchmarksSchema>;
 export type Offer = z.infer<typeof OfferSchema>;

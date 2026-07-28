@@ -1,6 +1,7 @@
 import type { CategoryKind, Offer } from '../methodology/schema';
 import type { AreaFit } from './fit';
 import type { Calibration } from './calibration';
+import type { DependencyEdge } from './dependencies';
 
 export interface Response {
   category_id: string;
@@ -85,6 +86,7 @@ export interface Diagnosis {
   blind_spots: BlindSpot[];
   dispersion_flags: DispersionFlag[];
   calibration: Calibration;
+  dependencies: DependencyEdge[];
   offer: Offer;
   confidence: number;
   evidence_trail: EvidenceReceipt[];

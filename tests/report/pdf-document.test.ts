@@ -34,6 +34,7 @@ function diagnosis(): Diagnosis {
       spread: 2.2,
     }],
     calibration: { people: [], spread: 0 },
+    dependencies: [],
     offer: { type: 'guest_retention', call_type: 'Diagnostic call', hook: 'Lets walk the chain together.' },
     confidence: 0.8,
     evidence_trail: [

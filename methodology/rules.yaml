@@ -9,6 +9,24 @@ generosity:
   depth_items: [GEN2, GEN4]
 throughput:
   min_weight: 0.85
+# DEPENDENCY STATEMENTS ARE XPG METHODOLOGY (spec §10).
+# The `statement` values below are PLACEHOLDERS pending Natalie's authoring — see
+# Task 10 of docs/superpowers/plans/2026-07-27-diagnosis-report-reform.md.
+# DO NOT SHIP TO A CUSTOMER WITH THESE IN PLACE.
+dependencies:
+  - { from: guest, to: conn,  kind: sequence, statement: "PLACEHOLDER - awaiting XPG authoring" }
+  - { from: conn,  to: disc,  kind: sequence, statement: "PLACEHOLDER - awaiting XPG authoring" }
+  - { from: disc,  to: vol,   kind: sequence, statement: "PLACEHOLDER - awaiting XPG authoring" }
+  - { from: vol,   to: gen,   kind: sequence, statement: "PLACEHOLDER - awaiting XPG authoring" }
+  - { from: gov,   to: guest, kind: gate,     statement: "PLACEHOLDER - awaiting XPG authoring" }
+  - { from: gov,   to: conn,  kind: gate,     statement: "PLACEHOLDER - awaiting XPG authoring" }
+  - { from: gov,   to: disc,  kind: gate,     statement: "PLACEHOLDER - awaiting XPG authoring" }
+  - { from: gov,   to: vol,   kind: gate,     statement: "PLACEHOLDER - awaiting XPG authoring" }
+  - { from: gov,   to: gen,   kind: gate,     statement: "PLACEHOLDER - awaiting XPG authoring" }
+  - { from: comm,  to: guest, kind: gate,     statement: "PLACEHOLDER - awaiting XPG authoring" }
+  - { from: comm,  to: conn,  kind: gate,     statement: "PLACEHOLDER - awaiting XPG authoring" }
+  - { from: sys,   to: vol,   kind: gate,     statement: "PLACEHOLDER - awaiting XPG authoring" }
+  - { from: sys,   to: disc,  kind: gate,     statement: "PLACEHOLDER - awaiting XPG authoring" }
 thresholds:
   break: 45
   severe: 25
