@@ -211,28 +211,24 @@ describe('ReportDocument', () => {
   // proving no respondent name is present in that output) is already covered
   // by the tests above, so it isn't repeated here. This test proves the
   // opposite side: the fail-closed guard in render.ts actually fires.
-  it('throws when a screen-audience view carrying respondent names reaches the renderer', async () => {
+  it('throws when a view carrying respondent names reaches the renderer', async () => {
     const d = diagnosis();
     const blocks = fallbackProse(d, methodology);
-    // Built directly (bypassing renderText) because the render is expected to
-    // reject before renderToBuffer ever runs, so there is no buffer for
-    // renderText's extractText step to read.
-    const view = buildReportView(d, blocks, methodology, { audience: 'screen' });
-
-    // Sanity check: this test only proves the guard is reachable if the
-    // fixture actually carries respondent names for the screen audience. If a
-    // future edit to diagnosis() or view.ts silently emptied this, the
-    // .rejects assertion below would fail to reject too — but assert it
-    // directly here so a break in this precondition is diagnosed immediately.
+    // buildReportView now strips respondent names for EVERY audience (respondent anonymity), so
+    // manufacture the names-carrying view the fail-closed guard defends against by injecting a
+    // labelled respondent directly. The guard must still fire if such a view ever reaches it.
+    const base = buildReportView(d, blocks, methodology, { audience: 'screen' });
+    const view: ReportView = {
+      ...base,
+      dispersion: { text: 'Your leaders split.', respondents: [{ label: 'Dana Okafor', mean: 3 }] },
+    };
     expect(view.dispersion?.respondents.length).toBeGreaterThan(0);
 
     // renderReportDocument is declared as a plain (non-async) function, so its
     // guard throws synchronously rather than returning a rejected promise.
-    // Calling it directly as expect(renderReportDocument(...)) would let that
-    // throw escape before .rejects ever attaches to it. Wrapping the call in
-    // an async closure defers evaluation until the closure runs, so the throw
-    // becomes a rejection .rejects can observe — the same reason renderText's
-    // own `await renderReportDocument(...)` above is safe.
+    // Wrapping the call in an async closure defers evaluation until the closure
+    // runs, so the throw becomes a rejection .rejects can observe — the same
+    // reason renderText's own `await renderReportDocument(...)` above is safe.
     await expect(
       (async () =>
         renderReportDocument({
@@ -257,23 +253,25 @@ describe('ReportDocument', () => {
   it('throws when only system.disagreement (not dispersion) carries respondent names', async () => {
     const d = diagnosis();
     const blocks = fallbackProse(d, methodology);
-    const view = buildReportView(d, blocks, methodology, { audience: 'screen' });
-
-    // Precondition: the screen audience naturally carries the same names in both fields today.
-    expect(view.dispersion?.respondents.length).toBeGreaterThan(0);
+    const base = buildReportView(d, blocks, methodology, { audience: 'screen' });
+    // dispersion empty, system.disagreement still carrying names — isolates the system.disagreement
+    // half of the guard's `||` (see comment above). Names injected directly since no audience
+    // produces them anymore.
+    const view: ReportView = {
+      ...base,
+      dispersion: undefined,
+      system: {
+        ...base.system,
+        disagreement: { text: 'Your leaders split.', respondents: [{ label: 'Dana Okafor', mean: 3 }] },
+      },
+    };
+    expect(view.dispersion?.respondents.length).toBeUndefined();
     expect(view.system.disagreement?.respondents.length).toBeGreaterThan(0);
-
-    // Force the divergence Finding 3 warns about: dispersion empty, system.disagreement still
-    // carrying names — the exact shape a future edit (or dispersion's eventual retirement)
-    // could produce if the two strip sites ever fall out of sync.
-    const divergedView: ReportView = { ...view, dispersion: undefined };
-    expect(divergedView.dispersion?.respondents.length).toBeUndefined();
-    expect(divergedView.system.disagreement?.respondents.length).toBeGreaterThan(0);
 
     await expect(
       (async () =>
         renderReportDocument({
-          view: divergedView,
+          view,
           churchName: 'Grace Church',
           brandColor: '#3A4A6B',
           monogram: 'GC',
