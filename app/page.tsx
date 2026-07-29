@@ -518,6 +518,10 @@ export default function Home() {
                 XPGATHERING.COM ↗
               </a>
             </div>
+            <div className="xp-footer-nav">
+              <span className="xp-footer-heading">DOCUMENTATION</span>
+              <Link href="/methodology" className="xp-footer-link">METHODOLOGY</Link>
+            </div>
           </div>
           <div className="xp-footer-legal">
             <span>© 2026 XP GATHERING — CHURCH HEALTH ASSESSMENT · V1</span>

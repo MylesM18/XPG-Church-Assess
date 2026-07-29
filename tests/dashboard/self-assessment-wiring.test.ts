@@ -18,18 +18,14 @@ const CODE = SOURCE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
 describe('dashboard self-assessment wiring', () => {
   it('does not render a per-area "Answer yourself" card link (removed with the owner)', () => {
     // The per-area link was removed from the category cards (owner decision); the whole-assessment
-    // primary CTA is now the single entry point into answering. A re-add must fail here. That link
-    // was also the only new-window control on the dashboard, so its target/rel attributes go too.
+    // primary CTA is now the single entry point into answering. A re-add must fail here.
+    // (The dashboard's one legitimate new-window control — the "View diagnosis" link, opened in a
+    // new tab per owner decision — is pinned separately by view-diagnosis-new-tab.test.ts. This
+    // file no longer asserts the absence of target/rel, which that decision deliberately overturned.)
     expect(
       CODE,
       'the per-area "Answer yourself" card link was removed (owner decision) — a re-add must fail here',
     ).not.toContain('Answer yourself')
-    expect(
-      CODE,
-      'the removed per-area link was the only target="_blank" / rel="noopener noreferrer" new-window ' +
-        'control on the dashboard — no card link should reintroduce one',
-    ).not.toContain('target="_blank"')
-    expect(CODE).not.toContain('rel="noopener noreferrer"')
   })
 
   it('labels a fully-covered area "Completed", not "Covered"', () => {
