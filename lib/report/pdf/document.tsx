@@ -1,6 +1,7 @@
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, Link, StyleSheet } from '@react-pdf/renderer';
 import type { ReportView, SystemView, AreaDossierView } from '../view';
 import type { EdgeRead } from '../../engine/dependencies';
+import { bookingCta } from '../cta';
 import { registerReportFonts, FONT_DISPLAY, FONT_BODY } from './fonts';
 
 registerReportFonts();
@@ -77,7 +78,10 @@ const s = StyleSheet.create({
   fieldLabel: { fontSize: 8, color: INK_SOFT, textTransform: 'uppercase', letterSpacing: 0.5 },
   fieldValue: { fontSize: 10, marginTop: 1 },
 
-  // Layer 4 — appendix
+  // Layer 4 — booking CTA + appendix
+  ctaButton: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: INK, color: '#FFFFFF',
+               paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, fontSize: 11,
+               textDecoration: 'none' },
   appendixRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
   footer: { position: 'absolute', bottom: 24, left: 48, right: 48,
             flexDirection: 'row', justifyContent: 'space-between',
@@ -376,6 +380,12 @@ export function ReportDocument({
             <Text style={s.refs}>{view.nextStep.callType} — {view.nextStep.hook}</Text>
           </View>
         )}
+
+        <View style={s.section}>
+          <Text style={s.h2}>{bookingCta.heading}</Text>
+          <Text>{bookingCta.body}</Text>
+          <Link src={bookingCta.url} style={s.ctaButton}>{bookingCta.buttonLabel}</Link>
+        </View>
 
         <View style={s.section} break>
           <Text style={s.h2}>Appendix — all category scores</Text>

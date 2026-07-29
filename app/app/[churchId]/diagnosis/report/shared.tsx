@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import type { DiagnosisCategory } from '@/lib/engine/types'
 import type { StageView } from '@/lib/report/chain-walk'
 import type { ReportView } from '@/lib/report/view'
+import { bookingCta } from '@/lib/report/cta'
 import { GenerateButton } from '@/app/app/[churchId]/generate-button'
 import { CoverCard, VerdictHeader, AreaTable } from './cover'
 import { ChainWalk, EvidenceReceipt, CostSection } from './chain'
@@ -37,6 +38,28 @@ export function NextStep({
       <h2 className="font-display text-xl text-ink">Recommended next step</h2>
       <p className="font-body text-ink">{nextStep}</p>
       <p className="font-body text-base text-ink">{callType} — {hook}</p>
+    </section>
+  )
+}
+
+/**
+ * The booking call-to-action (spec §5). Copy + URL come from the shared lib/report/cta.ts
+ * constant so the screen, PDF, and public share surfaces cannot drift. External link opened in
+ * a new tab with rel="noopener noreferrer" (no reverse-tabnabbing, no referrer leak).
+ */
+export function BookingCta() {
+  return (
+    <section className="flex flex-col items-start gap-2 rounded-lg border border-line bg-paper p-4">
+      <h2 className="font-display text-xl text-ink">{bookingCta.heading}</h2>
+      <p className="font-body text-ink">{bookingCta.body}</p>
+      <a
+        href={bookingCta.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-1 inline-flex items-center rounded-lg bg-ink px-4 py-2 font-body text-sm text-paper hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+      >
+        {bookingCta.buttonLabel}
+      </a>
     </section>
   )
 }
@@ -213,6 +236,7 @@ export function ReportBody({
       {view.nextStep && (
         <NextStep callType={view.nextStep.callType} hook={view.nextStep.hook} nextStep={view.nextStep.text} />
       )}
+      <BookingCta />
       <Appendix categories={view.appendix.categories} stages={view.stages} benchmarkNote={view.appendix.benchmarkNote} dependencyNote={view.appendix.dependencyNote} />
     </>
   )

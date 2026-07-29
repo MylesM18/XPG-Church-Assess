@@ -364,3 +364,26 @@ describe('appendix table', () => {
     expect(appendix).toContain('—'); // null percentile renders an em dash, not a blank
   }, 30_000);
 });
+
+// --- Booking CTA (Change #5) -----------------------------------------------------------------
+//
+// The booking call-to-action renders on all three surfaces from one shared constant
+// (lib/report/cta.ts, spec §5). In the PDF it is a react-pdf <Link src={url}>: pdf-parse's
+// getText() surfaces the link's visible TEXT (heading + button label), but the target URL is a
+// PDF annotation (a /URI action), not text content — so it is asserted against the raw rendered
+// buffer, where the annotation URI is written verbatim.
+describe('booking CTA', () => {
+  it('renders the booking link — label in the text, URL in the annotation', async () => {
+    const { bookingCta } = await import('@/lib/report/cta');
+    const d = diagnosis();
+    const view = buildReportView(d, fallbackProse(d, methodology), methodology, { audience: 'pdf' });
+    const buffer = await renderReportDocument({
+      view, churchName: 'Grace Church', brandColor: '#3A4A6B', monogram: 'GC',
+      generatedAt: new Date('2026-07-18T00:00:00Z'),
+    });
+    const text = await extractText(buffer);
+    expect(text).toContain(bookingCta.heading);
+    expect(text).toContain(bookingCta.buttonLabel);
+    expect(buffer.toString('latin1')).toContain(bookingCta.url);
+  }, 30_000);
+});

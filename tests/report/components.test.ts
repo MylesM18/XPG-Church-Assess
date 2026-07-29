@@ -3,10 +3,12 @@ import { isValidElement, type ReactElement } from 'react';
 import { AreaDossier } from '../../app/app/[churchId]/diagnosis/report/dossier';
 import {
   Appendix,
+  BookingCta,
   ReportBody,
   StaleMethodologyNotice,
   SharedStaleMethodologyNotice,
 } from '../../app/app/[churchId]/diagnosis/report/shared';
+import { bookingCta } from '@/lib/report/cta';
 import { CoverCard, AreaTable } from '../../app/app/[churchId]/diagnosis/report/cover';
 import { DependencyMap } from '../../app/app/[churchId]/diagnosis/report/system';
 import { buildReportView, type SystemView } from '@/lib/report/view';
@@ -299,5 +301,37 @@ describe('Appendix table', () => {
     // the two disclosure caveats still render beneath the table (signature unchanged)
     expect(text).toContain('Benchmarks are provisional priors.');
     expect(text).toContain('Dependencies are a working model.');
+  });
+});
+
+// --- BookingCta: the report's booking call-to-action (Change #5) ------------------------------
+//
+// One shared source of truth (lib/report/cta.ts) rendered on all three surfaces (spec §5).
+// BookingCta is a plain function component; the anchor lives in its body, which walk()/textOf()
+// only reach when the component is invoked directly (not through ReportBody, which never descends
+// into a nested component's body). So the link itself is asserted on BookingCta(); its PLACEMENT
+// (present, before the Appendix) is asserted on ReportBody via element types, which is all the
+// walk of a fragment can see.
+describe('BookingCta', () => {
+  it('renders an external booking link carrying the button label and heading', () => {
+    const tree = BookingCta();
+    const cta = walk(tree)
+      .filter((n) => n.type === 'a')
+      .find((a) => (a.props as { href?: string }).href === bookingCta.url);
+    expect(cta, 'expected an <a> linking to the booking URL').toBeDefined();
+    expect(textOf(cta)).toContain(bookingCta.buttonLabel);
+    // opens in a new tab, safely (no reverse-tabnabbing / referrer leak)
+    expect((cta!.props as { target?: string }).target).toBe('_blank');
+    expect((cta!.props as { rel?: string }).rel).toContain('noopener');
+    expect(textOf(tree)).toContain(bookingCta.heading);
+  });
+});
+
+describe('ReportBody booking CTA placement', () => {
+  it('renders the booking CTA on the fresh report, before the appendix', () => {
+    const fresh = ReportBody({ storedVersion: '0.2.0', currentVersion: '0.2.0', view, churchId: 'c-1' });
+    const types = collectTypes(fresh);
+    expect(types).toContain(BookingCta);
+    expect(types.indexOf(BookingCta)).toBeLessThan(types.indexOf(Appendix));
   });
 });
