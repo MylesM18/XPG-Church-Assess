@@ -31,3 +31,26 @@ describe('dashboard intro statement', () => {
     ).toBeGreaterThan(ctaIdx)
   })
 })
+
+describe('dashboard privacy note', () => {
+  it('imports the AnonymityNote component', () => {
+    expect(CODE, 'the dashboard must import AnonymityNote').toContain(
+      "import { AnonymityNote } from '@/components/anonymity-note'",
+    )
+  })
+
+  it('renders the short AnonymityNote variant under the CTA, after the intro', () => {
+    expect(CODE, 'the note must be rendered').toContain('<AnonymityNote')
+    // The dashboard uses the shorter copy (lead + combined-results promise only), not the full note.
+    expect(CODE, 'the dashboard note must use the short variant').toContain('variant="short"')
+    const ctaIdx = CODE.indexOf('cta.label')
+    const introIdx = CODE.indexOf('Please complete the assessment for each category')
+    const noteIdx = CODE.indexOf('<AnonymityNote')
+    expect(noteIdx, 'the privacy note must be present').toBeGreaterThan(-1)
+    expect(
+      noteIdx,
+      'the privacy note must sit under the CTA and after the intro (button → intro → privacy note)',
+    ).toBeGreaterThan(introIdx)
+    expect(introIdx, 'the intro must still precede the note').toBeGreaterThan(ctaIdx)
+  })
+})
