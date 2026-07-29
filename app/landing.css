@@ -1403,6 +1403,10 @@ html:has(.xp-landing) {
   font-size: 11px;
   letter-spacing: .13em;
 }
+.xp-footer-heading {
+  color: rgba(255, 255, 255, .45);
+  margin-bottom: 2px;
+}
 .xp-landing .xp-footer-link {
   color: rgba(255, 255, 255, .7);
 }
