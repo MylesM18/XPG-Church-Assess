@@ -70,7 +70,6 @@ export function AreaTable({ areas }: { areas: AreaDossierView[] }) {
         <tr className="border-b border-line text-left text-ink-soft">
           <th className="py-1.5 font-normal">Area</th>
           <th className="py-1.5 font-normal">Score</th>
-          <th className="py-1.5 font-normal">N</th>
           <th className="py-1.5 font-normal">Band</th>
         </tr>
       </thead>
@@ -79,7 +78,6 @@ export function AreaTable({ areas }: { areas: AreaDossierView[] }) {
           <tr key={area.category_id} className="border-b border-line">
             <td className="py-1.5 text-ink">{area.name}</td>
             <td className="py-1.5 text-ink">{area.score}</td>
-            <td className="py-1.5 text-ink">{area.n}</td>
             <td className="py-1.5 text-ink">{area.readingLabel}</td>
           </tr>
         ))}

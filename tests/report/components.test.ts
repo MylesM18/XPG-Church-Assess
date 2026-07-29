@@ -7,7 +7,7 @@ import {
   StaleMethodologyNotice,
   SharedStaleMethodologyNotice,
 } from '../../app/app/[churchId]/diagnosis/report/shared';
-import { CoverCard } from '../../app/app/[churchId]/diagnosis/report/cover';
+import { CoverCard, AreaTable } from '../../app/app/[churchId]/diagnosis/report/cover';
 import { buildReportView } from '@/lib/report/view';
 import { fallbackProse } from '@/lib/ai/fallback';
 import { diagnose } from '../../lib/engine';
@@ -50,12 +50,12 @@ const area = {
 };
 
 describe('AreaDossier', () => {
-  it('renders the score, N, and all six fields inline', () => {
+  it('renders the score and all six fields inline', () => {
     const tree = AreaDossier({ area });
     const text = textOf(tree);
     expect(text).toMatch(/Discipleship Pathway/);
     expect(text).toMatch(/73/);
-    expect(text).toMatch(/N=14/);
+    expect(text).not.toContain('N=');
     for (const label of ['Reading', 'Inside it', 'Agreement', 'Position', 'Depends on', 'Watch for']) {
       expect(text).toContain(label);
     }
@@ -88,6 +88,19 @@ describe('AreaDossier', () => {
     expect(text).toContain('Discipleship is holding but not compounding.'); // reading — untouched
     expect(text).toContain('p62 of the benchmark prior'); // position — untouched
     expect(text).toContain('Systems (74) gates this · feeds Volunteers (48)'); // dependsOn — untouched
+  });
+});
+
+// --- AreaTable: the Layer 1 cover table columns (Change #1: respondent N removed) ------------
+//
+// AreaTable is shared by the screen cover, the PDF, and the public /r/[shareToken] surface (all
+// import it from cover.tsx). The respondent count is an internal statistic that no longer belongs
+// on any report surface, so the table must show Area / Score / Band only — no N column.
+describe('AreaTable', () => {
+  it('shows Area, Score, and Band columns but not respondent N', () => {
+    const tree = AreaTable({ areas: [area] });
+    const headers = walk(tree).filter((n) => n.type === 'th').map((n) => textOf(n));
+    expect(headers).toEqual(['Area', 'Score', 'Band']);
   });
 });
 

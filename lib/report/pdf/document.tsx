@@ -150,7 +150,7 @@ function AreaDossierBlock({ area }: { area: AreaDossierView }) {
     <View style={s.dossier} wrap={false}>
       <View style={s.dossierHeaderRow}>
         <Text style={s.dossierName}>{area.name}</Text>
-        <Text style={s.dossierMeta}>{`${area.score}  ·  N=${area.n}`}</Text>
+        <Text style={s.dossierMeta}>{area.score}</Text>
       </View>
       <DossierField label="Reading" value={area.reading} />
       <DossierField label="Inside it" value={area.insideIt} />
@@ -216,14 +216,12 @@ export function ReportDocument({
           <View style={s.tableHeaderRow}>
             <Text style={[s.tableHeaderText, s.tableCellName]}>Area</Text>
             <Text style={[s.tableHeaderText, s.tableCellSmall]}>Score</Text>
-            <Text style={[s.tableHeaderText, s.tableCellSmall]}>N</Text>
             <Text style={[s.tableHeaderText, s.tableCellSmall]}>Band</Text>
           </View>
           {view.areas.map((area) => (
             <View key={area.category_id} style={s.tableRow}>
               <Text style={s.tableCellName}>{area.name}</Text>
               <Text style={s.tableCellSmall}>{area.score}</Text>
-              <Text style={s.tableCellSmall}>{area.n}</Text>
               <Text style={s.tableCellSmall}>{area.readingLabel}</Text>
             </View>
           ))}

@@ -105,6 +105,20 @@ describe('ReportDocument', () => {
     expect(text).not.toContain('70%');
   }, 30_000);
 
+  // Change #1: the respondent count (N) is an internal statistic that no longer belongs on any
+  // report surface. Neither the dossier meta ("score · N=n") nor the AreaTable "N" column may
+  // appear. The band-column region between the 'Score' header and Layer 2's 'The chain walk'
+  // heading must carry no standalone 'N' header.
+  it('does not display the respondent N column or N= meta', async () => {
+    const text = await renderText('pdf');
+    expect(text).not.toContain('N=');
+    const start = text.indexOf('Score');
+    const end = text.indexOf('The chain walk');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(text.slice(start, end)).not.toMatch(/\bN\b/);
+  }, 30_000);
+
   // Finding #5: the Layer 1 AreaTable "Band" column must show the same state-aware reading band
   // as each area's dossier (Natalie's ruling: align). The old score-only scoreBand() collapsed a
   // Watch-state area (score >= 45) to "Holding" on the cover while its dossier read watch-state — a
