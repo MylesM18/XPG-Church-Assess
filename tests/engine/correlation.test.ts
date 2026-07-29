@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { loadFixtureMethodology } from './helpers';
 import { correlate, benjaminiHochberg } from '../../lib/engine/correlation';
-import { calibrationFrom } from '../../lib/engine/calibration';
 import type { AreaFit } from '../../lib/engine/fit';
 
 const AREAS = ['guest', 'conn', 'disc', 'vol', 'gen', 'gov', 'comm', 'sys'];
@@ -33,6 +32,18 @@ function fitsFrom(table: Array<{ id: string; effects: Record<string, number> }>)
 describe('correlation', () => {
   const rules = loadFixtureMethodology().rules;
 
+  it('depends only on fits + rules: at the N gate it yields the 13 authored pairs and no exploratory noise (guards the removed calibration arg)', () => {
+    const rnd = prng(7);
+    const table = Array.from({ length: 18 }, (_, i) => ({
+      id: `u${i}`,
+      effects: Object.fromEntries(AREAS.map((a) => [a, rnd() * 2])) as Record<string, number>,
+    }));
+    const fits = fitsFrom(table);
+    const out = correlate(fits, rules); // 2-arg: calibration is not an input to correlate
+    expect(out).toHaveLength(13);
+    expect(out.every((c) => c.verdict !== 'unexpected')).toBe(true);
+  });
+
   it('returns nothing below the N gate, and something at it', () => {
     const build = (count: number) => {
       const rnd = prng(7);
@@ -41,7 +52,7 @@ describe('correlation', () => {
         effects: Object.fromEntries(AREAS.map((a) => [a, rnd() * 2])) as Record<string, number>,
       }));
       const fits = fitsFrom(table);
-      return correlate(fits, calibrationFrom(fits), rules);
+      return correlate(fits, rules);
     };
     expect(build(17)).toEqual([]);
     // 13 = the authored pairs (Task 9's 13 structural edges, deduplicated as
@@ -64,7 +75,7 @@ describe('correlation', () => {
       };
     });
     const fits = fitsFrom(table);
-    const out = correlate(fits, calibrationFrom(fits), rules);
+    const out = correlate(fits, rules);
     expect(out.filter((c) => c.verdict === 'confirmed')).toEqual([]);
   });
 
@@ -83,7 +94,7 @@ describe('correlation', () => {
       })),
     ];
     const fits = fitsFrom(table);
-    const out = correlate(fits, calibrationFrom(fits), rules);
+    const out = correlate(fits, rules);
     const guestConn = out.find((c) => c.from === 'guest' && c.to === 'conn');
     expect(guestConn?.verdict).not.toBe('confirmed');
     expect(guestConn?.n ?? 0).toBeLessThanOrEqual(20); // the two-area people did not count
@@ -96,7 +107,7 @@ describe('correlation', () => {
       effects: Object.fromEntries(AREAS.map((a) => [a, rnd() * 2])) as Record<string, number>,
     }));
     const fits = fitsFrom(table);
-    const out = correlate(fits, calibrationFrom(fits), rules);
+    const out = correlate(fits, rules);
     expect(out.filter((c) => c.verdict === 'unexpected')).toEqual([]);
   });
 
@@ -134,7 +145,7 @@ describe('correlation', () => {
       return { id: `u${i}`, effects };
     });
     const fits = fitsFrom(table);
-    const out = correlate(fits, calibrationFrom(fits), rules);
+    const out = correlate(fits, rules);
 
     expect(out.some((c) => c.verdict !== 'not_visible')).toBe(true); // non-vacuity guard
     for (const c of out) {
@@ -157,7 +168,7 @@ describe('correlation', () => {
       return { id: `u${i}`, effects };
     });
     const fits = fitsFrom(table);
-    const out = correlate(fits, calibrationFrom(fits), rules);
+    const out = correlate(fits, rules);
     expect(out.filter((c) => c.verdict === 'unexpected').length).toBeLessThanOrEqual(2);
   });
 });

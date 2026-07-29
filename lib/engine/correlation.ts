@@ -1,6 +1,5 @@
 import type { Rules } from '../methodology/schema';
 import type { AreaFit } from './fit';
-import type { Calibration } from './calibration';
 import { structuralEdges } from './dependencies';
 
 export interface CorrelationAnnotation {
@@ -104,11 +103,7 @@ export function benjaminiHochberg(ps: number[], alpha: number): Set<number> {
   return survivors;
 }
 
-export function correlate(
-  fits: AreaFit[],
-  _calibration: Calibration,
-  rules: Rules,
-): CorrelationAnnotation[] {
+export function correlate(fits: AreaFit[], rules: Rules): CorrelationAnnotation[] {
   const c = rules.correlation;
 
   const effectsByPerson = new Map<string, Map<string, number>>();

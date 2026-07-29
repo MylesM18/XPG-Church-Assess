@@ -202,7 +202,6 @@ export function assemble(
   const dependencies = readDependencies(methodology.rules, scores, t.break);
   const correlations = correlate(
     methodology.questions.categories.map(cat => normalized.get(cat.id)!.fit),
-    calibration,
     methodology.rules,
   );
 
