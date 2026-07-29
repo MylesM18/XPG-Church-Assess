@@ -2,14 +2,24 @@ import { createClient } from '@/lib/supabase/server'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { fallbackProse, type ReportBlocks } from '@/lib/ai/fallback'
-import { buildReportView } from '@/lib/report/view'
+import { resolveReportView } from '@/lib/report/view'
+import { deriveDiagnosisForRun } from '@/lib/report/derive'
 import { renderReportDocument } from '@/lib/report/pdf/render'
-import type { Diagnosis } from '@/lib/engine/types'
+import type { Response } from '@/lib/engine/types'
 
 // renderReportDocument (renderToBuffer) is Node-only (Yoga WASM + Buffer). Edge would fail at runtime.
 export const runtime = 'nodejs'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Raw shape of one get_completed_run_responses row (supabase.rpc returns it untyped).
+interface RunResponseRow {
+  category_id: string
+  item_id: string
+  value: number
+  respondent_label: string
+  respondent_user_id: string | null
+}
 
 /** Filename-safe ASCII slug. There is no slug column; derive from the name. */
 function slugify(name: string): string {
@@ -36,9 +46,11 @@ export async function GET(
   // row (no error), and both return 404 — never a 403, which would let a
   // caller probe which run ids exist. A real query failure sets `error`
   // instead, which we surface as a 500 so it isn't invisible in logs.
+  // The diagnoses row is read ONLY for AI `prose` (the lazy thunk) and row existence (404).
+  // Its `payload` is no longer the view's source — CT-2(c) re-derives from the run's responses.
   const { data: diag, error: diagError } = await supabase
     .from('diagnoses')
-    .select('payload, prose, run_id')
+    .select('prose')
     .eq('run_id', runId)
     .order('generated_at', { ascending: false })
     .limit(1)
@@ -52,7 +64,7 @@ export async function GET(
 
   const { data: run, error: runError } = await supabase
     .from('assessment_runs')
-    .select('church_id, churches(name, brand_color)')
+    .select('church_id, churches(name, brand_color, attendance_band)')
     .eq('id', runId)
     .maybeSingle()
 
@@ -61,21 +73,54 @@ export async function GET(
     return new Response('Could not generate the PDF', { status: 500 })
   }
 
-  const church = run?.churches as unknown as { name: string; brand_color: string } | undefined
+  const church = run?.churches as unknown as
+    | { name: string; brand_color: string; attendance_band: string | null }
+    | undefined
   if (!church) return new Response('Not found', { status: 404 })
 
   try {
-    const diagnosis = diag.payload as Diagnosis
     const methodology = loadMethodology()
 
-    // Same gate as the report page — the document never depends on AI.
-    const PROSE_MODE = process.env.PROSE_MODE ?? 'fallback'
-    const blocks: ReportBlocks =
-      PROSE_MODE !== 'fallback' && diag.prose
-        ? (diag.prose as ReportBlocks)
-        : fallbackProse(diagnosis, methodology)
+    // CT-2(c): re-derive the Diagnosis from the run's RESPONSES under the CURRENT methodology
+    // rather than trusting diag.payload. Same member-gated RPC + stable-identity mapping the
+    // authenticated page uses.
+    const { data: rawResponses } = await supabase.rpc('get_completed_run_responses', {
+      p_church_id: run!.church_id,
+    })
+    const responses: Response[] = (rawResponses ?? []).map((r: RunResponseRow) => ({
+      category_id: r.category_id,
+      item_id: r.item_id,
+      value: r.value,
+      respondent_label: r.respondent_label,
+      respondent_id: r.respondent_user_id ?? r.respondent_label,
+    }))
+    const derived = deriveDiagnosisForRun(responses, methodology, {
+      attendance_band: church.attendance_band ?? '',
+    })
 
-    const view = buildReportView(diagnosis, blocks, methodology, { audience: 'pdf' })
+    // `blocks` stays a lazy thunk taking the fresh diagnosis, evaluated only on the scoreable
+    // path (resolveReportView, lib/report/view.ts).
+    const PROSE_MODE = process.env.PROSE_MODE ?? 'fallback'
+    const resolution = resolveReportView(
+      derived,
+      methodology,
+      (d) =>
+        PROSE_MODE !== 'fallback' && diag.prose
+          ? (diag.prose as ReportBlocks)
+          : fallbackProse(d, methodology),
+      { audience: 'pdf' },
+    )
+
+    if (!resolution.scoreable) {
+      // A run that cannot be scored under the current methodology (incomplete area, or an
+      // unset/unknown attendance band) cannot be exported. Distinct 409, not the generic 500.
+      return new Response(
+        'This report cannot be scored under the current methodology and cannot be exported until the assessment is completed.',
+        { status: 409 },
+      )
+    }
+
+    const view = resolution.view
     const brand = resolveBrand(church.name)
     const generatedAt = new Date()
 

@@ -4,12 +4,21 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { loadMethodology } from '@/lib/methodology/load'
 import { createClient } from '@/lib/supabase/server'
-import { coverage, type CoverageRow } from '@/lib/coverage/coverage'
-import { diagnose } from '@/lib/engine'
-import { isKnownBand } from '@/lib/engine/benchmark'
+import { deriveDiagnosisForRun } from '@/lib/report/derive'
 import type { Response } from '@/lib/engine/types'
 import { responseHash } from '@/lib/report/response-hash'
 import { generateProse } from '@/lib/ai/prose'
+
+// Raw shape of one get_run_responses row (supabase.rpc returns it untyped). respondent_user_id
+// is null for a row predating the 20260728000100 migration or a submission the RPC never
+// resolved to a member id; the map below falls back to the label in that case.
+interface RunResponseRow {
+  category_id: string
+  item_id: string
+  value: number
+  respondent_label: string
+  respondent_user_id: string | null
+}
 
 export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
@@ -19,38 +28,48 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
   const methodology = loadMethodology()
   const categories = methodology.questions.categories
 
-  // HARD GATE (spec §2): never diagnose a partial run — an unanswered category scores 0 → phantom constraint.
-  const { data: coverageData, error: coverageError } = await supabase.rpc('get_run_coverage', {
+  // Raw per-respondent rows — server-side ONLY, never returned to the browser.
+  const { data: raw, error: respError } = await supabase.rpc('get_run_responses', {
     p_church_id: churchId,
   })
-  if (coverageError) return { ok: false, error: coverageError.message }
-  const rows = (coverageData ?? []) as CoverageRow[]
-  if (coverage(rows, categories).coveredCount !== categories.length) {
-    return { ok: false, error: 'All 8 areas must be answered before generating a diagnosis.' }
-  }
+  if (respError) return { ok: false, error: respError.message }
+  const responses: Response[] = (raw ?? []).map((r: RunResponseRow) => ({
+    category_id: r.category_id,
+    item_id: r.item_id,
+    value: r.value,
+    respondent_label: r.respondent_label,
+    respondent_id: r.respondent_user_id ?? r.respondent_label,
+  }))
 
   const { data: church } = await supabase
     .from('churches')
     .select('attendance_band')
     .eq('id', churchId)
     .maybeSingle()
-  // Require a known attendance band before diagnosing: cohort benchmarks are keyed by it,
-  // and diagnose() (lib/engine/benchmark.ts) throws on an unknown band. Guard here so a
-  // blank/legacy band returns a friendly error instead of a 500. (M5a governance: require band.)
-  const band = church?.attendance_band ?? ''
-  if (!isKnownBand(methodology, band)) {
+
+  // normalize → diagnosis gate → attendance-band guard → assemble, the SAME sequence the three
+  // report surfaces re-derive with at render (deriveDiagnosisForRun, lib/report/derive.ts). Sharing
+  // it here is what guarantees generateDiagnosis and the render path can never disagree about what
+  // "complete" means or which bands are known. HARD GATE (spec §4.6): never diagnose a run where
+  // some area has zero fully-covered respondents (a phantom constraint), and never assemble() with
+  // an unknown band (benchmarkFor() throws) — both surface as friendly errors here, not a 500.
+  const derived = deriveDiagnosisForRun(responses, methodology, {
+    attendance_band: church?.attendance_band ?? '',
+  })
+  if (!derived.ok) {
+    if (derived.reason === 'incomplete_areas') {
+      const names = derived.blockedAreas
+        .map((id) => categories.find((c) => c.id === id)?.name ?? id)
+        .join(', ')
+      return {
+        ok: false,
+        error: `Every area needs at least one person who answered all its questions. Still waiting on: ${names}.`,
+      }
+    }
     return { ok: false, error: 'Set your church’s weekend attendance band before generating a diagnosis.' }
   }
-  const ctx = { attendance_band: band }
 
-  // Raw per-respondent rows — server-side ONLY, never returned to the browser.
-  const { data: raw, error: respError } = await supabase.rpc('get_run_responses', {
-    p_church_id: churchId,
-  })
-  if (respError) return { ok: false, error: respError.message }
-  const responses = (raw ?? []) as Response[]
-
-  const diagnosis = diagnose(responses, methodology, ctx)
+  const diagnosis = derived.diagnosis
   const hash = responseHash(responses, diagnosis.methodology_version)
 
   const { error: saveError } = await supabase.rpc('save_diagnosis', {
@@ -88,8 +107,9 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
         .limit(1)
         .maybeSingle()
       // An unresolvable run degrades to a cache MISS (generate), never a skip: generateDiagnosis
-      // is one-shot per church — save_diagnosis completes the run and get_run_coverage then
-      // reads nothing, so a second attempt never reaches this block. Forfeiting here on a
+      // is one-shot per church — save_diagnosis completes the run, so get_run_responses' own
+      // in_progress filter then returns nothing, normalize() sees zero responses, diagnosisGate
+      // blocks every area, and a second attempt never reaches this block. Forfeiting here on a
       // transient read failure would reproduce the very harm this scoping fixes. save_prose
       // resolves its own row from church_id + response_hash, so it needs no run id.
       let alreadyAi = false

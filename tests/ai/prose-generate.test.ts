@@ -19,7 +19,7 @@ import { generateProse } from '../../lib/ai/prose';
 const m = loadMethodology();
 function cat(id: string, v: number): Response[] {
   const c = m.questions.categories.find(x => x.id === id)!;
-  return c.items.map(it => ({ category_id: id, item_id: it.id, value: v, respondent_label: 'Pastor' }));
+  return c.items.map(it => ({ category_id: id, item_id: it.id, value: v, respondent_label: 'Pastor', respondent_id: 'Pastor' }));
 }
 const dBroken = diagnose(
   [...cat('guest', 3), ...cat('conn', 7), ...cat('disc', 7), ...cat('vol', 7),
@@ -34,6 +34,7 @@ function asParsed(b: ReportBlocks): Record<string, string | null> {
     verdict: b.verdict, evidence: b.evidence ?? null, blind_spot: b.blind_spot ?? null,
     cost: b.cost ?? null, do_not_work_on: b.do_not_work_on ?? null, next_step: b.next_step,
     gating: b.gating ?? null, dispersion: b.dispersion ?? null, benchmark_note: b.benchmark_note,
+    dependency_note: b.dependency_note,
   };
 }
 

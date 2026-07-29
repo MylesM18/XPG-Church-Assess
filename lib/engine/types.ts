@@ -1,10 +1,16 @@
 import type { CategoryKind, Offer } from '../methodology/schema';
+import type { AreaFit } from './fit';
+import type { Calibration } from './calibration';
+import type { DependencyEdge } from './dependencies';
+import type { CorrelationAnnotation } from './correlation';
+import type { DisagreementFlag } from './disagreement';
 
 export interface Response {
   category_id: string;
   item_id: string;
   value: number; // 1..10
-  respondent_label: string;
+  respondent_label: string; // DISPLAY ONLY — may collide across people
+  respondent_id: string; // stable identity — what the engine groups on
 }
 
 export interface Context {
@@ -16,6 +22,7 @@ export interface NormalizedCategory {
   itemValues: Map<string, number[]>; // item_id -> values across all respondents
   respondentMeans: Array<{ label: string; mean: number }>;
   respondentCount: number;
+  fit: AreaFit;
 }
 
 export type GapClass = 'blind_spot' | 'underrated' | 'calibrated' | null;
@@ -32,7 +39,9 @@ export interface DiagnosisCategory {
   gap_class: GapClass;
   cohort_percentile: number | null;
   state: CategoryState;
-  respondent_count: number;
+  respondent_count: number; // complete respondents in this area (= fit.n)
+  excluded_partial: number; // people with unfinished answers here that did not count
+  questionEffects: Array<{ item_id: string; effect: number }>; // = fit.questionEffects → dossier "Inside it" (spec §7.2)
 }
 
 export interface BlindSpot {
@@ -42,11 +51,7 @@ export interface BlindSpot {
   gap: number;
 }
 
-export interface DispersionFlag {
-  category_id: string;
-  respondents: Array<{ label: string; mean: number }>;
-  spread: number; // population stddev of respondent means, 0..10 scale
-}
+export type { DisagreementFlag };
 
 export interface DoNotWorkOn {
   category_id: string;
@@ -71,7 +76,9 @@ export interface EvidenceReceipt {
 
 export interface Diagnosis {
   methodology_version: string;
-  overall_score: number;
+  throughput: number; // the cover number — 0.85*min(chain) + 0.15*mean(chain)
+  capacity: number;   // 8-area mean — what overall_score used to be
+  gap: number;        // capacity - throughput
   categories: DiagnosisCategory[];
   primary_constraint: { category_id: string } | null;
   contributing: string[];
@@ -79,7 +86,10 @@ export interface Diagnosis {
   gating_conditions: GatingCondition[];
   generosity_mode: GenerosityMode;
   blind_spots: BlindSpot[];
-  dispersion_flags: DispersionFlag[];
+  disagreement_flags: DisagreementFlag[];
+  calibration: Calibration;
+  dependencies: DependencyEdge[];
+  correlations: CorrelationAnnotation[];
   offer: Offer;
   confidence: number;
   evidence_trail: EvidenceReceipt[];

@@ -1,5 +1,5 @@
 begin;
-select plan(7);
+select plan(8);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
  ('c1111111-1111-1111-1111-111111111111','authenticated','authenticated','respadmin@test.com','x',now(),now()),
@@ -33,6 +33,10 @@ select is((select value from get_run_responses(
 select is((select respondent_label from get_run_responses(
             (select id from churches where name = 'Responses Test Church')) where item_id = 'G1'), 'Someone',
           'raw respondent_label for G1 is preserved');
+select is((select respondent_user_id from get_run_responses(
+            (select id from churches where name = 'Responses Test Church')) where item_id = 'G1'),
+          'c1111111-1111-1111-1111-111111111111'::uuid,
+          'respondent_user_id is returned and matches the seeded member');
 
 -- run-scoping: a second (complete) run's rows are excluded
 reset role;

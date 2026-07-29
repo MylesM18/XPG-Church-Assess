@@ -1,8 +1,8 @@
 import { z } from 'zod/v4';
 
 /**
- * Mirrors the shipped 9-field ReportBlocks contract (lib/ai/fallback.ts).
- * Required: verdict, next_step, benchmark_note. The 6 optional fields are
+ * Mirrors the shipped 10-field ReportBlocks contract (lib/ai/fallback.ts).
+ * Required: verdict, next_step, benchmark_note, dependency_note. The 6 optional fields are
  * `.nullable()` (present-but-null) rather than `.optional()`: Anthropic strict
  * structured outputs emit every property, so the model returns null for an
  * absent field. passesFactCheck (Task 2) treats null/undefined/'' identically,
@@ -18,6 +18,7 @@ export const ReportBlocksSchema = z.object({
   gating: z.string().nullable(),
   dispersion: z.string().nullable(),
   benchmark_note: z.string(),
+  dependency_note: z.string(),
 });
 
 export type ParsedBlocks = z.infer<typeof ReportBlocksSchema>;
@@ -53,7 +54,7 @@ function stringValues(b: ReportBlocks): string {
  *   3. Category fidelity — if primary_constraint is non-null, its category name must appear in `ai`.
  *   4. Primary-score pin — if primary_constraint is non-null, that category's true score must
  *      appear in `ai.verdict` (closes the "scored 100 out of 100" hole prong 2 alone misses).
- *   5. Respondent anonymity — no `dispersion_flags[].respondents[].label` may appear in `ai`.
+ *   5. Respondent anonymity — no `disagreement_flags[].respondents[].label` may appear in `ai`.
  */
 export function passesFactCheck(
   ai: ReportBlocks,
@@ -106,7 +107,7 @@ export function passesFactCheck(
   }
 
   // 5. Respondent anonymity. The user message embeds JSON.stringify(d), which carries
-  // dispersion_flags[].respondents[].label. Nothing downstream strips prose, so a reword
+  // disagreement_flags[].respondents[].label. Nothing downstream strips prose, so a reword
   // that names an individual reaches the public /r/[shareToken] page unfiltered. Fail
   // closed: returning false routes the caller to deterministic prose, which is provably
   // name-free (lib/ai/fallback.ts). The `?? []` guards are deliberate even though both
@@ -119,7 +120,7 @@ export function passesFactCheck(
   // on the authenticated diagnosis/PDF paths respondent names render by design. Generation-time
   // only: prose persisted before this gate is unaffected.
   const haystack = stringValues(ai).toLowerCase();
-  for (const f of d.dispersion_flags ?? []) {
+  for (const f of d.disagreement_flags ?? []) {
     for (const r of f.respondents ?? []) {
       if (r.label && haystack.includes(r.label.toLowerCase())) return false;
     }
@@ -153,6 +154,7 @@ function toReportBlocks(p: ParsedBlocks): ReportBlocks {
     gating: p.gating ?? undefined,
     dispersion: p.dispersion ?? undefined,
     benchmark_note: p.benchmark_note,
+    dependency_note: p.dependency_note,
   };
 }
 
@@ -165,7 +167,7 @@ function toReportBlocks(p: ParsedBlocks): ReportBlocks {
  * Every silent-null path logs a reason so "AI is off" (caller's PROSE_MODE gate) stays
  * distinguishable from "AI is broken" (a failure here). Log `err.message` only — never
  * the error object, the request payload, `d`, or the draft: the user message embeds
- * `JSON.stringify(d)` and `d.dispersion_flags[].respondents[].label` carries respondent
+ * `JSON.stringify(d)` and `d.disagreement_flags[].respondents[].label` carries respondent
  * names, so logging anything beyond a short reason string would leak report content.
  * This file is under eslint globalIgnores, so console.warn here is lint-clean.
  */

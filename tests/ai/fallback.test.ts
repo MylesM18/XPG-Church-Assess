@@ -7,7 +7,7 @@ import type { Response } from '../../lib/engine/types';
 const m = loadMethodology();
 function cat(id: string, v: number): Response[] {
   const c = m.questions.categories.find(x => x.id === id)!;
-  return c.items.map(it => ({ category_id: id, item_id: it.id, value: v, respondent_label: 'Pastor' }));
+  return c.items.map(it => ({ category_id: id, item_id: it.id, value: v, respondent_label: 'Pastor', respondent_id: 'Pastor' }));
 }
 
 describe('fallbackProse', () => {

@@ -22,6 +22,13 @@ describe('Fixture: Broad but Shallow (depth)', () => {
   it('primary constraint is generosity', () => {
     expect(d.primary_constraint?.category_id).toBe('gen');
   });
+  it('capacity is the 8-area mean; throughput is dragged down by the gen bottleneck', () => {
+    // chain scores (guest,conn,disc,vol,gen) = [70,70,70,70,30]; min=30, mean=62
+    // throughput = round(0.85*30 + 0.15*62) = round(25.5 + 9.3) = round(34.8) = 35
+    // capacity = mean of all 8 = (70+70+70+70+30+70+70+70)/8 = 520/8 = 65
+    expect(d.capacity).toBe(65);
+    expect(d.throughput).toBe(35);
+  });
   it('generosity mode is depth', () => {
     expect(d.generosity_mode).toBe('depth');
   });

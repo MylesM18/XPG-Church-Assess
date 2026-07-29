@@ -8,7 +8,7 @@ import type { Response } from '../../lib/engine/types';
 const m = loadMethodology();
 function cat(id: string, v: number): Response[] {
   const c = m.questions.categories.find(x => x.id === id)!;
-  return c.items.map(it => ({ category_id: id, item_id: it.id, value: v, respondent_label: 'Pastor' }));
+  return c.items.map(it => ({ category_id: id, item_id: it.id, value: v, respondent_label: 'Pastor', respondent_id: 'Pastor' }));
 }
 
 // Broken chain: guest is the primary constraint → full multi-field draft.
@@ -19,7 +19,7 @@ const dBroken = diagnose(
 );
 const draftFull = fallbackProse(dBroken, m);
 
-// Healthy: no constraint → 3-field draft.
+// Healthy: no constraint → minimal draft.
 const dHealthy = diagnose(
   [...cat('guest', 7), ...cat('conn', 7), ...cat('disc', 7), ...cat('vol', 7),
    ...cat('gen', 7), ...cat('gov', 7), ...cat('comm', 7), ...cat('sys', 7)],
@@ -28,14 +28,14 @@ const dHealthy = diagnose(
 const draft3 = fallbackProse(dHealthy, m);
 
 // Two respondents who disagree sharply on one category, so the engine really emits
-// dispersion_flags[].respondents[] carrying their labels. A respondent-anonymity test built
+// disagreement_flags[].respondents[] carrying their labels. A respondent-anonymity test built
 // on a fixture with an EMPTY respondents array would pass because the loop never runs.
 const NAMED = 'Priscilla Vandermeer';
 function cat2(id: string, a: number, b: number): Response[] {
   const c = m.questions.categories.find(x => x.id === id)!;
   return c.items.flatMap(it => [
-    { category_id: id, item_id: it.id, value: a, respondent_label: NAMED },
-    { category_id: id, item_id: it.id, value: b, respondent_label: 'Marcus Ellingsworth' },
+    { category_id: id, item_id: it.id, value: a, respondent_label: NAMED, respondent_id: NAMED },
+    { category_id: id, item_id: it.id, value: b, respondent_label: 'Marcus Ellingsworth', respondent_id: 'Marcus Ellingsworth' },
   ]);
 }
 
@@ -81,13 +81,13 @@ describe('passesFactCheck', () => {
     expect(passesFactCheck(ai, draftFull, dBroken, m)).toBe(false);
   });
 
-  it('(f) accepts a faithful reword on the null-constraint 3-field draft', () => {
+  it('(f) accepts a faithful reword on the null-constraint minimal draft', () => {
     expect(dHealthy.primary_constraint).toBeNull(); // precondition
     const ai = { ...draft3, verdict: draft3.verdict + ' Nothing is breaking the chain right now.' };
     expect(passesFactCheck(ai, draft3, dHealthy, m)).toBe(true);
   });
 
-  it('(g) rejects a 4th field added to the 3-field null-constraint draft', () => {
+  it('(g) rejects an extra field added to the null-constraint draft', () => {
     const ai = { ...draft3, evidence: 'Invented supporting detail.' };
     expect(passesFactCheck(ai, draft3, dHealthy, m)).toBe(false);
   });
@@ -129,7 +129,7 @@ describe('passesFactCheck', () => {
 
   it('(k) rejects a reword that names an individual respondent (respondent anonymity)', () => {
     // Precondition: the fixture genuinely carries the label, so the gate's loop can fire.
-    expect(dNamed.dispersion_flags.some(f => f.respondents.some(r => r.label === NAMED))).toBe(true);
+    expect(dNamed.disagreement_flags.some(f => f.respondents.some(r => r.label === NAMED))).toBe(true);
     expect(draftNamed.evidence).toBeDefined();
     // Nothing downstream strips prose, so a reword that names an individual would reach the
     // public /r/[shareToken] page unfiltered. Fail closed to deterministic prose instead.

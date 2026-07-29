@@ -18,7 +18,14 @@ export function renderReportDocument(props: ReportDocumentProps): Promise<Buffer
   // only asserts that decision was actually applied to whatever view we were
   // handed, so a stray caller or a typo'd audience literal can't ship names
   // past the permission wall.
-  if (props.view.dispersion?.respondents.length) {
+  //
+  // Two independent fields carry the same names today (lib/report/view.ts: `dispersion` at
+  // :54, `system.disagreement` at :40), stripped by two independent sites (:256-257 and
+  // :320-326) — legacy and current source-of-truth respectively (Task 16). document.tsx
+  // renders from `system.disagreement`, not `dispersion`; checking only `dispersion` here would
+  // let this guard silently stop watching the field the renderer actually reads the moment the
+  // two fields' strip logic ever diverges, or `dispersion` is retired. Check both.
+  if (props.view.dispersion?.respondents.length || props.view.system?.disagreement?.respondents.length) {
     throw new Error('renderReportDocument: view carries respondent names; expected audience "pdf"');
   }
 

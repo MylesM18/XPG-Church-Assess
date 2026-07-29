@@ -24,12 +24,9 @@ const CHURCH_B = '22222222-2222-2222-2222-222222222222';
 // Identical answer sets for both churches → identical responseHash. responseHash contains no
 // church identifier (lib/report/response-hash.ts), which is what makes the collision possible.
 const responses: Response[] = m.questions.categories.flatMap((c) =>
-  c.items.map((it) => ({ category_id: c.id, item_id: it.id, value: 7, respondent_label: 'Pastor' })),
+  c.items.map((it) => ({ category_id: c.id, item_id: it.id, value: 7, respondent_label: 'Pastor', respondent_id: 'Pastor' })),
 );
 const HASH = responseHash(responses, diagnose(responses, m, { attendance_band: '500_999' }).methodology_version);
-const coverageRows = m.questions.categories.flatMap((c) =>
-  c.items.map((it) => ({ category_id: c.id, item_id: it.id, response_count: 1, respondent_count: 1 })),
-);
 
 type Row = Record<string, unknown>;
 
@@ -70,7 +67,7 @@ describe('generateDiagnosis AI prose cache-check', () => {
   beforeEach(() => {
     vi.stubEnv('PROSE_MODE', 'ai');
     mockGenerateProse.mockReset();
-    mockGenerateProse.mockResolvedValue({ verdict: 'v', next_step: 'n', benchmark_note: 'b' });
+    mockGenerateProse.mockResolvedValue({ verdict: 'v', next_step: 'n', benchmark_note: 'b', dependency_note: 'd' });
     saveProseCalls.length = 0;
 
     const from = fakeDb({
@@ -94,7 +91,6 @@ describe('generateDiagnosis AI prose cache-check', () => {
       auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) },
       from,
       rpc: async (name: string, args: Record<string, unknown>) => {
-        if (name === 'get_run_coverage') return { data: coverageRows, error: null };
         if (name === 'get_run_responses') return { data: responses, error: null };
         if (name === 'save_diagnosis') return { data: null, error: null };
         if (name === 'save_prose') { saveProseCalls.push(args); return { data: null, error: null }; }

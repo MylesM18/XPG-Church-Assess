@@ -22,6 +22,13 @@ describe('Fixture: Faithful Remnant (breadth)', () => {
   it('primary constraint is conn', () => {
     expect(d.primary_constraint?.category_id).toBe('conn');
   });
+  it('capacity is the 8-area mean; throughput is dragged down by the conn bottleneck', () => {
+    // chain scores (guest,conn,disc,vol,gen) = [70,30,70,70,40]; min=30, mean=56
+    // throughput = round(0.85*30 + 0.15*56) = round(25.5 + 8.4) = round(33.9) = 34
+    // capacity = mean of all 8 = (70+30+70+70+40+70+70+70)/8 = 490/8 = 61.25 -> 61
+    expect(d.capacity).toBe(61);
+    expect(d.throughput).toBe(34);
+  });
   it('generosity is downstream and marked do-not-work-on', () => {
     expect(d.do_not_work_on.map(x => x.category_id)).toContain('gen');
   });

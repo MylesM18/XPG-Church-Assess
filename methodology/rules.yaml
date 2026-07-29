@@ -1,4 +1,4 @@
-version: "0.1.0"
+version: "0.2.0"
 chain: [guest, conn, disc, vol, gen]
 enablers:
   gov:  { gates: all }
@@ -7,6 +7,22 @@ enablers:
 generosity:
   breadth_items: [GEN1]
   depth_items: [GEN2, GEN4]
+throughput:
+  min_weight: 0.85
+dependencies:
+  - { from: guest, to: conn,  kind: sequence, statement: "Connection has nothing to work with until a guest's name reaches a person who owns the next conversation." }
+  - { from: conn,  to: disc,  kind: sequence, statement: "People do not change in front of strangers — formation needs enough relational safety to be honest about where you actually are." }
+  - { from: disc,  to: vol,   kind: sequence, statement: "Serving without formation fills slots and burns people out — a volunteer who was never discipled has nothing to serve from." }
+  - { from: vol,   to: gen,   kind: sequence, statement: "Serving is what widens the circle of givers — it changes how many people give, not how much any one of them gives." }
+  - { from: gov,   to: guest, kind: gate,     statement: "When no one owns the guest journey, it stops being anyone's job — that is a governance gap, not a hospitality one." }
+  - { from: gov,   to: conn,  kind: gate,     statement: "Connection stays stuck in the same small core when no one is accountable for widening it." }
+  - { from: gov,   to: disc,  kind: gate,     statement: "A formation path no one is accountable for stays a good intention — governance is what turns it into something the church actually runs." }
+  - { from: gov,   to: vol,   kind: gate,     statement: "Volunteers will not take real responsibility where authority is unclear — people step up to own something, not to be blamed for it." }
+  - { from: gov,   to: gen,   kind: gate,     statement: "People give to a church they trust to decide well — weak accountability is felt in the offering long before it is named." }
+  - { from: comm,  to: guest, kind: gate,     statement: "If a newcomer cannot find the next step in under a minute, the step does not exist — however well you built it." }
+  - { from: comm,  to: conn,  kind: gate,     statement: "An on-ramp nobody hears about carries nobody — connection is capped by what your people actually know is available." }
+  - { from: sys,   to: vol,   kind: gate,     statement: "Volunteer capacity is capped by the systems that schedule, track and support it." }
+  - { from: sys,   to: disc,  kind: gate,     statement: "Formation that lives in one person's head stops when that person does — systems are what make discipleship survive a departure." }
 thresholds:
   break: 45
   severe: 25
@@ -29,3 +45,9 @@ constraint_logic: |
 confidence:
   low_response_penalty: 0.15
   floor: 0.4
+correlation:
+  min_n: 18                 # ~80% power to distinguish r ~ 0.6 from zero
+  min_areas_per_person: 4   # leave-two-out style must still rest on >= 2 areas
+  practical_floor: 0.5      # |r| below this is not reported however significant
+  max_unexpected: 2
+  alpha: 0.05

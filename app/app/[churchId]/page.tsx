@@ -5,11 +5,13 @@ import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { coverage, type CoverageRow, type CoverageStatus } from '@/lib/coverage/coverage'
 import { assessmentCta } from '@/lib/coverage/assessment-cta'
+import { diagnosisGateFromMatrix } from '@/lib/coverage/diagnosis-gate'
 import { ChainGlyph } from './chain-glyph'
 import { GenerateButton } from './generate-button'
 import { RefreshOnFocus } from './refresh-on-focus'
 import { InviteMemberForm } from './access/invite-member-form'
 import { buildMemberMatrix, type MatrixMember, type MemberCategoryCoverageRow, type MemberMatrixRow } from '@/lib/coverage/member-matrix'
+import { partialNudges } from '@/lib/coverage/partial-nudge'
 import { MemberCoverageMatrix } from './member-coverage-matrix'
 
 function gatesLabel(gates: 'all' | string[] | undefined): string {
@@ -113,6 +115,23 @@ export default async function DashboardPage({
     )
   }
 
+  // Mirrors the server-side diagnosisGate() in actions.ts: an area is only covered if some ONE
+  // member finished every item in it, not merely that the area has responses somewhere across
+  // the church. This page only has coverage RPCs, not raw responses, so it reads the same
+  // "covered" cells the member matrix below already renders, rather than recomputing fit.n.
+  const dashboardGate = diagnosisGateFromMatrix(memberMatrix, categories)
+  const blockedAreaNames = dashboardGate.blockedAreas
+    .map((id) => categories.find((c) => c.id === id)?.name ?? id)
+    .join(', ')
+
+  // A partial respondent (started an area, didn't finish it) is dropped from that area's score,
+  // not down-weighted (spec §4.5) — so the admin should know what it cost. Derived from the
+  // member matrix rather than the diagnosis, so it shows up before a diagnosis exists.
+  const partialNudgeRows = partialNudges(memberMatrix, categories).map((n) => ({
+    ...n,
+    name: categories.find((c) => c.id === n.category_id)?.name ?? n.category_id,
+  }))
+
   let hasDiagnosis = false
   if (isAdmin) {
     const { data: run } = await supabase
@@ -207,7 +226,7 @@ export default async function DashboardPage({
             >
               View diagnosis
             </Link>
-          ) : result.coveredCount === categories.length ? (
+          ) : dashboardGate.ok ? (
             <GenerateButton churchId={churchId} />
           ) : (
             <button
@@ -217,11 +236,7 @@ export default async function DashboardPage({
             >
               Generate diagnosis{' '}
               <span className="text-xs">
-                (
-                {result.coveredCount < categories.length
-                  ? `Answer all 8 areas first — ${result.coveredCount} of ${categories.length}`
-                  : 'Admins can generate the diagnosis'}
-                )
+                (Every area needs at least one person who answered all its questions. Still waiting on: {blockedAreaNames}.)
               </span>
             </button>
           )
@@ -249,6 +264,18 @@ export default async function DashboardPage({
 
       {isAdmin && (
         <MemberCoverageMatrix matrix={memberMatrix} categories={categories} currentUserId={user?.id ?? null} />
+      )}
+
+      {isAdmin && partialNudgeRows.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {partialNudgeRows.map((n) => (
+            <p key={n.category_id} className="font-body text-sm text-ink-soft">
+              {n.count === 1
+                ? `1 person has unfinished answers in ${n.name} that aren't counting.`
+                : `${n.count} people have unfinished answers in ${n.name} that aren't counting.`}
+            </p>
+          ))}
+        </div>
       )}
     </main>
   )

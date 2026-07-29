@@ -5,7 +5,9 @@ describe('engine types', () => {
   it('a Diagnosis object satisfies the §7.6 shape', () => {
     const d: Diagnosis = {
       methodology_version: '0.1.0',
-      overall_score: 0,
+      throughput: 0,
+      capacity: 0,
+      gap: 0,
       categories: [],
       primary_constraint: null,
       contributing: [],
@@ -13,7 +15,10 @@ describe('engine types', () => {
       gating_conditions: [],
       generosity_mode: null,
       blind_spots: [],
-      dispersion_flags: [],
+      disagreement_flags: [],
+      calibration: { people: [], spread: 0 },
+      dependencies: [],
+      correlations: [],
       offer: { type: 't', call_type: 'c', hook: 'h' },
       confidence: 1,
       evidence_trail: [],
