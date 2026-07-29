@@ -264,3 +264,40 @@ describe('DependencyMap', () => {
     expect(text).toContain('Governance (82) gates → Discipleship (79)');
   });
 });
+
+// --- Appendix: aligned Area/Role/Score/Percentile table (Change #4) --------------------------
+//
+// The appendix used to be a prose <li> list ("{name} (stage 1): {score} · {pct}th pct"). The
+// redesign (spec §4) makes it an aligned four-column table: Area · Role · Score · Percentile.
+// Role reads "Stage {n}" for chain members (by their order in `stages`) and "Enabler" otherwise;
+// a null cohort_percentile shows "—", not a blank. The signature stays
+// Appendix({ categories, stages, benchmarkNote, dependencyNote }) (the notes test above pins it).
+const appendixArgs = {
+  categories: [
+    { category_id: 'guest', name: 'Guest Experience', score: 55, cohort_percentile: 40 },
+    { category_id: 'gen', name: 'Generosity', score: 80, cohort_percentile: null },
+  ],
+  stages: [{ category_id: 'guest' }],
+  benchmarkNote: 'Benchmarks are provisional priors.',
+  dependencyNote: 'Dependencies are a working model.',
+} as unknown as Parameters<typeof Appendix>[0];
+
+describe('Appendix table', () => {
+  it('renders an aligned Area / Role / Score / Percentile table', () => {
+    const headers = walk(Appendix(appendixArgs))
+      .filter((n) => n.type === 'th')
+      .map((n) => textOf(n));
+    expect(headers).toEqual(['Area', 'Role', 'Score', 'Percentile']);
+  });
+
+  it('labels chain members "Stage N", everything else "Enabler", and shows — for a null percentile', () => {
+    const text = textOf(Appendix(appendixArgs));
+    expect(text).toContain('Stage 1'); // guest is stages[0]
+    expect(text).toContain('Enabler'); // gen is not a chain member
+    expect(text).toContain('40th pct'); // guest's percentile
+    expect(text).toContain('—'); // gen's null percentile renders an em dash, not a blank
+    // the two disclosure caveats still render beneath the table (signature unchanged)
+    expect(text).toContain('Benchmarks are provisional priors.');
+    expect(text).toContain('Dependencies are a working model.');
+  });
+});

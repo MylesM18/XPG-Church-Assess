@@ -341,3 +341,26 @@ describe('depRelationshipLine', () => {
     expect(line).not.toContain('nothing to flag here');
   });
 });
+
+// --- Appendix table (Change #4) --------------------------------------------------------------
+//
+// The appendix is redesigned from a two-column name/score row into an aligned four-column table:
+// Area · Role · Score · Percentile (spec §4). The new "Role"/"Percentile" headers, the capitalised
+// "Enabler" role label, and the em-dash for a null percentile must appear in the extracted text.
+// This fixture's two appendix categories are both enablers (their raw ids aren't methodology chain
+// ids) with null percentiles — the "Stage N" path is covered on the screen side in
+// components.test.ts. Region-isolated from the appendix heading onward so stray text elsewhere
+// cannot mask a regression. The heading string itself is unchanged — the "all eight dossiers"
+// test above uses it as its section boundary.
+describe('appendix table', () => {
+  it('renders Area/Role/Score/Percentile columns with capitalised role labels', async () => {
+    const text = await renderText('pdf');
+    const start = text.indexOf('Appendix — all category scores');
+    expect(start, 'expected the Appendix heading in the PDF').toBeGreaterThan(-1);
+    const appendix = text.slice(start);
+    expect(appendix).toContain('Role');
+    expect(appendix).toContain('Percentile');
+    expect(appendix).toContain('Enabler'); // capitalised role label (was lowercase "enabler")
+    expect(appendix).toContain('—'); // null percentile renders an em dash, not a blank
+  }, 30_000);
+});

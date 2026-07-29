@@ -379,13 +379,23 @@ export function ReportDocument({
 
         <View style={s.section} break>
           <Text style={s.h2}>Appendix — all category scores</Text>
+          <View style={s.tableHeaderRow}>
+            <Text style={[s.tableHeaderText, s.tableCellName]}>Area</Text>
+            <Text style={[s.tableHeaderText, s.tableCellSmall]}>Role</Text>
+            <Text style={[s.tableHeaderText, s.tableCellSmall]}>Score</Text>
+            <Text style={[s.tableHeaderText, s.tableCellSmall]}>Percentile</Text>
+          </View>
           {view.appendix.categories.map((c) => {
             const idx = chainIds.indexOf(c.category_id);
-            const tag = idx >= 0 ? `stage ${idx + 1}` : 'enabler';
+            const role = idx >= 0 ? `Stage ${idx + 1}` : 'Enabler';
             return (
-              <View key={c.category_id} style={s.appendixRow}>
-                <Text>{`${c.name} (${tag})`}</Text>
-                <Text>{`${c.score}${c.cohort_percentile !== null ? ` · ${c.cohort_percentile}th pct` : ''}`}</Text>
+              <View key={c.category_id} style={s.tableRow}>
+                <Text style={s.tableCellName}>{c.name}</Text>
+                <Text style={s.tableCellSmall}>{role}</Text>
+                <Text style={s.tableCellSmall}>{String(c.score)}</Text>
+                <Text style={s.tableCellSmall}>
+                  {c.cohort_percentile !== null ? `${c.cohort_percentile}th pct` : '—'}
+                </Text>
               </View>
             );
           })}
