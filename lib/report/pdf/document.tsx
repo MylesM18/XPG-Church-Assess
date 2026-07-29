@@ -114,7 +114,7 @@ const DEP_READ_LABEL: Record<string, string> = {
   load_bearing: 'Load-bearing',
   at_risk: 'At risk',
   clear: 'Clear',
-  both_strong: 'Both holding',
+  both_strong: 'Both strong',
 };
 
 function depRelationshipLine(e: SystemView['dependencies'][number]): string {
@@ -195,7 +195,7 @@ export function ReportDocument({
           <Text style={s.coverScore}>{`${view.cover.throughput}%`}</Text>
           <Text style={s.coverSub}>{`Capacity ${view.cover.capacity}  ·  Gap ${view.cover.gap} pts`}</Text>
           <Text style={s.coverConstraint}>
-            {view.cover.constraintName ? `Constraint: ${view.cover.constraintName}` : 'Constraint: none — every stage holding'}
+            {view.cover.constraintName ? `Constraint: ${view.cover.constraintName}` : 'Constraint: none — every stage strong'}
           </Text>
           {view.cover.gatedBy.length > 0 && (
             <Text style={s.coverGated}>
@@ -233,7 +233,7 @@ export function ReportDocument({
           {view.stages.map((st) => {
             const isConstraint = st.bucket === 'constraint';
             const isDownstream = st.bucket === 'downstream';
-            const label = isConstraint ? 'Constraint' : isDownstream ? 'Downstream' : 'Holding';
+            const label = isConstraint ? 'Constraint' : isDownstream ? 'Downstream' : 'Strong';
             return (
               <View key={st.category_id} style={s.stage}>
                 <View>

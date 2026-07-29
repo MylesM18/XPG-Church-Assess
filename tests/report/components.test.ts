@@ -41,7 +41,7 @@ const area = {
   score: 73,
   n: 14,
   reading: 'Discipleship is holding but not compounding.',
-  readingLabel: 'Holding',
+  readingLabel: 'Strong',
   insideIt: 'D3 sits 18 points below the rest of this area.',
   agreement: 'Tight — your leaders read this area the same way.',
   position: 'p62 of the benchmark prior',

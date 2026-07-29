@@ -13,7 +13,7 @@ const READ_LABEL: Record<string, string> = {
   load_bearing: 'Load-bearing',
   at_risk: 'At risk',
   clear: 'Clear',
-  both_strong: 'Both holding',
+  both_strong: 'Both strong',
 }
 
 /**

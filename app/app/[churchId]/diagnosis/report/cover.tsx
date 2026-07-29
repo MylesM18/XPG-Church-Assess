@@ -29,7 +29,7 @@ export function CoverCard({ cover }: { cover: CoverView }) {
       <p className="font-display text-5xl text-ink">{`${cover.throughput}%`}</p>
       <p className="font-body text-sm text-ink-soft">{`Capacity ${cover.capacity}  ·  Gap ${cover.gap} pts`}</p>
       <p className="font-body text-base text-ink">
-        {cover.constraintName ? `Constraint: ${cover.constraintName}` : 'Constraint: none — every stage holding'}
+        {cover.constraintName ? `Constraint: ${cover.constraintName}` : 'Constraint: none — every stage strong'}
       </p>
       {cover.gatedBy.length > 0 && (
         <p className="font-body text-sm text-berry">

@@ -5,7 +5,7 @@ import type { StageView } from '@/lib/report/chain-walk'
 export function StageTile({ stage }: { stage: StageView }) {
   const isConstraint = stage.bucket === 'constraint'
   const isDownstream = stage.bucket === 'downstream'
-  const label = isConstraint ? 'Constraint' : isDownstream ? 'Downstream' : 'Holding'
+  const label = isConstraint ? 'Constraint' : isDownstream ? 'Downstream' : 'Strong'
   const barColor = isDownstream
     ? 'var(--color-ink-soft)'
     : isConstraint

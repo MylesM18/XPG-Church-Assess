@@ -119,6 +119,19 @@ describe('ReportDocument', () => {
     expect(text.slice(start, end)).not.toMatch(/\bN\b/);
   }, 30_000);
 
+  // Change #2: the healthy reading band's DISPLAY label is now "Strong", not "Holding". The default
+  // renderText('pdf') fixture's category_ids don't match the methodology ids, so all 8 areas fall
+  // back to state 'ok' (healthy) → their cover band cells read "Strong". Region-isolated between the
+  // 'Band' header and Layer 2's 'The chain walk' heading (same region the N-column test uses).
+  it('labels a healthy area "Strong", not "Holding", in the cover band column', async () => {
+    const text = await renderText('pdf');
+    const start = text.indexOf('Band');
+    const end = text.indexOf('The chain walk');
+    const band = text.slice(start, end);
+    expect(band).toContain('Strong');
+    expect(band).not.toContain('Holding');
+  }, 30_000);
+
   // Finding #5: the Layer 1 AreaTable "Band" column must show the same state-aware reading band
   // as each area's dossier (Natalie's ruling: align). The old score-only scoreBand() collapsed a
   // Watch-state area (score >= 45) to "Holding" on the cover while its dossier read watch-state — a
