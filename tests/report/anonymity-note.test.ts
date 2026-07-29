@@ -27,4 +27,15 @@ describe('AnonymityNote', () => {
     expect(cls).toContain('text-ink-soft');
     expect(cls).toContain('mt-2');
   });
+
+  it('renders the short variant — the lead and combined-results promise, without the "never shown" clause', () => {
+    const text = textOf(AnonymityNote({ variant: 'short' }));
+    expect(text).toContain('Your answers are private.');
+    expect(text).toContain('combined results');
+    expect(text).toContain('never who said what.');
+    // The short variant drops the middle "never shown to anyone" clause the full note carries —
+    // that omission is exactly what distinguishes it, so assert it is gone (not just that the
+    // shared lead/tail are present, which the full variant would satisfy too).
+    expect(text).not.toContain('never shown to anyone');
+  });
 });

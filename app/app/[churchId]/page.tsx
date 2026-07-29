@@ -13,6 +13,7 @@ import { InviteMemberForm } from './access/invite-member-form'
 import { buildMemberMatrix, type MatrixMember, type MemberCategoryCoverageRow, type MemberMatrixRow } from '@/lib/coverage/member-matrix'
 import { partialNudges } from '@/lib/coverage/partial-nudge'
 import { MemberCoverageMatrix } from './member-coverage-matrix'
+import { AnonymityNote } from '@/components/anonymity-note'
 
 function gatesLabel(gates: 'all' | string[] | undefined): string {
   if (gates === 'all') return 'all stages'
@@ -185,6 +186,7 @@ export default async function DashboardPage({
         <p className="mt-3 max-w-prose font-body text-sm text-ink-soft">
           {"Please complete the assessment for each category. We encourage you to provide honest and thoughtful feedback, as your responses will help us gain an accurate understanding of the church's overall health and well-being."}
         </p>
+        <AnonymityNote variant="short" className="mt-3 max-w-prose" />
       </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
