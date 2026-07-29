@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireChurchMembership } from '@/lib/auth/require-church-membership'
 import { loadMethodology } from '@/lib/methodology/load'
 import { SelfForm } from './self-form'
+import { AnonymityNote } from '@/components/anonymity-note'
 
 export default async function AnswerPage({
   params,
@@ -46,6 +47,7 @@ export default async function AnswerPage({
       >
         ← Back to menu
       </Link>
+      <AnonymityNote />
       <SelfForm
         churchId={churchId}
         categoryId={categoryId}
