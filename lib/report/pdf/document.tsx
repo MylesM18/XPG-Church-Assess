@@ -63,7 +63,12 @@ const s = StyleSheet.create({
   // Status pill (spec §3): a small rounded badge; background/text colour set inline per read.
   depPill: { alignSelf: 'flex-start', fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 9,
              paddingVertical: 2, paddingHorizontal: 6, borderRadius: 8, marginBottom: 4 },
-  depItem: { marginBottom: 6 },
+  // Each group's rows sit in one bordered, rounded box with a divider line between rows.
+  depBox: { borderWidth: 1, borderColor: RULE, borderRadius: 6 },
+  depGroupRead: { fontSize: 10, color: INK_SOFT, paddingHorizontal: 10, paddingVertical: 8,
+                  borderBottomWidth: 1, borderBottomColor: RULE },
+  depItem: { paddingHorizontal: 10, paddingVertical: 8 },
+  depItemDivider: { borderTopWidth: 1, borderTopColor: RULE },
   depStatement: { fontSize: 9, color: INK_SOFT },
   depRead: { fontSize: 10, color: INK_SOFT, marginTop: 1 },
   depLine: { fontSize: 10.5 },
@@ -306,24 +311,26 @@ export function ReportDocument({
                 <Text style={[s.depPill, { backgroundColor: DEP_PILL[read].bg, color: DEP_PILL[read].color }]}>
                   {DEP_READ_LABEL[read]}
                 </Text>
-                {groupRead && edges[0] && <Text style={s.depRead}>{edges[0].readSentence}</Text>}
-                {edges.map((e) => {
-                  const corr = view.system.correlations.find(
-                    (c) => (c.from === e.from && c.to === e.to) || (c.from === e.to && c.to === e.from),
-                  );
-                  return (
-                    <View key={`${e.from}-${e.to}`} style={s.depItem}>
-                      <Text style={s.depLine}>{depRelationshipLine(e)}</Text>
-                      {!groupRead && <Text style={s.depRead}>{e.readSentence}</Text>}
-                      <Text style={s.depStatement}>{e.statement}</Text>
-                      {corr && (
-                        <Text style={s.depCorr}>
-                          {`Correlation ${corr.verdict.replace('_', ' ')} — r=${corr.r.toFixed(2)} (n=${corr.n})`}
-                        </Text>
-                      )}
-                    </View>
-                  );
-                })}
+                <View style={s.depBox}>
+                  {groupRead && edges[0] && <Text style={s.depGroupRead}>{edges[0].readSentence}</Text>}
+                  {edges.map((e, i) => {
+                    const corr = view.system.correlations.find(
+                      (c) => (c.from === e.from && c.to === e.to) || (c.from === e.to && c.to === e.from),
+                    );
+                    return (
+                      <View key={`${e.from}-${e.to}`} style={i > 0 ? [s.depItem, s.depItemDivider] : s.depItem}>
+                        <Text style={s.depLine}>{depRelationshipLine(e)}</Text>
+                        {!groupRead && <Text style={s.depRead}>{e.readSentence}</Text>}
+                        <Text style={s.depStatement}>{e.statement}</Text>
+                        {corr && (
+                          <Text style={s.depCorr}>
+                            {`Correlation ${corr.verdict.replace('_', ' ')} — r=${corr.r.toFixed(2)} (n=${corr.n})`}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
               </View>
             );
           })}

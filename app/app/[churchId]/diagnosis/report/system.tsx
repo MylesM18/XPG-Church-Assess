@@ -84,26 +84,37 @@ export function DependencyMap({ system }: { system: SystemView }) {
                 {READ_LABEL[read]}
               </span>
             </h3>
-            {groupRead && edges[0] && <p className="font-body text-sm text-ink-soft">{edges[0].readSentence}</p>}
-            <ul className="flex flex-col gap-3">
-              {edges.map((e) => {
-                const corr = system.correlations.find(
-                  (c) => (c.from === e.from && c.to === e.to) || (c.from === e.to && c.to === e.from),
-                )
-                return (
-                  <li key={`${e.from}-${e.to}`} className="flex flex-col gap-0.5">
-                    <p className="font-body text-ink">{relationshipLine(e)}</p>
-                    {!groupRead && <p className="font-body text-sm text-ink-soft">{e.readSentence}</p>}
-                    <p className="font-body text-xs text-ink-soft">{e.statement}</p>
-                    {corr && (
-                      <p className="font-body text-xs text-ink-soft">
-                        {`Correlation ${corr.verdict.replace('_', ' ')} — r=${corr.r.toFixed(2)} (n=${corr.n})`}
-                      </p>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
+            {/* Each group's rows sit in one bordered, rounded box with a divider line between
+                rows, so a relationship reads as a distinct block instead of running together. */}
+            <div className="rounded-lg border border-line">
+              {groupRead && edges[0] && (
+                <p className="border-b border-line px-4 py-3 font-body text-sm text-ink-soft">
+                  {edges[0].readSentence}
+                </p>
+              )}
+              <ul className="flex flex-col">
+                {edges.map((e, i) => {
+                  const corr = system.correlations.find(
+                    (c) => (c.from === e.from && c.to === e.to) || (c.from === e.to && c.to === e.from),
+                  )
+                  return (
+                    <li
+                      key={`${e.from}-${e.to}`}
+                      className={`flex flex-col gap-0.5 px-4 py-3${i > 0 ? ' border-t border-line' : ''}`}
+                    >
+                      <p className="font-body text-ink">{relationshipLine(e)}</p>
+                      {!groupRead && <p className="font-body text-sm text-ink-soft">{e.readSentence}</p>}
+                      <p className="font-body text-xs text-ink-soft">{e.statement}</p>
+                      {corr && (
+                        <p className="font-body text-xs text-ink-soft">
+                          {`Correlation ${corr.verdict.replace('_', ' ')} — r=${corr.r.toFixed(2)} (n=${corr.n})`}
+                        </p>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
           </div>
         )
       })}

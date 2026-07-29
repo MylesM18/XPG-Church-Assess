@@ -38,6 +38,13 @@ function collectTypes(node: unknown): unknown[] {
   return walk(node).map((n) => n.type);
 }
 
+/** Every className string present in the tree (elements without one are skipped). */
+function classesOf(node: unknown): string[] {
+  return walk(node)
+    .map((n) => (n.props as { className?: unknown }).className)
+    .filter((c): c is string => typeof c === 'string');
+}
+
 const area = {
   category_id: 'disc',
   name: 'Discipleship Pathway',
@@ -264,6 +271,25 @@ describe('DependencyMap', () => {
     // and both arrow rows still render, each with its own verb
     expect(text).toContain('Generosity (80) feeds → Community (78)');
     expect(text).toContain('Governance (82) gates → Discipleship (79)');
+  });
+
+  // Legibility (post-#5 tweak): each group's rows sit inside a bordered, rounded box with a
+  // thin divider line between rows, so one relationship reads as a distinct block instead of the
+  // rows running together. Colour is owner-glanced; these guards pin the box + divider structure.
+  it('wraps each group in a bordered, rounded box', () => {
+    // depSystem has a load_bearing group and a both_strong group → one box each.
+    const boxes = classesOf(DependencyMap({ system: depSystem })).filter(
+      (c) => /\bborder\b/.test(c) && /\brounded/.test(c),
+    );
+    expect(boxes.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('separates the rows within a group with divider lines', () => {
+    // the both_strong group has two edge rows → a top-border divider on the second, and its
+    // group-level read is divided from the rows by a bottom border.
+    const cls = classesOf(DependencyMap({ system: depSystem }));
+    expect(cls.some((c) => /\bborder-t\b/.test(c)), 'expected a divider between rows').toBe(true);
+    expect(cls.some((c) => /\bborder-b\b/.test(c)), 'expected the group read divided from its rows').toBe(true);
   });
 });
 
