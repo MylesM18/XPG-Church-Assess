@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { resolveAcceptState, roleLabel, type AcceptPreview } from '@/lib/access/accept-state'
 import { AcceptButton } from './accept-button'
+import { AnonymityNote } from '@/components/anonymity-note'
 
 const shell = 'mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-4 px-6'
 
@@ -69,6 +70,7 @@ export default async function AcceptPage({ params }: { params: Promise<{ token: 
     <main id="main-content" tabIndex={-1} className={shell}>
       <h1 className="font-display text-2xl text-ink">Join {p.church_name}</h1>
       <p className="font-body text-ink-soft">Accept your invitation to help lead {p.church_name} as a {label}.</p>
+      <AnonymityNote />
       <AcceptButton token={token} />
     </main>
   )
