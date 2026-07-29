@@ -3,12 +3,15 @@ import { isValidElement, type ReactElement } from 'react';
 import { AreaDossier } from '../../app/app/[churchId]/diagnosis/report/dossier';
 import {
   Appendix,
+  BookingCta,
   ReportBody,
   StaleMethodologyNotice,
   SharedStaleMethodologyNotice,
 } from '../../app/app/[churchId]/diagnosis/report/shared';
-import { CoverCard } from '../../app/app/[churchId]/diagnosis/report/cover';
-import { buildReportView } from '@/lib/report/view';
+import { bookingCta } from '@/lib/report/cta';
+import { CoverCard, AreaTable } from '../../app/app/[churchId]/diagnosis/report/cover';
+import { DependencyMap } from '../../app/app/[churchId]/diagnosis/report/system';
+import { buildReportView, type SystemView } from '@/lib/report/view';
 import { fallbackProse } from '@/lib/ai/fallback';
 import { diagnose } from '../../lib/engine';
 import { loadFixtureMethodology, answers } from '../engine/helpers';
@@ -41,7 +44,7 @@ const area = {
   score: 73,
   n: 14,
   reading: 'Discipleship is holding but not compounding.',
-  readingLabel: 'Holding',
+  readingLabel: 'Strong',
   insideIt: 'D3 sits 18 points below the rest of this area.',
   agreement: 'Tight — your leaders read this area the same way.',
   position: 'p62 of the benchmark prior',
@@ -50,12 +53,12 @@ const area = {
 };
 
 describe('AreaDossier', () => {
-  it('renders the score, N, and all six fields inline', () => {
+  it('renders the score and all six fields inline', () => {
     const tree = AreaDossier({ area });
     const text = textOf(tree);
     expect(text).toMatch(/Discipleship Pathway/);
     expect(text).toMatch(/73/);
-    expect(text).toMatch(/N=14/);
+    expect(text).not.toContain('N=');
     for (const label of ['Reading', 'Inside it', 'Agreement', 'Position', 'Depends on', 'Watch for']) {
       expect(text).toContain(label);
     }
@@ -88,6 +91,19 @@ describe('AreaDossier', () => {
     expect(text).toContain('Discipleship is holding but not compounding.'); // reading — untouched
     expect(text).toContain('p62 of the benchmark prior'); // position — untouched
     expect(text).toContain('Systems (74) gates this · feeds Volunteers (48)'); // dependsOn — untouched
+  });
+});
+
+// --- AreaTable: the Layer 1 cover table columns (Change #1: respondent N removed) ------------
+//
+// AreaTable is shared by the screen cover, the PDF, and the public /r/[shareToken] surface (all
+// import it from cover.tsx). The respondent count is an internal statistic that no longer belongs
+// on any report surface, so the table must show Area / Score / Band only — no N column.
+describe('AreaTable', () => {
+  it('shows Area, Score, and Band columns but not respondent N', () => {
+    const tree = AreaTable({ areas: [area] });
+    const headers = walk(tree).filter((n) => n.type === 'th').map((n) => textOf(n));
+    expect(headers).toEqual(['Area', 'Score', 'Band']);
   });
 });
 
@@ -182,5 +198,140 @@ describe('Appendix', () => {
     const text = textOf(tree);
     expect(text).toContain('Benchmarks are provisional priors.');
     expect(text).toContain('Dependencies are a working model.');
+  });
+});
+
+// --- DependencyMap: pill/arrow rows (Change #3) ----------------------------------------------
+//
+// DependencyMap is a plain function component (returns JSX, walkable by the helpers above), so it
+// can be exercised directly. The redesign (spec §3): a colored status pill per group, a
+// `From (score) → To (score)` arrow row carrying the gates/feeds verb as the PRIMARY line, the
+// plain-English read as a muted subline, and the "why" statement as a smaller caption. When a
+// whole group reads both_strong, the "nothing to flag here" read shows ONCE at group level, not
+// once per row. Colour is a visual concern the owner verifies by glance; these guards pin the
+// structure and copy — the folded-in Change-#2 leftover guard (group label "Both strong", not
+// "Both holding") lives here too, since #3 is the change that gives DependencyMap its own tests.
+const depSystem = {
+  dependencies: [
+    {
+      from: 'sys', to: 'vol', kind: 'gate',
+      statement: 'Systems capacity caps how many volunteers you can carry.',
+      read: 'load_bearing',
+      fromName: 'Systems', toName: 'Volunteers', fromScore: 74, toScore: 48,
+      readSentence: 'Systems is strong — so Volunteers has room to grow into it.',
+    },
+    {
+      from: 'gen', to: 'comm', kind: 'feed',
+      statement: 'Generosity feeds the shared life of the community.',
+      read: 'both_strong',
+      fromName: 'Generosity', toName: 'Community', fromScore: 80, toScore: 78,
+      readSentence: 'Both are strong — nothing to flag here.',
+    },
+    {
+      from: 'gov', to: 'disc', kind: 'gate',
+      statement: 'Governance sets the pace discipleship can sustain.',
+      read: 'both_strong',
+      fromName: 'Governance', toName: 'Discipleship', fromScore: 82, toScore: 79,
+      readSentence: 'Both are strong — nothing to flag here.',
+    },
+  ],
+  correlations: [],
+} as unknown as SystemView;
+
+describe('DependencyMap', () => {
+  it('labels the both_strong group "Both strong", not "Both holding"', () => {
+    const text = textOf(DependencyMap({ system: depSystem }));
+    expect(text).toContain('Both strong');
+    expect(text).not.toContain('Both holding');
+  });
+
+  it('renders each edge as a "From (score) → To (score)" arrow row carrying the gates/feeds verb', () => {
+    const text = textOf(DependencyMap({ system: depSystem }));
+    // primary line: names + scores + arrow + verb, on the actionable (load_bearing) row
+    expect(text).toContain('Systems (74) gates → Volunteers (48)');
+    // the plain-English read is a muted subline and the "why" statement a caption — both present
+    expect(text).toContain('Systems is strong — so Volunteers has room to grow into it.');
+    expect(text).toContain('Systems capacity caps how many volunteers you can carry.');
+  });
+
+  it('shows the both_strong read once at group level, not repeated on every row', () => {
+    const text = textOf(DependencyMap({ system: depSystem }));
+    // two both_strong edges, but the "nothing to flag here" read renders once at group level
+    expect((text.match(/nothing to flag here/g) ?? []).length).toBe(1);
+    // the per-edge "why" captions survive the group-level dedup
+    expect(text).toContain('Generosity feeds the shared life of the community.');
+    expect(text).toContain('Governance sets the pace discipleship can sustain.');
+    // and both arrow rows still render, each with its own verb
+    expect(text).toContain('Generosity (80) feeds → Community (78)');
+    expect(text).toContain('Governance (82) gates → Discipleship (79)');
+  });
+});
+
+// --- Appendix: aligned Area/Role/Score/Percentile table (Change #4) --------------------------
+//
+// The appendix used to be a prose <li> list ("{name} (stage 1): {score} · {pct}th pct"). The
+// redesign (spec §4) makes it an aligned four-column table: Area · Role · Score · Percentile.
+// Role reads "Stage {n}" for chain members (by their order in `stages`) and "Enabler" otherwise;
+// a null cohort_percentile shows "—", not a blank. The signature stays
+// Appendix({ categories, stages, benchmarkNote, dependencyNote }) (the notes test above pins it).
+const appendixArgs = {
+  categories: [
+    { category_id: 'guest', name: 'Guest Experience', score: 55, cohort_percentile: 40 },
+    { category_id: 'gen', name: 'Generosity', score: 80, cohort_percentile: null },
+  ],
+  stages: [{ category_id: 'guest' }],
+  benchmarkNote: 'Benchmarks are provisional priors.',
+  dependencyNote: 'Dependencies are a working model.',
+} as unknown as Parameters<typeof Appendix>[0];
+
+describe('Appendix table', () => {
+  it('renders an aligned Area / Role / Score / Percentile table', () => {
+    const headers = walk(Appendix(appendixArgs))
+      .filter((n) => n.type === 'th')
+      .map((n) => textOf(n));
+    expect(headers).toEqual(['Area', 'Role', 'Score', 'Percentile']);
+  });
+
+  it('labels chain members "Stage N", everything else "Enabler", and shows — for a null percentile', () => {
+    const text = textOf(Appendix(appendixArgs));
+    expect(text).toContain('Stage 1'); // guest is stages[0]
+    expect(text).toContain('Enabler'); // gen is not a chain member
+    expect(text).toContain('40th pct'); // guest's percentile
+    expect(text).toContain('—'); // gen's null percentile renders an em dash, not a blank
+    // the two disclosure caveats still render beneath the table (signature unchanged)
+    expect(text).toContain('Benchmarks are provisional priors.');
+    expect(text).toContain('Dependencies are a working model.');
+  });
+});
+
+// --- BookingCta: the report's booking call-to-action (Change #5) ------------------------------
+//
+// One shared source of truth (lib/report/cta.ts) rendered on all three surfaces (spec §5).
+// BookingCta is a plain function component; the anchor lives in its body, which walk()/textOf()
+// only reach when the component is invoked directly (not through ReportBody, which never descends
+// into a nested component's body). So the link itself is asserted on BookingCta(); its PLACEMENT
+// (present, before the Appendix) is asserted on ReportBody via element types, which is all the
+// walk of a fragment can see.
+describe('BookingCta', () => {
+  it('renders an external booking link carrying the button label and heading', () => {
+    const tree = BookingCta();
+    const cta = walk(tree)
+      .filter((n) => n.type === 'a')
+      .find((a) => (a.props as { href?: string }).href === bookingCta.url);
+    expect(cta, 'expected an <a> linking to the booking URL').toBeDefined();
+    expect(textOf(cta)).toContain(bookingCta.buttonLabel);
+    // opens in a new tab, safely (no reverse-tabnabbing / referrer leak)
+    expect((cta!.props as { target?: string }).target).toBe('_blank');
+    expect((cta!.props as { rel?: string }).rel).toContain('noopener');
+    expect(textOf(tree)).toContain(bookingCta.heading);
+  });
+});
+
+describe('ReportBody booking CTA placement', () => {
+  it('renders the booking CTA on the fresh report, before the appendix', () => {
+    const fresh = ReportBody({ storedVersion: '0.2.0', currentVersion: '0.2.0', view, churchId: 'c-1' });
+    const types = collectTypes(fresh);
+    expect(types).toContain(BookingCta);
+    expect(types.indexOf(BookingCta)).toBeLessThan(types.indexOf(Appendix));
   });
 });

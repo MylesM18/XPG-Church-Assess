@@ -38,7 +38,7 @@ export function AreaDossier({ area }: { area: AreaDossierView }) {
     <section className="flex flex-col gap-2 rounded-lg border border-line p-4">
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="font-display text-lg text-ink">{area.name}</h3>
-        <span className="font-body text-sm text-ink-soft">{`${area.score}  ·  N=${area.n}`}</span>
+        <span className="font-body text-sm text-ink-soft">{area.score}</span>
       </div>
       <dl className="flex flex-col divide-y divide-line">
         {field('Reading', area.reading)}

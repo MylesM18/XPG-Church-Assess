@@ -1,7 +1,7 @@
 version: "0.1.0"
 blocks:
   verdict: "Your primary constraint is {primary_name}. It scored {primary_score} out of 100, below the point where a stage is working. Everything after it in the chain will look weak until this is fixed."
-  verdict_no_constraint: "Nothing in your chain is broken. Every stage is holding. This is a capacity conversation, not a repair one."
+  verdict_no_constraint: "Nothing in your chain is broken. Every stage is strong. This is a capacity conversation, not a repair one."
   evidence: "Here is what that score rests on: {evidence_lines}."
   blind_spot: "You rated {bs_name} highly, but the countable side tells a different story. Belief sits at {bs_belief}, the evidence at {bs_evidence}, a gap of {bs_gap} points."
   cost: "Left alone, {primary_name} caps everything downstream. Spending on {downstream_list} first raises numbers once and changes nothing."
@@ -18,12 +18,12 @@ dossier:
       severe:  "This is not underperforming, it is absent — there is no working version of this to improve yet."
       broken:  "This is below the line where it holds — everything downstream of it is running on what little gets through."
       watch:   "This works, but not reliably — it holds on a good week and slips on the rest."
-      holding: "This is holding. It is not what is limiting you."
+      holding: "This is strong. It is not what is limiting you."
     enabler:
       severe:  "This is absent, and it is capping every area that leans on it — none of them can rise above it."
       broken:  "This is below the line, and it puts a ceiling on every area it touches at once."
       watch:   "This mostly holds, but it is thin enough to give way under any added load."
-      holding: "This is holding — it is not what is capping anything."
+      holding: "This is strong — it is not what is capping anything."
   enabler_belief_only: "Measured on perception only — there's no countable evidence side to cross-check this against."
   calibration_spread: "Rater style spans {spread} points across your leaders — that is removed before any score you see above."
   generosity:
@@ -39,6 +39,6 @@ dossier:
 # system.tsx / pdf/document.tsx; {fromName}/{toName} interpolated in lib/report/view.ts.
 dependency_reads:
   load_bearing: "{fromName} is weak here too — this dependency is active and part of what's costing you."
-  clear: "{fromName} is holding — so {fromName} is not what's capping your {toName}."
-  at_risk: "{toName} is holding for now, but {fromName} is weak — it's running on borrowed time."
-  both_strong: "Both are holding — nothing to flag here."
+  clear: "{fromName} is strong — so {fromName} is not what's capping your {toName}."
+  at_risk: "{toName} is strong for now, but {fromName} is weak — it's running on borrowed time."
+  both_strong: "Both are strong — nothing to flag here."

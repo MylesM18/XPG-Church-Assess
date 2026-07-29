@@ -285,6 +285,16 @@ describe('ReportView shape', () => {
     expect(view.areas.filter((a) => a.watchFor !== null).length).toBeGreaterThanOrEqual(4);
   });
 
+  it('labels a healthy area "Strong", not "Holding" (display rename, spec §7)', () => {
+    // The healthy reading band's DISPLAY label changed from "Holding" to "Strong"
+    // (band KEY 'holding' is unchanged — internal id, not user-facing). No area may
+    // still render the old "Holding" label, and the high-scoring fixture areas must
+    // now read "Strong".
+    const labels = view.areas.map((a) => a.readingLabel);
+    expect(labels).toContain('Strong');
+    expect(labels).not.toContain('Holding');
+  });
+
   it('names the enabler blind-spot hole rather than leaving it empty', () => {
     // gov, comm and sys are 100% belief items, so gapFor() structurally returns
     // evidence: null and blind-spot detection is impossible for all three.

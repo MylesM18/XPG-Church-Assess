@@ -25,7 +25,7 @@ import { CoverCard, VerdictHeader, AreaTable } from '@/app/app/[churchId]/diagno
 import { ChainWalk, EvidenceReceipt, CostSection } from '@/app/app/[churchId]/diagnosis/report/chain'
 import { DependencyMap, Calibration, Disagreement, GatingFlags } from '@/app/app/[churchId]/diagnosis/report/system'
 import { AreaDossier } from '@/app/app/[churchId]/diagnosis/report/dossier'
-import { NextStep, Appendix, SharedStaleMethodologyNotice } from '@/app/app/[churchId]/diagnosis/report/shared'
+import { NextStep, BookingCta, Appendix, SharedStaleMethodologyNotice } from '@/app/app/[churchId]/diagnosis/report/shared'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -177,6 +177,8 @@ export default async function SharedReportPage({
           nextStep={view.nextStep.text}
         />
       )}
+
+      <BookingCta />
 
       <Appendix
         categories={view.appendix.categories}

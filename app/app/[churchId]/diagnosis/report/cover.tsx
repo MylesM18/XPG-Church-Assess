@@ -29,7 +29,7 @@ export function CoverCard({ cover }: { cover: CoverView }) {
       <p className="font-display text-5xl text-ink">{`${cover.throughput}%`}</p>
       <p className="font-body text-sm text-ink-soft">{`Capacity ${cover.capacity}  ·  Gap ${cover.gap} pts`}</p>
       <p className="font-body text-base text-ink">
-        {cover.constraintName ? `Constraint: ${cover.constraintName}` : 'Constraint: none — every stage holding'}
+        {cover.constraintName ? `Constraint: ${cover.constraintName}` : 'Constraint: none — every stage strong'}
       </p>
       {cover.gatedBy.length > 0 && (
         <p className="font-body text-sm text-berry">
@@ -70,7 +70,6 @@ export function AreaTable({ areas }: { areas: AreaDossierView[] }) {
         <tr className="border-b border-line text-left text-ink-soft">
           <th className="py-1.5 font-normal">Area</th>
           <th className="py-1.5 font-normal">Score</th>
-          <th className="py-1.5 font-normal">N</th>
           <th className="py-1.5 font-normal">Band</th>
         </tr>
       </thead>
@@ -79,7 +78,6 @@ export function AreaTable({ areas }: { areas: AreaDossierView[] }) {
           <tr key={area.category_id} className="border-b border-line">
             <td className="py-1.5 text-ink">{area.name}</td>
             <td className="py-1.5 text-ink">{area.score}</td>
-            <td className="py-1.5 text-ink">{area.n}</td>
             <td className="py-1.5 text-ink">{area.readingLabel}</td>
           </tr>
         ))}

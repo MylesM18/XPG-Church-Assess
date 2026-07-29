@@ -101,7 +101,7 @@ const READING_BAND_LABEL: Record<ReadingBand, string> = {
   severe: 'Severe',
   broken: 'Broken',
   watch: 'Watch',
-  holding: 'Holding',
+  holding: 'Strong',
 };
 
 /** Largest-magnitude question effect, rendered as "{item_id} sits {n} pts {below|above} the rest".

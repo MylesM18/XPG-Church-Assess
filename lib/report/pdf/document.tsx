@@ -1,6 +1,7 @@
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, Link, StyleSheet } from '@react-pdf/renderer';
 import type { ReportView, SystemView, AreaDossierView } from '../view';
 import type { EdgeRead } from '../../engine/dependencies';
+import { bookingCta } from '../cta';
 import { registerReportFonts, FONT_DISPLAY, FONT_BODY } from './fonts';
 
 registerReportFonts();
@@ -9,6 +10,8 @@ const INK = '#1A1A18';
 const INK_SOFT = '#5A5A54';
 const RULE = '#D8D5CE';
 const BERRY = '#8E2B3E'; // RESERVED: diagnosis/constraint/active only (app/globals.css --color-berry)
+const SAGE = '#4E6B60'; // healthy / enabler (app/globals.css --color-sage)
+const AMBER = '#B87D1E'; // at-risk status (app/globals.css --color-status-amber)
 
 const s = StyleSheet.create({
   page: { paddingTop: 56, paddingBottom: 56, paddingHorizontal: 48,
@@ -57,8 +60,12 @@ const s = StyleSheet.create({
   // Layer 2 — dependency map
   depGroup: { marginBottom: 10 },
   depGroupHeading: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 11, marginBottom: 4 },
+  // Status pill (spec §3): a small rounded badge; background/text colour set inline per read.
+  depPill: { alignSelf: 'flex-start', fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 9,
+             paddingVertical: 2, paddingHorizontal: 6, borderRadius: 8, marginBottom: 4 },
   depItem: { marginBottom: 6 },
   depStatement: { fontSize: 9, color: INK_SOFT },
+  depRead: { fontSize: 10, color: INK_SOFT, marginTop: 1 },
   depLine: { fontSize: 10.5 },
   depCorr: { fontSize: 9, color: INK_SOFT, marginTop: 1 },
 
@@ -71,7 +78,10 @@ const s = StyleSheet.create({
   fieldLabel: { fontSize: 8, color: INK_SOFT, textTransform: 'uppercase', letterSpacing: 0.5 },
   fieldValue: { fontSize: 10, marginTop: 1 },
 
-  // Layer 4 — appendix
+  // Layer 4 — booking CTA + appendix
+  ctaButton: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: INK, color: '#FFFFFF',
+               paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, fontSize: 11,
+               textDecoration: 'none' },
   appendixRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
   footer: { position: 'absolute', bottom: 24, left: 48, right: 48,
             flexDirection: 'row', justifyContent: 'space-between',
@@ -114,12 +124,25 @@ const DEP_READ_LABEL: Record<string, string> = {
   load_bearing: 'Load-bearing',
   at_risk: 'At risk',
   clear: 'Clear',
-  both_strong: 'Both holding',
+  both_strong: 'Both strong',
 };
 
-function depRelationshipLine(e: SystemView['dependencies'][number]): string {
+// Mirrors system.tsx's READ_PILL — the status-pill colour per group (spec §3).
+// Keyed by EdgeRead (not string) so DEP_PILL[read] is never possibly-undefined.
+const DEP_PILL: Record<EdgeRead, { bg: string; color: string }> = {
+  load_bearing: { bg: BERRY, color: '#FFFFFF' },
+  at_risk: { bg: AMBER, color: '#FFFFFF' },
+  clear: { bg: '#EEE8DD', color: INK }, // sand / ink (app/globals.css --color-sand)
+  both_strong: { bg: SAGE, color: '#FFFFFF' },
+};
+
+// Exported so tests/report/pdf-document.test.ts can pin the exact string without a full render —
+// the default render fixture has no authored edges, so the rows never appear in extracted text.
+// Same pattern as confidenceBand above. Mirrors system.tsx's relationshipLine byte-for-byte: the
+// `From (n) verb → To (m)` arrow line, with the read sentence rendered as a SEPARATE subline.
+export function depRelationshipLine(e: SystemView['dependencies'][number]): string {
   const verb = e.kind === 'gate' ? 'gates' : 'feeds';
-  return `${e.fromName} (${e.fromScore}) ${verb} ${e.toName} (${e.toScore}). ${e.readSentence}`;
+  return `${e.fromName} (${e.fromScore}) ${verb} → ${e.toName} (${e.toScore})`;
 }
 
 // Mirrors dossier.tsx's private UNAVAILABLE/field() — same constraint again: dossier.tsx
@@ -150,7 +173,7 @@ function AreaDossierBlock({ area }: { area: AreaDossierView }) {
     <View style={s.dossier} wrap={false}>
       <View style={s.dossierHeaderRow}>
         <Text style={s.dossierName}>{area.name}</Text>
-        <Text style={s.dossierMeta}>{`${area.score}  ·  N=${area.n}`}</Text>
+        <Text style={s.dossierMeta}>{area.score}</Text>
       </View>
       <DossierField label="Reading" value={area.reading} />
       <DossierField label="Inside it" value={area.insideIt} />
@@ -195,7 +218,7 @@ export function ReportDocument({
           <Text style={s.coverScore}>{`${view.cover.throughput}%`}</Text>
           <Text style={s.coverSub}>{`Capacity ${view.cover.capacity}  ·  Gap ${view.cover.gap} pts`}</Text>
           <Text style={s.coverConstraint}>
-            {view.cover.constraintName ? `Constraint: ${view.cover.constraintName}` : 'Constraint: none — every stage holding'}
+            {view.cover.constraintName ? `Constraint: ${view.cover.constraintName}` : 'Constraint: none — every stage strong'}
           </Text>
           {view.cover.gatedBy.length > 0 && (
             <Text style={s.coverGated}>
@@ -216,14 +239,12 @@ export function ReportDocument({
           <View style={s.tableHeaderRow}>
             <Text style={[s.tableHeaderText, s.tableCellName]}>Area</Text>
             <Text style={[s.tableHeaderText, s.tableCellSmall]}>Score</Text>
-            <Text style={[s.tableHeaderText, s.tableCellSmall]}>N</Text>
             <Text style={[s.tableHeaderText, s.tableCellSmall]}>Band</Text>
           </View>
           {view.areas.map((area) => (
             <View key={area.category_id} style={s.tableRow}>
               <Text style={s.tableCellName}>{area.name}</Text>
               <Text style={s.tableCellSmall}>{area.score}</Text>
-              <Text style={s.tableCellSmall}>{area.n}</Text>
               <Text style={s.tableCellSmall}>{area.readingLabel}</Text>
             </View>
           ))}
@@ -235,7 +256,7 @@ export function ReportDocument({
           {view.stages.map((st) => {
             const isConstraint = st.bucket === 'constraint';
             const isDownstream = st.bucket === 'downstream';
-            const label = isConstraint ? 'Constraint' : isDownstream ? 'Downstream' : 'Holding';
+            const label = isConstraint ? 'Constraint' : isDownstream ? 'Downstream' : 'Strong';
             return (
               <View key={st.category_id} style={s.stage}>
                 <View>
@@ -277,17 +298,24 @@ export function ReportDocument({
           {DEP_READ_ORDER.map((read) => {
             const edges = view.system.dependencies.filter((e) => e.read === read);
             if (edges.length === 0) return null;
+            // both_strong reads are identical on every edge ("nothing to flag here"): show once
+            // at group level and suppress the per-row subline (mirrors system.tsx).
+            const groupRead = read === 'both_strong';
             return (
               <View key={read} style={s.depGroup}>
-                <Text style={s.depGroupHeading}>{DEP_READ_LABEL[read]}</Text>
+                <Text style={[s.depPill, { backgroundColor: DEP_PILL[read].bg, color: DEP_PILL[read].color }]}>
+                  {DEP_READ_LABEL[read]}
+                </Text>
+                {groupRead && edges[0] && <Text style={s.depRead}>{edges[0].readSentence}</Text>}
                 {edges.map((e) => {
                   const corr = view.system.correlations.find(
                     (c) => (c.from === e.from && c.to === e.to) || (c.from === e.to && c.to === e.from),
                   );
                   return (
                     <View key={`${e.from}-${e.to}`} style={s.depItem}>
-                      <Text style={s.depStatement}>{e.statement}</Text>
                       <Text style={s.depLine}>{depRelationshipLine(e)}</Text>
+                      {!groupRead && <Text style={s.depRead}>{e.readSentence}</Text>}
+                      <Text style={s.depStatement}>{e.statement}</Text>
                       {corr && (
                         <Text style={s.depCorr}>
                           {`Correlation ${corr.verdict.replace('_', ' ')} — r=${corr.r.toFixed(2)} (n=${corr.n})`}
@@ -353,15 +381,31 @@ export function ReportDocument({
           </View>
         )}
 
+        <View style={s.section}>
+          <Text style={s.h2}>{bookingCta.heading}</Text>
+          <Text>{bookingCta.body}</Text>
+          <Link src={bookingCta.url} style={s.ctaButton}>{bookingCta.buttonLabel}</Link>
+        </View>
+
         <View style={s.section} break>
           <Text style={s.h2}>Appendix — all category scores</Text>
+          <View style={s.tableHeaderRow}>
+            <Text style={[s.tableHeaderText, s.tableCellName]}>Area</Text>
+            <Text style={[s.tableHeaderText, s.tableCellSmall]}>Role</Text>
+            <Text style={[s.tableHeaderText, s.tableCellSmall]}>Score</Text>
+            <Text style={[s.tableHeaderText, s.tableCellSmall]}>Percentile</Text>
+          </View>
           {view.appendix.categories.map((c) => {
             const idx = chainIds.indexOf(c.category_id);
-            const tag = idx >= 0 ? `stage ${idx + 1}` : 'enabler';
+            const role = idx >= 0 ? `Stage ${idx + 1}` : 'Enabler';
             return (
-              <View key={c.category_id} style={s.appendixRow}>
-                <Text>{`${c.name} (${tag})`}</Text>
-                <Text>{`${c.score}${c.cohort_percentile !== null ? ` · ${c.cohort_percentile}th pct` : ''}`}</Text>
+              <View key={c.category_id} style={s.tableRow}>
+                <Text style={s.tableCellName}>{c.name}</Text>
+                <Text style={s.tableCellSmall}>{role}</Text>
+                <Text style={s.tableCellSmall}>{String(c.score)}</Text>
+                <Text style={s.tableCellSmall}>
+                  {c.cohort_percentile !== null ? `${c.cohort_percentile}th pct` : '—'}
+                </Text>
               </View>
             );
           })}

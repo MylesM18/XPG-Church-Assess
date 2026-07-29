@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PDFParse } from 'pdf-parse';
 import { renderReportDocument } from '@/lib/report/pdf/render';
+import { depRelationshipLine } from '@/lib/report/pdf/document';
 import { buildReportView, type ReportView } from '@/lib/report/view';
 import { loadMethodology } from '@/lib/methodology/load';
 import { fallbackProse } from '@/lib/ai/fallback';
@@ -103,6 +104,33 @@ describe('ReportDocument', () => {
     const text = await renderText('pdf');
     expect(text).toContain('55%');
     expect(text).not.toContain('70%');
+  }, 30_000);
+
+  // Change #1: the respondent count (N) is an internal statistic that no longer belongs on any
+  // report surface. Neither the dossier meta ("score · N=n") nor the AreaTable "N" column may
+  // appear. The band-column region between the 'Score' header and Layer 2's 'The chain walk'
+  // heading must carry no standalone 'N' header.
+  it('does not display the respondent N column or N= meta', async () => {
+    const text = await renderText('pdf');
+    expect(text).not.toContain('N=');
+    const start = text.indexOf('Score');
+    const end = text.indexOf('The chain walk');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(text.slice(start, end)).not.toMatch(/\bN\b/);
+  }, 30_000);
+
+  // Change #2: the healthy reading band's DISPLAY label is now "Strong", not "Holding". The default
+  // renderText('pdf') fixture's category_ids don't match the methodology ids, so all 8 areas fall
+  // back to state 'ok' (healthy) → their cover band cells read "Strong". Region-isolated between the
+  // 'Band' header and Layer 2's 'The chain walk' heading (same region the N-column test uses).
+  it('labels a healthy area "Strong", not "Holding", in the cover band column', async () => {
+    const text = await renderText('pdf');
+    const start = text.indexOf('Band');
+    const end = text.indexOf('The chain walk');
+    const band = text.slice(start, end);
+    expect(band).toContain('Strong');
+    expect(band).not.toContain('Holding');
   }, 30_000);
 
   // Finding #5: the Layer 1 AreaTable "Band" column must show the same state-aware reading band
@@ -279,4 +307,83 @@ describe('ReportDocument', () => {
         }))(),
     ).rejects.toThrow('view carries respondent names');
   });
+});
+
+// --- depRelationshipLine: the PDF dependency-map primary line (Change #3) --------------------
+//
+// The dependency-map rows are pure JSX inside ReportDocument, and the default renderText('pdf')
+// fixture has no authored edges (diagnosis.dependencies === []), so the arrow rows never appear
+// in its extracted text. The primary-line string is therefore pinned directly on the exported
+// pure helper — the same "export so a test can pin it without a full render" pattern confidenceBand
+// already uses in document.tsx. It mirrors system.tsx's relationshipLine byte-for-byte: a
+// `From (score) → To (score)` arrow line carrying the gates/feeds verb, with the plain-English
+// read now a separate subline (NOT appended here).
+describe('depRelationshipLine', () => {
+  it('renders a "From (score) → To (score)" arrow line carrying the gates verb', () => {
+    expect(
+      depRelationshipLine({
+        from: 'sys', to: 'vol', kind: 'gate',
+        statement: 'Systems capacity caps volunteers.', read: 'load_bearing',
+        fromName: 'Systems', toName: 'Volunteers', fromScore: 74, toScore: 48,
+        readSentence: 'Systems is strong — so Volunteers has room to grow.',
+      }),
+    ).toBe('Systems (74) gates → Volunteers (48)');
+  });
+
+  it('uses the feeds verb for feed edges and does not append the read sentence', () => {
+    const line = depRelationshipLine({
+      from: 'gen', to: 'comm', kind: 'feed',
+      statement: 'Generosity feeds community.', read: 'both_strong',
+      fromName: 'Generosity', toName: 'Community', fromScore: 80, toScore: 78,
+      readSentence: 'Both are strong — nothing to flag here.',
+    });
+    expect(line).toBe('Generosity (80) feeds → Community (78)');
+    expect(line).not.toContain('nothing to flag here');
+  });
+});
+
+// --- Appendix table (Change #4) --------------------------------------------------------------
+//
+// The appendix is redesigned from a two-column name/score row into an aligned four-column table:
+// Area · Role · Score · Percentile (spec §4). The new "Role"/"Percentile" headers, the capitalised
+// "Enabler" role label, and the em-dash for a null percentile must appear in the extracted text.
+// This fixture's two appendix categories are both enablers (their raw ids aren't methodology chain
+// ids) with null percentiles — the "Stage N" path is covered on the screen side in
+// components.test.ts. Region-isolated from the appendix heading onward so stray text elsewhere
+// cannot mask a regression. The heading string itself is unchanged — the "all eight dossiers"
+// test above uses it as its section boundary.
+describe('appendix table', () => {
+  it('renders Area/Role/Score/Percentile columns with capitalised role labels', async () => {
+    const text = await renderText('pdf');
+    const start = text.indexOf('Appendix — all category scores');
+    expect(start, 'expected the Appendix heading in the PDF').toBeGreaterThan(-1);
+    const appendix = text.slice(start);
+    expect(appendix).toContain('Role');
+    expect(appendix).toContain('Percentile');
+    expect(appendix).toContain('Enabler'); // capitalised role label (was lowercase "enabler")
+    expect(appendix).toContain('—'); // null percentile renders an em dash, not a blank
+  }, 30_000);
+});
+
+// --- Booking CTA (Change #5) -----------------------------------------------------------------
+//
+// The booking call-to-action renders on all three surfaces from one shared constant
+// (lib/report/cta.ts, spec §5). In the PDF it is a react-pdf <Link src={url}>: pdf-parse's
+// getText() surfaces the link's visible TEXT (heading + button label), but the target URL is a
+// PDF annotation (a /URI action), not text content — so it is asserted against the raw rendered
+// buffer, where the annotation URI is written verbatim.
+describe('booking CTA', () => {
+  it('renders the booking link — label in the text, URL in the annotation', async () => {
+    const { bookingCta } = await import('@/lib/report/cta');
+    const d = diagnosis();
+    const view = buildReportView(d, fallbackProse(d, methodology), methodology, { audience: 'pdf' });
+    const buffer = await renderReportDocument({
+      view, churchName: 'Grace Church', brandColor: '#3A4A6B', monogram: 'GC',
+      generatedAt: new Date('2026-07-18T00:00:00Z'),
+    });
+    const text = await extractText(buffer);
+    expect(text).toContain(bookingCta.heading);
+    expect(text).toContain(bookingCta.buttonLabel);
+    expect(buffer.toString('latin1')).toContain(bookingCta.url);
+  }, 30_000);
 });

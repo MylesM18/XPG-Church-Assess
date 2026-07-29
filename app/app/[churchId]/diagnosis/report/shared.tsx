@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import type { DiagnosisCategory } from '@/lib/engine/types'
 import type { StageView } from '@/lib/report/chain-walk'
 import type { ReportView } from '@/lib/report/view'
+import { bookingCta } from '@/lib/report/cta'
 import { GenerateButton } from '@/app/app/[churchId]/generate-button'
 import { CoverCard, VerdictHeader, AreaTable } from './cover'
 import { ChainWalk, EvidenceReceipt, CostSection } from './chain'
@@ -42,6 +43,28 @@ export function NextStep({
 }
 
 /**
+ * The booking call-to-action (spec §5). Copy + URL come from the shared lib/report/cta.ts
+ * constant so the screen, PDF, and public share surfaces cannot drift. External link opened in
+ * a new tab with rel="noopener noreferrer" (no reverse-tabnabbing, no referrer leak).
+ */
+export function BookingCta() {
+  return (
+    <section className="flex flex-col items-start gap-2 rounded-lg border border-line bg-paper p-4">
+      <h2 className="font-display text-xl text-ink">{bookingCta.heading}</h2>
+      <p className="font-body text-ink">{bookingCta.body}</p>
+      <a
+        href={bookingCta.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-1 inline-flex items-center rounded-lg bg-ink px-4 py-2 font-body text-sm text-paper hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+      >
+        {bookingCta.buttonLabel}
+      </a>
+    </section>
+  )
+}
+
+/**
  * Thinner now that the dossiers carry the detail (spec §7 Layer 4) — sourced
  * entirely from ReportView (`view.appendix.categories`, already carrying
  * resolved names, and `view.stages` for chain membership/order), not from the
@@ -60,18 +83,32 @@ export function Appendix({
   return (
     <section className="flex flex-col gap-2">
       <h2 className="font-display text-xl text-ink">Appendix — all scores</h2>
-      <ul className="flex flex-col gap-1">
-        {categories.map((c) => {
-          const idx = chainIds.indexOf(c.category_id)
-          const tag = idx >= 0 ? `stage ${idx + 1}` : 'enabler'
-          return (
-            <li key={c.category_id} className="font-body text-sm text-ink-soft">
-              {c.name} ({tag}): {c.score}
-              {c.cohort_percentile !== null ? ` · ${c.cohort_percentile}th pct` : ''}
-            </li>
-          )
-        })}
-      </ul>
+      <table className="w-full border-collapse font-body text-sm">
+        <thead>
+          <tr className="border-b border-line text-left text-ink-soft">
+            <th className="py-1.5 font-normal">Area</th>
+            <th className="py-1.5 font-normal">Role</th>
+            <th className="py-1.5 font-normal">Score</th>
+            <th className="py-1.5 font-normal">Percentile</th>
+          </tr>
+        </thead>
+        <tbody>
+          {categories.map((c) => {
+            const idx = chainIds.indexOf(c.category_id)
+            const role = idx >= 0 ? `Stage ${idx + 1}` : 'Enabler'
+            return (
+              <tr key={c.category_id} className="border-b border-line text-ink">
+                <td className="py-1.5">{c.name}</td>
+                <td className="py-1.5 text-ink-soft">{role}</td>
+                <td className="py-1.5">{c.score}</td>
+                <td className="py-1.5 text-ink-soft">
+                  {c.cohort_percentile !== null ? `${c.cohort_percentile}th pct` : '—'}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
       <p className="font-body text-xs text-ink-soft">{benchmarkNote}</p>
       <p className="font-body text-xs text-ink-soft">{dependencyNote}</p>
     </section>
@@ -199,6 +236,7 @@ export function ReportBody({
       {view.nextStep && (
         <NextStep callType={view.nextStep.callType} hook={view.nextStep.hook} nextStep={view.nextStep.text} />
       )}
+      <BookingCta />
       <Appendix categories={view.appendix.categories} stages={view.stages} benchmarkNote={view.appendix.benchmarkNote} dependencyNote={view.appendix.dependencyNote} />
     </>
   )
