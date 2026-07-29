@@ -1,5 +1,5 @@
 begin;
-select plan(5);
+select plan(6);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
  ('b1111111-1111-1111-1111-111111111111','authenticated','authenticated','covadmin@test.com','x',now(),now()),
@@ -47,6 +47,19 @@ select throws_ok(
   '42501',
   'not a member of this church',
   'non-member cannot read coverage');
+
+-- REGRESSION (completion-survives-diagnosis): save_diagnosis flips the church's single run
+-- in_progress -> complete. Coverage MUST survive that. Pre-fix the run-selection filtered
+-- status='in_progress', found no run once complete, and returned empty -> the dashboard showed
+-- every category "Not started". Complete the run and assert the aggregate still returns G1..G3.
+reset role;
+update assessment_runs set status = 'complete'
+where church_id = (select id from churches where name = 'Coverage Test Church');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"b1111111-1111-1111-1111-111111111111","email":"covadmin@test.com","role":"authenticated"}';
+select is((select count(*)::int from get_run_coverage(
+            (select id from churches where name = 'Coverage Test Church'))), 3,
+          'aggregate coverage still returns the 3 answered items after the run is completed');
 
 select * from finish();
 rollback;

@@ -1,5 +1,5 @@
 begin;
-select plan(4);
+select plan(5);
 
 -- One church, three users: A (admin via create_church_with_admin), B (seeded viewer), C (stranger).
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
@@ -49,6 +49,21 @@ select throws_ok(
   '42501',
   'not a member of this church',
   'non-member cannot read personal answers');
+
+-- REGRESSION (completion-survives-diagnosis): save_diagnosis flips the church's single run
+-- in_progress -> complete. Form-resume prefill MUST survive that. Pre-fix the run-selection filtered
+-- status='in_progress', found no run once complete, and returned empty -> the "Take Again" answer
+-- page prefilled BLANK despite the dashboard showing the category covered. Complete the run and
+-- assert A still reads back own 3 guest answers.
+reset role;
+update assessment_runs set status = 'complete'
+where church_id = (select id from churches where name = 'My Answers Test Church');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"d1111111-1111-1111-1111-111111111111","email":"myaadmin@test.com","role":"authenticated"}';
+select is(
+  (select count(*)::int from get_my_category_answers(
+     (select id from churches where name = 'My Answers Test Church'), 'guest')),
+  3, 'A still reads back own 3 guest answers after the run is completed');
 
 select * from finish();
 rollback;
