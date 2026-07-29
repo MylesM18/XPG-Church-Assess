@@ -9,6 +9,8 @@ const INK = '#1A1A18';
 const INK_SOFT = '#5A5A54';
 const RULE = '#D8D5CE';
 const BERRY = '#8E2B3E'; // RESERVED: diagnosis/constraint/active only (app/globals.css --color-berry)
+const SAGE = '#4E6B60'; // healthy / enabler (app/globals.css --color-sage)
+const AMBER = '#B87D1E'; // at-risk status (app/globals.css --color-status-amber)
 
 const s = StyleSheet.create({
   page: { paddingTop: 56, paddingBottom: 56, paddingHorizontal: 48,
@@ -57,8 +59,12 @@ const s = StyleSheet.create({
   // Layer 2 — dependency map
   depGroup: { marginBottom: 10 },
   depGroupHeading: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 11, marginBottom: 4 },
+  // Status pill (spec §3): a small rounded badge; background/text colour set inline per read.
+  depPill: { alignSelf: 'flex-start', fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 9,
+             paddingVertical: 2, paddingHorizontal: 6, borderRadius: 8, marginBottom: 4 },
   depItem: { marginBottom: 6 },
   depStatement: { fontSize: 9, color: INK_SOFT },
+  depRead: { fontSize: 10, color: INK_SOFT, marginTop: 1 },
   depLine: { fontSize: 10.5 },
   depCorr: { fontSize: 9, color: INK_SOFT, marginTop: 1 },
 
@@ -117,9 +123,22 @@ const DEP_READ_LABEL: Record<string, string> = {
   both_strong: 'Both strong',
 };
 
-function depRelationshipLine(e: SystemView['dependencies'][number]): string {
+// Mirrors system.tsx's READ_PILL — the status-pill colour per group (spec §3).
+// Keyed by EdgeRead (not string) so DEP_PILL[read] is never possibly-undefined.
+const DEP_PILL: Record<EdgeRead, { bg: string; color: string }> = {
+  load_bearing: { bg: BERRY, color: '#FFFFFF' },
+  at_risk: { bg: AMBER, color: '#FFFFFF' },
+  clear: { bg: '#EEE8DD', color: INK }, // sand / ink (app/globals.css --color-sand)
+  both_strong: { bg: SAGE, color: '#FFFFFF' },
+};
+
+// Exported so tests/report/pdf-document.test.ts can pin the exact string without a full render —
+// the default render fixture has no authored edges, so the rows never appear in extracted text.
+// Same pattern as confidenceBand above. Mirrors system.tsx's relationshipLine byte-for-byte: the
+// `From (n) verb → To (m)` arrow line, with the read sentence rendered as a SEPARATE subline.
+export function depRelationshipLine(e: SystemView['dependencies'][number]): string {
   const verb = e.kind === 'gate' ? 'gates' : 'feeds';
-  return `${e.fromName} (${e.fromScore}) ${verb} ${e.toName} (${e.toScore}). ${e.readSentence}`;
+  return `${e.fromName} (${e.fromScore}) ${verb} → ${e.toName} (${e.toScore})`;
 }
 
 // Mirrors dossier.tsx's private UNAVAILABLE/field() — same constraint again: dossier.tsx
@@ -275,17 +294,24 @@ export function ReportDocument({
           {DEP_READ_ORDER.map((read) => {
             const edges = view.system.dependencies.filter((e) => e.read === read);
             if (edges.length === 0) return null;
+            // both_strong reads are identical on every edge ("nothing to flag here"): show once
+            // at group level and suppress the per-row subline (mirrors system.tsx).
+            const groupRead = read === 'both_strong';
             return (
               <View key={read} style={s.depGroup}>
-                <Text style={s.depGroupHeading}>{DEP_READ_LABEL[read]}</Text>
+                <Text style={[s.depPill, { backgroundColor: DEP_PILL[read].bg, color: DEP_PILL[read].color }]}>
+                  {DEP_READ_LABEL[read]}
+                </Text>
+                {groupRead && edges[0] && <Text style={s.depRead}>{edges[0].readSentence}</Text>}
                 {edges.map((e) => {
                   const corr = view.system.correlations.find(
                     (c) => (c.from === e.from && c.to === e.to) || (c.from === e.to && c.to === e.from),
                   );
                   return (
                     <View key={`${e.from}-${e.to}`} style={s.depItem}>
-                      <Text style={s.depStatement}>{e.statement}</Text>
                       <Text style={s.depLine}>{depRelationshipLine(e)}</Text>
+                      {!groupRead && <Text style={s.depRead}>{e.readSentence}</Text>}
+                      <Text style={s.depStatement}>{e.statement}</Text>
                       {corr && (
                         <Text style={s.depCorr}>
                           {`Correlation ${corr.verdict.replace('_', ' ')} — r=${corr.r.toFixed(2)} (n=${corr.n})`}

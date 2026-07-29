@@ -8,7 +8,8 @@ import {
   SharedStaleMethodologyNotice,
 } from '../../app/app/[churchId]/diagnosis/report/shared';
 import { CoverCard, AreaTable } from '../../app/app/[churchId]/diagnosis/report/cover';
-import { buildReportView } from '@/lib/report/view';
+import { DependencyMap } from '../../app/app/[churchId]/diagnosis/report/system';
+import { buildReportView, type SystemView } from '@/lib/report/view';
 import { fallbackProse } from '@/lib/ai/fallback';
 import { diagnose } from '../../lib/engine';
 import { loadFixtureMethodology, answers } from '../engine/helpers';
@@ -195,5 +196,71 @@ describe('Appendix', () => {
     const text = textOf(tree);
     expect(text).toContain('Benchmarks are provisional priors.');
     expect(text).toContain('Dependencies are a working model.');
+  });
+});
+
+// --- DependencyMap: pill/arrow rows (Change #3) ----------------------------------------------
+//
+// DependencyMap is a plain function component (returns JSX, walkable by the helpers above), so it
+// can be exercised directly. The redesign (spec §3): a colored status pill per group, a
+// `From (score) → To (score)` arrow row carrying the gates/feeds verb as the PRIMARY line, the
+// plain-English read as a muted subline, and the "why" statement as a smaller caption. When a
+// whole group reads both_strong, the "nothing to flag here" read shows ONCE at group level, not
+// once per row. Colour is a visual concern the owner verifies by glance; these guards pin the
+// structure and copy — the folded-in Change-#2 leftover guard (group label "Both strong", not
+// "Both holding") lives here too, since #3 is the change that gives DependencyMap its own tests.
+const depSystem = {
+  dependencies: [
+    {
+      from: 'sys', to: 'vol', kind: 'gate',
+      statement: 'Systems capacity caps how many volunteers you can carry.',
+      read: 'load_bearing',
+      fromName: 'Systems', toName: 'Volunteers', fromScore: 74, toScore: 48,
+      readSentence: 'Systems is strong — so Volunteers has room to grow into it.',
+    },
+    {
+      from: 'gen', to: 'comm', kind: 'feed',
+      statement: 'Generosity feeds the shared life of the community.',
+      read: 'both_strong',
+      fromName: 'Generosity', toName: 'Community', fromScore: 80, toScore: 78,
+      readSentence: 'Both are strong — nothing to flag here.',
+    },
+    {
+      from: 'gov', to: 'disc', kind: 'gate',
+      statement: 'Governance sets the pace discipleship can sustain.',
+      read: 'both_strong',
+      fromName: 'Governance', toName: 'Discipleship', fromScore: 82, toScore: 79,
+      readSentence: 'Both are strong — nothing to flag here.',
+    },
+  ],
+  correlations: [],
+} as unknown as SystemView;
+
+describe('DependencyMap', () => {
+  it('labels the both_strong group "Both strong", not "Both holding"', () => {
+    const text = textOf(DependencyMap({ system: depSystem }));
+    expect(text).toContain('Both strong');
+    expect(text).not.toContain('Both holding');
+  });
+
+  it('renders each edge as a "From (score) → To (score)" arrow row carrying the gates/feeds verb', () => {
+    const text = textOf(DependencyMap({ system: depSystem }));
+    // primary line: names + scores + arrow + verb, on the actionable (load_bearing) row
+    expect(text).toContain('Systems (74) gates → Volunteers (48)');
+    // the plain-English read is a muted subline and the "why" statement a caption — both present
+    expect(text).toContain('Systems is strong — so Volunteers has room to grow into it.');
+    expect(text).toContain('Systems capacity caps how many volunteers you can carry.');
+  });
+
+  it('shows the both_strong read once at group level, not repeated on every row', () => {
+    const text = textOf(DependencyMap({ system: depSystem }));
+    // two both_strong edges, but the "nothing to flag here" read renders once at group level
+    expect((text.match(/nothing to flag here/g) ?? []).length).toBe(1);
+    // the per-edge "why" captions survive the group-level dedup
+    expect(text).toContain('Generosity feeds the shared life of the community.');
+    expect(text).toContain('Governance sets the pace discipleship can sustain.');
+    // and both arrow rows still render, each with its own verb
+    expect(text).toContain('Generosity (80) feeds → Community (78)');
+    expect(text).toContain('Governance (82) gates → Discipleship (79)');
   });
 });

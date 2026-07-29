@@ -16,17 +16,27 @@ const READ_LABEL: Record<string, string> = {
   both_strong: 'Both strong',
 }
 
+// A colored status pill per group (spec §3). Tokens live in app/globals.css @theme
+// (--color-berry etc., surfaced as Tailwind utilities): load-bearing is the most
+// actionable, constraint-adjacent group → berry (its reserved diagnosis colour);
+// at-risk → amber; clear → neutral sand; both-strong → sage (the healthy colour).
+const READ_PILL: Record<string, string> = {
+  load_bearing: 'bg-berry text-paper',
+  at_risk: 'bg-status-amber text-paper',
+  clear: 'bg-sand text-ink',
+  both_strong: 'bg-sage text-paper',
+}
+
 /**
- * The "X (n) gates/feeds Y (m). " scaffold (spec §6.1) — names, scores, and the
- * gates/feeds verb, all structural. The read-specific sentence that follows is
- * XPG methodology (spec §10): it is precomputed in lib/report/view.ts from
- * methodology.copy.dependency_reads and arrives on `e.readSentence`, so this
- * surface and pdf/document.tsx render one identical string instead of each
- * carrying its own copy.
+ * The `From (n) verb → To (m)` primary line (spec §3): names, scores, the arrow, and
+ * the gates/feeds verb, all structural. The read-specific sentence is NOT part of this
+ * line — it is precomputed in lib/report/view.ts from methodology.copy.dependency_reads,
+ * arrives on `e.readSentence`, and renders as a separate muted subline. pdf/document.tsx's
+ * depRelationshipLine mirrors this byte-for-byte so the two surfaces cannot drift.
  */
 function relationshipLine(e: SystemView['dependencies'][number]): string {
   const verb = e.kind === 'gate' ? 'gates' : 'feeds'
-  return `${e.fromName} (${e.fromScore}) ${verb} ${e.toName} (${e.toScore}). ${e.readSentence}`
+  return `${e.fromName} (${e.fromScore}) ${verb} → ${e.toName} (${e.toScore})`
 }
 
 /**
@@ -61,18 +71,30 @@ export function DependencyMap({ system }: { system: SystemView }) {
       {READ_ORDER.map((read) => {
         const edges = byRead.get(read)
         if (!edges || edges.length === 0) return null
+        // When the whole group reads both_strong the read is identical on every edge
+        // ("nothing to flag here" — no per-edge tokens): show it once at group level and
+        // suppress the per-row subline, rather than repeating one sentence down the column.
+        const groupRead = read === 'both_strong'
         return (
           <div key={read} className="flex flex-col gap-2">
-            <h3 className="font-display text-base text-ink">{READ_LABEL[read]}</h3>
-            <ul className="flex flex-col gap-2">
+            <h3 className="font-display text-base text-ink">
+              <span
+                className={`inline-flex items-center rounded-full px-2.5 py-0.5 font-body text-xs font-medium ${READ_PILL[read]}`}
+              >
+                {READ_LABEL[read]}
+              </span>
+            </h3>
+            {groupRead && edges[0] && <p className="font-body text-sm text-ink-soft">{edges[0].readSentence}</p>}
+            <ul className="flex flex-col gap-3">
               {edges.map((e) => {
                 const corr = system.correlations.find(
                   (c) => (c.from === e.from && c.to === e.to) || (c.from === e.to && c.to === e.from),
                 )
                 return (
                   <li key={`${e.from}-${e.to}`} className="flex flex-col gap-0.5">
-                    <p className="font-body text-sm text-ink-soft">{e.statement}</p>
                     <p className="font-body text-ink">{relationshipLine(e)}</p>
+                    {!groupRead && <p className="font-body text-sm text-ink-soft">{e.readSentence}</p>}
+                    <p className="font-body text-xs text-ink-soft">{e.statement}</p>
                     {corr && (
                       <p className="font-body text-xs text-ink-soft">
                         {`Correlation ${corr.verdict.replace('_', ' ')} — r=${corr.r.toFixed(2)} (n=${corr.n})`}
