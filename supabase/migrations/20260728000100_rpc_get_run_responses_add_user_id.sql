@@ -12,6 +12,18 @@
 -- Everything else is byte-identical to the origin migration (20260716001000): same
 -- authentication/membership gate, same run-scoping (single in_progress run, oldest first),
 -- same grants.
+--
+-- DROP-then-create, not a bare CREATE OR REPLACE: adding respondent_user_id changes the
+-- function's return type (a RETURNS TABLE is a set of OUT parameters, so a new column is a
+-- new row type). PostgreSQL forbids CREATE OR REPLACE from altering a return type -- it
+-- raises 42P13 "cannot change return type of existing function" against the pre-existing
+-- 4-column function from 20260716001000 -- so the old function must be dropped first. This
+-- holds whether the migration applies on top of prod (the 4-column function is live) or from
+-- a fresh reset (20260716001000 created it moments earlier). No schema object depends on it
+-- (only app-side .rpc() callers), so the drop needs no CASCADE; the grants below re-establish
+-- the permissions the drop removes.
+drop function if exists public.get_run_responses(uuid);
+
 create or replace function public.get_run_responses(p_church_id uuid)
 returns table(category_id text, item_id text, value int, respondent_label text, respondent_user_id uuid)
 language plpgsql
