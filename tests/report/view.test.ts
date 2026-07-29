@@ -84,10 +84,12 @@ describe('buildReportView', () => {
     expect(v.dispersion).toBeUndefined();
   });
 
-  it('keeps respondent names for the screen audience', () => {
+  it('drops respondent names for the screen audience but keeps the section', () => {
     const v = buildReportView(diagnosis(WITH_DISPERSION), blocks({ dispersion: 'Your leaders split.' }),
       methodology, { audience: 'screen' });
-    expect(v.dispersion?.respondents.map((r) => r.label)).toEqual(['Dana Okafor', 'Sam Reyes']);
+    expect(v.dispersion).toBeDefined();
+    expect(v.dispersion?.text).toBe('Your leaders split.');
+    expect(v.dispersion?.respondents).toEqual([]);
   });
 
   it('drops respondent names for the pdf audience but keeps the section', () => {
@@ -124,9 +126,10 @@ describe('buildReportView', () => {
   // blocks.dispersion — see lib/report/view.ts's buildSystem), so it needs its own
   // audience-gating coverage: nothing here proves it mirrors dispersion's stripping
   // unless it is asserted directly. Mirrors the three tests immediately above.
-  it('keeps respondent names in system.disagreement for the screen audience', () => {
+  it('drops respondent names from system.disagreement for the screen audience but keeps the section', () => {
     const v = buildReportView(diagnosis(WITH_DISPERSION), blocks(), methodology, { audience: 'screen' });
-    expect(v.system.disagreement?.respondents.map((r) => r.label)).toEqual(['Dana Okafor', 'Sam Reyes']);
+    expect(v.system.disagreement).toBeDefined();
+    expect(v.system.disagreement?.respondents).toEqual([]);
   });
 
   it('drops respondent names from system.disagreement for the pdf audience but keeps the section', () => {

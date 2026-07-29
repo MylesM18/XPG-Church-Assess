@@ -25,25 +25,25 @@ describe('audience privacy', () => {
     }
   });
 
-  it('screen keeps the labelled respondent list under Disagreement, exactly as it ships', () => {
+  it('screen now empties the labelled respondent list under Disagreement', () => {
     const v = buildReportView(d, blocks, methodology, { audience: 'screen' });
-    // No `if` guard: the fixture is built to fire. vol is 2 vs 9 while every other
-    // area is 8 vs 7, so both rating styles are 0 and vol's deviation stddev is 3.5,
-    // clearing any plausible thresholds.dispersion. A conditional here would pass
-    // silently if buildReportView never populated system.disagreement at all.
+    // The fixture is built to fire (vol 2 vs 9 while every other area is 8 vs 7), so the
+    // disagreement SECTION still renders — heading + narrative text. Keeping this presence
+    // assertion is the non-vacuity guard: the test cannot pass by the section silently
+    // disappearing. Only the per-person name list is now stripped (respondent anonymity),
+    // on screen exactly as it already was on pdf/shared.
     expect(v.system.disagreement).toBeDefined();
-    expect(v.system.disagreement!.respondents.length).toBeGreaterThan(0);
+    expect(v.system.disagreement!.respondents).toEqual([]);
   });
 
-  it('calibration carries no names on ANY surface, screen included', () => {
+  it('no respondent names anywhere in the system section on ANY surface, screen included', () => {
     for (const audience of ['screen', 'pdf', 'shared'] as const) {
       const v = buildReportView(d, blocks, methodology, { audience });
-      // Stringify the WHOLE system section, not one numeric field. The rendered
-      // calibration LINE is prose (system.calibrationText) and that is where a name
-      // could actually leak; a number can never contain one, so asserting on
-      // calibrationSpread alone cannot fail. `disagreement` is excluded because the
-      // labelled respondent list is legitimately screen-only (test above).
-      const json = JSON.stringify({ ...v.system, disagreement: undefined });
+      // Stringify the WHOLE system section, disagreement INCLUDED. Previously the labelled
+      // respondent list was screen-only, so `disagreement` was excluded here; now that names are
+      // stripped on every surface, the entire section — calibration prose AND the disagreement
+      // block — must be name-free for screen, pdf, and shared alike.
+      const json = JSON.stringify(v.system);
       for (const name of NAMES) expect(json).not.toContain(name);
     }
   });
@@ -69,7 +69,7 @@ describe('audience privacy', () => {
    * guest itself is symmetric (2 vs 2) so it contributes no disagreement of its own — verified
    * empirically that d2.disagreement_flags contains exactly the vol flag, not guest.
    */
-  it('pdf and shared also strip the top-level dispersion.respondents once it is actually populated', () => {
+  it('screen, pdf, and shared all strip the top-level dispersion.respondents once it is actually populated', () => {
     const d2 = diagnose(
       ALL.flatMap((id) => [
         ...answers(methodology, id, id === 'guest' ? 2 : id === 'vol' ? 2 : 8, 'Pastor Dana', 'u-1'),
@@ -85,7 +85,7 @@ describe('audience privacy', () => {
     expect(d2.primary_constraint).not.toBeNull();
     expect(blocks2.dispersion).toBeDefined();
 
-    for (const audience of ['pdf', 'shared'] as const) {
+    for (const audience of ['screen', 'pdf', 'shared'] as const) {
       const v = buildReportView(d2, blocks2, methodology, { audience });
       expect(v.dispersion).toBeDefined();
       const json = JSON.stringify(v);

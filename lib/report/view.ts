@@ -248,7 +248,6 @@ function buildSystem(
   d: Diagnosis,
   blocks: ReportBlocks,
   methodology: Methodology,
-  opts: { audience: ReportAudience },
 ): SystemView {
   const names = new Map(methodology.questions.categories.map((c) => [c.id, c.name]));
   const flag = d.disagreement_flags[0];
@@ -280,8 +279,7 @@ function buildSystem(
             disp_name: names.get(flag.category_id) ?? flag.category_id,
             disp_spread: String(flag.spread),
           }),
-          respondents:
-            opts.audience === 'pdf' || opts.audience === 'shared' ? [] : flag.respondents,
+          respondents: [],
         }
       : undefined,
     // Layer 2's "GatingFlags kept" (spec §7 table) — same source as the
@@ -295,10 +293,11 @@ function buildSystem(
  * document consume this so section content and ordering cannot drift apart;
  * only layout primitives differ between them.
  *
- * audience 'pdf' and 'shared' both empty dispersion.respondents (and, identically,
- * system.disagreement.respondents). Each leaves the permission wall, so the
- * per-person name-to-score list must not travel with them. The field stays
- * present-but-empty so the narrative still renders.
+ * dispersion.respondents and system.disagreement.respondents are now emptied for EVERY
+ * audience, screen included: the per-person name-to-score list is never shown on any surface
+ * (respondent anonymity — spec 2026-07-29-report-anonymity-design). The fields stay
+ * present-but-empty so the disagreement narrative still renders; buildSystem no longer varies
+ * by audience and takes no `opts`.
  *
  * audience 'shared' additionally drops nextStep: the CTA is an admin action, and
  * a board member reading a forwarded link cannot take it.
@@ -319,8 +318,6 @@ export function buildReportView(
   const receipt = primaryId
     ? d.evidence_trail.find((r) => r.claim === `primary_constraint:${primaryId}`)
     : undefined;
-
-  const flag = d.disagreement_flags[0];
 
   // Same resolution pattern chain-walk.ts uses, so the chain section and the
   // appendix never disagree on how a category_id is displayed.
@@ -347,10 +344,7 @@ export function buildReportView(
     dispersion: blocks.dispersion
       ? {
           text: blocks.dispersion,
-          respondents:
-            opts.audience === 'pdf' || opts.audience === 'shared'
-              ? []
-              : (flag?.respondents ?? []),
+          respondents: [],
         }
       : undefined,
 
@@ -366,7 +360,7 @@ export function buildReportView(
 
     cover: buildCover(d, methodology),
     areas: buildAreas(d, methodology),
-    system: buildSystem(d, blocks, methodology, opts),
+    system: buildSystem(d, blocks, methodology),
   };
 }
 
