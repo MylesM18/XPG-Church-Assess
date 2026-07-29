@@ -21,6 +21,7 @@ export interface AreaDossierView {
   score: number;
   n: number;
   reading: string;
+  readingLabel: string;
   insideIt: string | null;
   agreement: string | null;
   position: string | null;
@@ -91,6 +92,17 @@ function readingBand(state: DiagnosisCategory['state'], score: number, severeThr
   if (state === 'watch') return 'watch';
   return 'holding';
 }
+
+/** Short, capitalized label for the Layer 1 AreaTable "Band" column — the SAME
+ *  state-aware reading band the dossier prose uses (spec §7 Layer 1/3), so the cover
+ *  table and each dossier can never disagree. Replaces the former score-only scoreBand()
+ *  that cover.tsx and pdf/document.tsx each duplicated (finding #5, Natalie: align). */
+const READING_BAND_LABEL: Record<ReadingBand, string> = {
+  severe: 'Severe',
+  broken: 'Broken',
+  watch: 'Watch',
+  holding: 'Holding',
+};
 
 /** Largest-magnitude question effect, rendered as "{item_id} sits {n} pts {below|above} the rest".
  *  Data-driven, not XPG voice — spec §7.2's own example ("D3 sits 18 pts below the rest"). */
@@ -222,6 +234,7 @@ function buildAreas(d: Diagnosis, methodology: Methodology): AreaDossierView[] {
       score,
       n,
       reading: methodology.copy.dossier.reading[kind][band]!,
+      readingLabel: READING_BAND_LABEL[band],
       insideIt: insideItFor(n, cat?.questionEffects ?? []),
       agreement: agreementFor(n, flagById.get(categoryId), methodology),
       position: positionFor(cat?.cohort_percentile ?? null),

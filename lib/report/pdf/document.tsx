@@ -104,18 +104,8 @@ export function confidenceBand(c: number): { label: string; low: boolean } {
   return { label: 'Low', low: true };
 }
 
-/** Mirrors cover.tsx's private scoreBand() — see confidenceBand() above for why this is a
- *  duplicate rather than an import. Thresholds are methodology/rules.yaml's own
- *  thresholds.severe=25 / thresholds.break=thresholds.gate=45 (the stable, meaningful cut
- *  points in this domain), not a fourth invented scale. */
-function scoreBand(score: number): string {
-  if (score < 25) return 'Severe';
-  if (score < 45) return 'Broken';
-  return 'Holding';
-}
-
 // Mirrors system.tsx's private READ_ORDER/READ_LABEL — same "cannot import a DOM component"
-// constraint as confidenceBand/scoreBand above. The read sentence is no longer mirrored here:
+// constraint as confidenceBand above. The read sentence is no longer mirrored here:
 // it is precomputed once in lib/report/view.ts (methodology.copy.dependency_reads, spec §10) and
 // arrives on e.readSentence, so both surfaces render the identical string.
 const DEP_READ_ORDER = ['load_bearing', 'at_risk', 'clear', 'both_strong'] as const satisfies readonly EdgeRead[];
@@ -234,7 +224,7 @@ export function ReportDocument({
               <Text style={s.tableCellName}>{area.name}</Text>
               <Text style={s.tableCellSmall}>{area.score}</Text>
               <Text style={s.tableCellSmall}>{area.n}</Text>
-              <Text style={s.tableCellSmall}>{scoreBand(area.score)}</Text>
+              <Text style={s.tableCellSmall}>{area.readingLabel}</Text>
             </View>
           ))}
         </View>

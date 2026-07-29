@@ -105,6 +105,36 @@ describe('ReportDocument', () => {
     expect(text).not.toContain('70%');
   }, 30_000);
 
+  // Finding #5: the Layer 1 AreaTable "Band" column must show the same state-aware reading band
+  // as each area's dossier (Natalie's ruling: align). The old score-only scoreBand() collapsed a
+  // Watch-state area (score >= 45) to "Holding" on the cover while its dossier read watch-state — a
+  // same-page contradiction. 'Watch' is a band the score-only fn could NEVER emit, so its presence
+  // in the band column proves the alignment. Region-isolated between the 'Band' header and Layer 2's
+  // 'The chain walk' heading because the dossier's "Watch for" field label also contains "Watch".
+  it('shows the state-aware reading band (Watch) in the cover AreaTable, aligned with the dossier', async () => {
+    const d = diagnosis();
+    // The shared fixture's category_ids ('connections'/'guest_experience') are NOT the methodology
+    // chain/enabler ids buildAreas iterates ([guest, conn, disc, vol, gen, gov, comm, sys]), so remap
+    // this row to the real chain id 'conn' (name "Community / Connection") for its state to reach the
+    // Layer 1 table at all — otherwise every area falls back to score 0 and no state is exercised.
+    const conn = d.categories.find((c) => c.category_id === 'connections')!;
+    conn.category_id = 'conn';
+    conn.state = 'watch'; // score stays 70 (>= 45): scoreBand(70) => 'Holding'; state-aware => 'Watch'
+    const blocks = fallbackProse(d, methodology);
+    const view = buildReportView(d, blocks, methodology, { audience: 'pdf' });
+    const buffer = await renderReportDocument({
+      view, churchName: 'Grace Church', brandColor: '#3A4A6B', monogram: 'GC',
+      generatedAt: new Date('2026-07-18T00:00:00Z'),
+    });
+    const text = await extractText(buffer);
+    const tableStart = text.indexOf('Band');
+    const tableEnd = text.indexOf('The chain walk');
+    expect(tableStart, 'expected the AreaTable "Band" header').toBeGreaterThan(-1);
+    expect(tableEnd, 'expected Layer 2 "The chain walk" heading after the table').toBeGreaterThan(tableStart);
+    const bandColumn = text.slice(tableStart, tableEnd);
+    expect(bandColumn).toContain('Watch');
+  }, 30_000);
+
   it('NEVER prints a respondent name in the pdf audience', async () => {
     const text = await renderText('pdf');
     expect(text).not.toContain(SENTINEL);

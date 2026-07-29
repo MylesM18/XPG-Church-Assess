@@ -16,24 +16,6 @@ function confidenceBand(c: number): { label: string; low: boolean } {
 }
 
 /**
- * Coarse, UI-only score band for the Layer 1 roll-up table — same spirit as
- * confidenceBand() above: presentation only, explicitly separate from the
- * methodology YAML (spec §7). It reuses the two numbers that already ARE the
- * methodology's own thresholds (methodology/rules.yaml thresholds.severe=25,
- * thresholds.break=thresholds.gate=45) because those are the stable, meaningful
- * cut points in this domain, but it does NOT attempt to reproduce the engine's
- * own 'watch' state — that also depends on cohort_percentile, which AreaTable
- * is not given. A coarse three-tier read is the right depth for an at-a-glance
- * table; the authoritative band for an area is what AreaDossier's `reading`
- * field says in Layer 3.
- */
-function scoreBand(score: number): string {
-  if (score < 25) return 'Severe'
-  if (score < 45) return 'Broken'
-  return 'Holding'
-}
-
-/**
  * Throughput is the single focal number; capacity/gap/constraint are a
  * supporting line beneath, never a co-headline (spec §3 decision 3, spec §5.3).
  * This is the report's page heading (h1) — the church-identity header that used
@@ -98,7 +80,7 @@ export function AreaTable({ areas }: { areas: AreaDossierView[] }) {
             <td className="py-1.5 text-ink">{area.name}</td>
             <td className="py-1.5 text-ink">{area.score}</td>
             <td className="py-1.5 text-ink">{area.n}</td>
-            <td className="py-1.5 text-ink">{scoreBand(area.score)}</td>
+            <td className="py-1.5 text-ink">{area.readingLabel}</td>
           </tr>
         ))}
       </tbody>
