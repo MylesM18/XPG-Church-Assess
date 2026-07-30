@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { loadChurchForMember } from '@/lib/data/churches'
+import { churchMembers } from '@/lib/data/members'
 import { MembersList, type Member } from './members-list'
 import { PendingInvitesList, type PendingInvite } from './pending-invites-list'
 
@@ -10,18 +12,12 @@ export default async function AccessPage({ params }: { params: Promise<{ churchI
   const { churchId } = await params
   const supabase = await createClient()
 
-  const { data: church } = await supabase
-    .from('churches').select('id, name').eq('id', churchId).maybeSingle()
-  if (!church) notFound()
-
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: membership } = await supabase
-    .from('church_members').select('role')
-    .eq('church_id', churchId).eq('user_id', user?.id ?? '').maybeSingle()
-  if (membership?.role !== 'admin') notFound()
+  const { church, role } = await loadChurchForMember(supabase, churchId, user?.id ?? '')
+  if (!church) notFound()
+  if (role !== 'admin') notFound()
 
-  const { data: memberRows } = await supabase.rpc('get_church_members', { p_church_id: churchId })
-  const members = (memberRows ?? []) as Member[]
+  const members = await churchMembers<Member>(supabase, churchId)
 
   const { data: pendingRows } = await supabase
     .from('member_invitations')

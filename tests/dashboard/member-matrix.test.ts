@@ -13,9 +13,9 @@ const page = read(...DIR, 'page.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/
 const matrix = read(...DIR, 'member-coverage-matrix.tsx')
 
 describe('admin Member × Category matrix', () => {
-  it('page wires the RPC, pivot, and component', () => {
+  it('page wires the roster, pivot, and component', () => {
     expect(page).toContain('get_member_category_coverage')
-    expect(page).toContain('get_church_members')
+    expect(page).toContain('churchMembers') // roster now via the lib/data seam, not the raw RPC
     expect(page).toContain('buildMemberMatrix')
     expect(page).toContain('MemberCoverageMatrix')
   })
