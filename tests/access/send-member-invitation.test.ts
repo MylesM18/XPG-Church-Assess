@@ -8,6 +8,7 @@ import { sendMemberInvitationEmail } from '@/lib/email/send-member-invitation'
 beforeEach(() => {
   sendMock.mockReset()
   delete process.env.RESEND_API_KEY
+  delete process.env.EMAIL_FROM
 })
 
 describe('sendMemberInvitationEmail', () => {
@@ -35,6 +36,21 @@ describe('sendMemberInvitationEmail', () => {
     sendMock.mockResolvedValue({ error: null })
     await sendMemberInvitationEmail({ to: 'a@test.com', link: 'http://x/accept/t', churchName: 'Grace', role: 'viewer' })
     expect(sendMock.mock.calls[0]![0].html).toContain('viewer')
+  })
+
+  it('sends from EMAIL_FROM when set (verified-domain address)', async () => {
+    process.env.RESEND_API_KEY = 'test-key'
+    process.env.EMAIL_FROM = 'invites@360churchhealthassessment.com'
+    sendMock.mockResolvedValue({ error: null })
+    await sendMemberInvitationEmail({ to: 'a@test.com', link: 'http://x/accept/t', churchName: 'Grace', role: 'admin' })
+    expect(sendMock.mock.calls[0]![0].from).toBe('invites@360churchhealthassessment.com')
+  })
+
+  it('falls back to the Resend test address when EMAIL_FROM is unset', async () => {
+    process.env.RESEND_API_KEY = 'test-key'
+    sendMock.mockResolvedValue({ error: null })
+    await sendMemberInvitationEmail({ to: 'a@test.com', link: 'http://x/accept/t', churchName: 'Grace', role: 'admin' })
+    expect(sendMock.mock.calls[0]![0].from).toBe('onboarding@resend.dev')
   })
 
   it('returns soft failure when Resend errors', async () => {
