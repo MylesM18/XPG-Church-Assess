@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { requireChurchMembership } from '@/lib/auth/require-church-membership'
+import { currentRun, canAcceptAnswers } from '@/lib/runs/current-run'
 import { loadMethodology } from '@/lib/methodology/load'
 import { SelfForm } from './self-form'
 import { AnonymityNote } from '@/components/anonymity-note'
@@ -39,6 +40,14 @@ export default async function AnswerPage({
     initialValues[row.item_id] = row.value
   }
 
+  // Review-only once the run is complete. v1 is single-run and completion is terminal, so a
+  // completed run cannot receive answers (docs/adr/0001-review-only-completion-defer-multi-run.md).
+  // Resolve the run status-agnostically and gate the editable form on the named write policy —
+  // rendering SelfForm on a completed run is exactly what produced the "no active run" write throw
+  // on the old "Take Again" path.
+  const run = await currentRun(supabase, churchId)
+  const writable = canAcceptAnswers(run)
+
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-lg flex-col gap-6 px-6 py-12">
       <Link
@@ -47,14 +56,39 @@ export default async function AnswerPage({
       >
         ← Back to menu
       </Link>
-      <AnonymityNote />
-      <SelfForm
-        churchId={churchId}
-        categoryId={categoryId}
-        categoryName={category.name}
-        items={items}
-        initialValues={initialValues}
-      />
+      {writable ? (
+        <>
+          <AnonymityNote />
+          <SelfForm
+            churchId={churchId}
+            categoryId={categoryId}
+            categoryName={category.name}
+            items={items}
+            initialValues={initialValues}
+          />
+        </>
+      ) : (
+        <section aria-labelledby="review-heading" className="flex flex-col gap-6">
+          <div className="flex flex-col gap-1">
+            <h1 id="review-heading" className="font-display text-2xl text-ink">
+              {category.name}
+            </h1>
+            <p className="font-body text-sm text-ink-soft">
+              This assessment is complete, so your answers are read-only.
+            </p>
+          </div>
+          <ol className="flex flex-col gap-4">
+            {items.map((item) => (
+              <li key={item.id} className="flex flex-col gap-1 border-b border-line pb-4">
+                <p className="font-body text-sm text-ink">{item.text}</p>
+                <p className="font-display text-lg text-ink">
+                  {item.id in initialValues ? initialValues[item.id] : '—'}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
     </main>
   )
 }
