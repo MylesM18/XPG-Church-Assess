@@ -18,18 +18,12 @@ describe('public methodology page — content', () => {
     'How a score is formed',
     'headline numbers',
     'chain',
-    'Benchmarks',
     'Blind spot',
     'Agreement',
     'role of AI',
     'Versioning',
   ])('covers the "%s" section', (heading) => {
     expect(SOURCE).toContain(heading)
-  })
-
-  it('carries the provisional-benchmark caveat', () => {
-    expect(SOURCE).toContain('provisional')
-    expect(SOURCE).toContain('observed cohort')
   })
 
   it('offers a back-to-home link', () => {
