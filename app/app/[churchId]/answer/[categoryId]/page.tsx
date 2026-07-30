@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { requireChurchMembership } from '@/lib/auth/require-church-membership'
 import { currentRun, canAcceptAnswers } from '@/lib/runs/current-run'
+import { sectionNav } from '@/lib/review/section-nav'
 import { loadMethodology } from '@/lib/methodology/load'
 import { SelfForm } from './self-form'
 import { AnonymityNote } from '@/components/anonymity-note'
@@ -47,6 +48,7 @@ export default async function AnswerPage({
   // on the old "Take Again" path.
   const run = await currentRun(supabase, churchId)
   const writable = canAcceptAnswers(run)
+  const nav = sectionNav(methodology.questions.categories, categoryId)
 
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-lg flex-col gap-6 px-6 py-12">
@@ -70,6 +72,11 @@ export default async function AnswerPage({
       ) : (
         <section aria-labelledby="review-heading" className="flex flex-col gap-6">
           <div className="flex flex-col gap-1">
+            {nav.index >= 0 && (
+              <p className="font-body text-xs uppercase tracking-wide text-ink-soft">
+                Area {nav.index + 1} of {nav.total}
+              </p>
+            )}
             <h1 id="review-heading" className="font-display text-2xl text-ink">
               {category.name}
             </h1>
@@ -87,6 +94,30 @@ export default async function AnswerPage({
               </li>
             ))}
           </ol>
+          {(nav.prev || nav.next) && (
+            <nav aria-label="Review sections" className="flex items-center justify-between gap-4 pt-2">
+              {nav.prev ? (
+                <Link
+                  href={`/app/${churchId}/answer/${nav.prev.id}`}
+                  className="rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                >
+                  ← {nav.prev.name}
+                </Link>
+              ) : (
+                <span />
+              )}
+              {nav.next ? (
+                <Link
+                  href={`/app/${churchId}/answer/${nav.next.id}`}
+                  className="rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                >
+                  {nav.next.name} →
+                </Link>
+              ) : (
+                <span />
+              )}
+            </nav>
+          )}
         </section>
       )}
     </main>
