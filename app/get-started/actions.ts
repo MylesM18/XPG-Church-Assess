@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { createClient } from '@/lib/supabase/server'
+import { createChurchWithAdmin } from '@/lib/data/churches'
 
 export interface CreateChurchState {
   error: string | null
@@ -50,11 +51,8 @@ export async function createChurch(
     args[`p_${field}`] = emptyToNull(formData.get(field))
   }
 
-  const { data, error } = await supabase.rpc('create_church_with_admin', args)
-  if (error) return { error: error.message }
-
-  const rows = data as Array<{ church_id: string; run_id: string }> | null
-  const churchId = rows?.[0]?.church_id
+  const { churchId, error } = await createChurchWithAdmin(supabase, args)
+  if (error) return { error }
   if (!churchId) return { error: 'Church creation failed — no id returned.' }
 
   redirect(`/app/${churchId}`)

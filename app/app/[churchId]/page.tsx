@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { loadChurchForMember } from '@/lib/data/churches'
+import { churchMembers } from '@/lib/data/members'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { coverage, type CoverageRow, type CoverageStatus } from '@/lib/coverage/coverage'
@@ -43,22 +45,9 @@ export default async function DashboardPage({
   const { churchId } = await params
   const supabase = await createClient()
 
-  const { data: church, error } = await supabase
-    .from('churches')
-    .select('id, name, brand_color')
-    .eq('id', churchId)
-    .maybeSingle()
-  if (error) throw error
-  if (!church) notFound()
-
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: membership } = await supabase
-    .from('church_members')
-    .select('role')
-    .eq('church_id', churchId)
-    .eq('user_id', user?.id ?? '')
-    .maybeSingle()
-  const role = membership?.role ?? null
+  const { church, role } = await loadChurchForMember(supabase, churchId, user?.id ?? '')
+  if (!church) notFound()
   const isAdmin = role === 'admin'
 
   // Admins read the church-wide aggregate (needed to gate diagnosis generation on all-8-covered)
@@ -107,10 +96,10 @@ export default async function DashboardPage({
   // Admin-only Member × Category matrix (RPC is admin-gated).
   let memberMatrix: MemberMatrixRow[] = []
   if (isAdmin) {
-    const { data: rosterRows } = await supabase.rpc('get_church_members', { p_church_id: churchId })
+    const rosterRows = await churchMembers<MatrixMember>(supabase, churchId)
     const { data: matrixRows } = await supabase.rpc('get_member_category_coverage', { p_church_id: churchId })
     memberMatrix = buildMemberMatrix(
-      (rosterRows ?? []) as MatrixMember[],
+      rosterRows,
       (matrixRows ?? []) as MemberCategoryCoverageRow[],
       categories,
     )

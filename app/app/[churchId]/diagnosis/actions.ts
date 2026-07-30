@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
+import { requireChurchAdmin } from '@/lib/auth/require-church-admin'
 import { shareLink } from '@/lib/report/share-link'
 
 export interface ShareResult {
@@ -16,22 +16,11 @@ export interface ShareResult {
 
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'
 
-async function requireAdmin(churchId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { supabase, error: 'You must be signed in.' as const }
-  const { data: membership } = await supabase
-    .from('church_members').select('role')
-    .eq('church_id', churchId).eq('user_id', user.id).maybeSingle()
-  if (membership?.role !== 'admin') return { supabase, error: 'You must be an admin of this church.' as const }
-  return { supabase, error: null }
-}
-
 export async function shareReport(_prev: ShareResult, formData: FormData): Promise<ShareResult> {
   const churchId = String(formData.get('church_id') ?? '')
   const runId = String(formData.get('run_id') ?? '')
 
-  const { supabase, error: authErr } = await requireAdmin(churchId)
+  const { supabase, error: authErr } = await requireChurchAdmin(churchId)
   if (authErr) return { link: null, error: authErr, status: 'idle' }
 
   const { data: token, error } = await supabase.rpc('create_report_share', { p_run_id: runId })
@@ -47,7 +36,7 @@ export async function revokeShare(_prev: ShareResult, formData: FormData): Promi
   const churchId = String(formData.get('church_id') ?? '')
   const runId = String(formData.get('run_id') ?? '')
 
-  const { supabase, error: authErr } = await requireAdmin(churchId)
+  const { supabase, error: authErr } = await requireChurchAdmin(churchId)
   if (authErr) return { link: null, error: authErr, status: 'idle' }
 
   const { error } = await supabase.rpc('revoke_report_share', { p_run_id: runId })

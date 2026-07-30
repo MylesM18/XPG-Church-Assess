@@ -1,6 +1,7 @@
 // app/app/[churchId]/diagnosis/page.tsx
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { loadChurchForMember } from '@/lib/data/churches'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { fallbackProse, type ReportBlocks } from '@/lib/ai/fallback'
@@ -32,20 +33,13 @@ export default async function DiagnosisPage({
   const { churchId } = await params
   const supabase = await createClient()
 
-  const { data: church } = await supabase
-    .from('churches')
-    .select('id, name, brand_color, attendance_band')
-    .eq('id', churchId)
-    .maybeSingle()
+  const { data: { user } } = await supabase.auth.getUser()
+  const { church, role } = await loadChurchForMember(supabase, churchId, user?.id ?? '')
   if (!church) notFound()
 
   // Results = admins only (Decision 5). A viewer cannot read the diagnoses row (RLS is
   // admin-only) and must not see the report page — send them back to the dashboard.
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: membership } = await supabase
-    .from('church_members').select('role')
-    .eq('church_id', churchId).eq('user_id', user?.id ?? '').maybeSingle()
-  const isAdmin = membership?.role === 'admin'
+  const isAdmin = role === 'admin'
   if (!isAdmin) redirect(`/app/${churchId}`)
 
   const { data: run } = await supabase
