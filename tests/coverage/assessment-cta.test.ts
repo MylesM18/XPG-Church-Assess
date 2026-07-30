@@ -23,9 +23,9 @@ describe('assessmentCta()', () => {
     expect(assessmentCta(result(['not_started', 'not_started', 'not_started']), cats))
       .toEqual({ state: 'not_started', label: 'Start Assessment', targetCategoryId: 'a' })
   })
-  it('all covered → Take Again at the first category', () => {
+  it('all covered → Review answers at the first category (completion is terminal; review is read-only)', () => {
     expect(assessmentCta(result(['covered', 'covered', 'covered']), cats))
-      .toEqual({ state: 'complete', label: 'Take Again', targetCategoryId: 'a' })
+      .toEqual({ state: 'complete', label: 'Review answers', targetCategoryId: 'a' })
   })
   it('partly done → Continue Assessment at the first non-covered category', () => {
     expect(assessmentCta(result(['covered', 'partial', 'not_started']), cats))

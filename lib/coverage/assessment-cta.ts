@@ -12,7 +12,7 @@ export interface AssessmentCta {
 /**
  * Whole-assessment primary CTA, derived from the coverage the dashboard already computes.
  * - not_started (nothing answered anywhere) → "Start Assessment" @ first category.
- * - complete (every category covered)       → "Take Again" @ first category (prefilled to review).
+ * - complete (every category covered)       → "Review answers" @ first category (read-only review).
  * - in_progress (otherwise)                 → "Continue Assessment" @ first non-covered category.
  * The step WITHIN the category is chosen by the form page (first unanswered), not here.
  */
@@ -23,7 +23,7 @@ export function assessmentCta(result: CoverageResult, categories: Category[]): A
     return { state: 'not_started', label: 'Start Assessment', targetCategoryId: firstId }
   }
   if (categories.length > 0 && result.coveredCount === categories.length) {
-    return { state: 'complete', label: 'Take Again', targetCategoryId: firstId }
+    return { state: 'complete', label: 'Review answers', targetCategoryId: firstId }
   }
   const firstNonCovered = result.categories.find((c) => c.status !== 'covered')
   return {
