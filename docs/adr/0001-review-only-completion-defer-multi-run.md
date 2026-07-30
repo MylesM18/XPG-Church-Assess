@@ -77,3 +77,21 @@ single-run.**
   `tests/coverage/member-category-coverage-rpc.test.ts` (it asserts a superseded
   migration). Reconcile whether the two diagnosis gates currently agree on
   "complete" — extracting the shared predicate makes that checkable.
+
+## Implementation status (2026-07-30)
+
+- **Wave 1 (TS, closes the bug — no migration): shipped** on `feat/review-only-completion`.
+  `currentRun`/`canAcceptAnswers` (`lib/runs/current-run.ts`); the completed-run answer page
+  renders a read-only review; CTA relabelled to "Review answers". Confirmed the two diagnosis
+  gates DO agree ("at least one fully-covered respondent"); `classify`'s aggregate coverage is a
+  distinct notion, left as-is.
+- **Wave 2 (SQL locality): shipped** on the same branch — migration
+  `20260730000100_fn_current_run_dedup_resolution.sql` adds `current_run(church_id)` and routes six
+  RPCs through it (`submit_self_response`, `save_diagnosis` — now gating on status with
+  `run is complete; answers are read-only`; `get_run_coverage`, `get_member_run_coverage`,
+  `get_member_category_coverage`, `get_my_category_answers`). Re-pointed the stale tripwire onto the
+  live definition. ⚠️ **Owner-gated:** apply with `supabase db push` and verify with
+  `npm run test:db` (pgTAP) — the agent runs neither.
+- **Still pending (pgTAP-gated follow-up):** route the three report-path RPCs
+  (`get_run_responses`, `get_completed_run_responses`, `get_shared_run_responses`) through
+  `current_run` too.
