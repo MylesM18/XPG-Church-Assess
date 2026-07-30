@@ -35,3 +35,15 @@ export async function removeChurchMember(
   const { error } = await supabase.rpc('remove_member', { p_church_id: churchId, p_user_id: userId })
   return { error: error?.message ?? null }
 }
+
+/**
+ * The church's members via the admin-gated `get_church_members` RPC, defaulted to []. Generic in the
+ * row shape so each call site keeps its own view type without the RPC name leaking out to callers.
+ */
+export async function churchMembers<T>(
+  supabase: SupabaseServerClient,
+  churchId: string,
+): Promise<T[]> {
+  const { data } = await supabase.rpc('get_church_members', { p_church_id: churchId })
+  return (data ?? []) as T[]
+}

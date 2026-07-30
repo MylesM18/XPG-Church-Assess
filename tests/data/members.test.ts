@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { memberRole, removeChurchMember } from '@/lib/data/members'
+import { memberRole, removeChurchMember, churchMembers } from '@/lib/data/members'
 
 type ClientType = Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>
 
 function fakeClient(opts: {
   data?: unknown
+  rpcData?: unknown
   rpcError?: unknown
   eqCols?: string[]
   rpcArgs?: Record<string, unknown>[]
@@ -21,7 +22,7 @@ function fakeClient(opts: {
     from: () => chain,
     rpc: async (_name: string, args: Record<string, unknown>) => {
       opts.rpcArgs?.push(args)
-      return { error: opts.rpcError ?? null }
+      return { data: opts.rpcData ?? null, error: opts.rpcError ?? null }
     },
   } as unknown as ClientType
 }
@@ -51,5 +52,20 @@ describe('removeChurchMember()', () => {
   it('surfaces the RPC refusal message (e.g. last-admin guard)', async () => {
     const res = await removeChurchMember(fakeClient({ rpcError: { message: 'cannot remove the last admin' } }), 'c1', 'u2')
     expect(res).toEqual({ error: 'cannot remove the last admin' })
+  })
+})
+
+describe('churchMembers()', () => {
+  it('returns the roster rows (typed by the caller)', async () => {
+    const rpcArgs: Record<string, unknown>[] = []
+    const rows = await churchMembers<{ user_id: string; role: string }>(
+      fakeClient({ rpcData: [{ user_id: 'u1', role: 'admin' }], rpcArgs }),
+      'c1',
+    )
+    expect(rows).toEqual([{ user_id: 'u1', role: 'admin' }])
+    expect(rpcArgs).toEqual([{ p_church_id: 'c1' }])
+  })
+  it('defaults to [] when the RPC returns nothing', async () => {
+    expect(await churchMembers(fakeClient({ rpcData: null }), 'c1')).toEqual([])
   })
 })
