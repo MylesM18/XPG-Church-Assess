@@ -20,10 +20,10 @@ describe('invite-window UI', () => {
     expect(page).toContain('inviteBannerText')
     expect(page).toContain('inviteWindow={inviteWindow}')
   })
-  it('form shows the box counter and disables when closed', () => {
+  it('form shows the box counter and gates submit when closed', () => {
     expect(form).toContain('inviteWindow')
     expect(form).toContain('inviteBoxText')
     expect(form).toContain('!inviteWindow.open')
-    expect(form).toContain('disabled')
+    expect(form).toContain('aria-disabled={pending || closed}')
   })
 })
