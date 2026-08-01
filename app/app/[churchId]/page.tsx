@@ -3,7 +3,11 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadChurchForMember } from '@/lib/data/churches'
 import { churchMembers, memberDeadline } from '@/lib/data/members'
-import { completionWindowState, completionBannerText } from '@/lib/deadlines/countdown'
+import {
+  completionWindowState, completionBannerText,
+  inviteWindowState, inviteBannerText, type InviteWindow,
+} from '@/lib/deadlines/countdown'
+import { earliestInviteAt } from '@/lib/data/invitations'
 import { DeadlineBanner } from '@/components/deadline-banner'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
@@ -56,6 +60,13 @@ export default async function DashboardPage({
   const deadlineAt = await memberDeadline(supabase, churchId, user?.id ?? '')
   const completion = completionWindowState(deadlineAt ? new Date(deadlineAt) : null, now)
   const completionText = completionBannerText(completion)
+
+  let inviteWindow: InviteWindow | null = null
+  if (isAdmin) {
+    const earliest = await earliestInviteAt(supabase, churchId)
+    inviteWindow = inviteWindowState(earliest ? new Date(earliest) : null, now)
+  }
+  const inviteText = inviteWindow ? inviteBannerText(inviteWindow) : null
 
   // Admins read the church-wide aggregate (needed to gate diagnosis generation on all-8-covered)
   // for the header, status dots, and gate below; viewers read their OWN coverage, which drives
@@ -153,6 +164,9 @@ export default async function DashboardPage({
       <RefreshOnFocus />
       {completionText && (
         <DeadlineBanner text={completionText} tone={completion.open ? 'info' : 'closed'} />
+      )}
+      {inviteWindow && inviteText && (
+        <DeadlineBanner text={inviteText} tone={inviteWindow.open ? 'info' : 'closed'} />
       )}
       <header className="flex items-center gap-4">
         <div
@@ -262,7 +276,7 @@ export default async function DashboardPage({
           <p className="font-body text-sm text-ink-soft">
             {"Invite a member or co-admin to help with your church's assessment."}
           </p>
-          <InviteMemberForm churchId={churchId} />
+          {inviteWindow && <InviteMemberForm churchId={churchId} inviteWindow={inviteWindow} />}
         </section>
       )}
 

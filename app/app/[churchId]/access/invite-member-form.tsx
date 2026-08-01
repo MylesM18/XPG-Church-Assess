@@ -4,34 +4,38 @@ import { useActionState } from 'react'
 import { inviteMember, type InviteResult } from './actions'
 import { LiveStatus } from '@/components/live-status'
 import { FieldInfo } from '@/app/get-started/field-info'
+import { inviteBoxText, type InviteWindow } from '@/lib/deadlines/countdown'
 
 const initial: InviteResult = { link: null, emailed: false, error: null }
 const inputClass =
-  'rounded-md border border-line bg-paper px-3 py-2 font-body text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink'
+  'rounded-md border border-line bg-paper px-3 py-2 font-body text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-50'
 
-export function InviteMemberForm({ churchId }: { churchId: string }) {
+export function InviteMemberForm({ churchId, inviteWindow }: { churchId: string; inviteWindow: InviteWindow }) {
   const [state, formAction, pending] = useActionState(inviteMember, initial)
+  const closed = !inviteWindow.open
   return (
     <form action={formAction} className="flex flex-col gap-3 rounded-lg border border-line bg-paper p-4">
       <input type="hidden" name="church_id" value={churchId} />
 
+      <p className={`font-body text-xs ${closed ? 'text-berry' : 'text-ink-soft'}`}>{inviteBoxText(inviteWindow)}</p>
+
       <label className="flex flex-col gap-1 font-body text-sm text-ink-soft">
         Their email
-        <input name="email" type="email" required className={inputClass} />
+        <input name="email" type="email" required disabled={closed} className={inputClass} />
       </label>
 
       <div className="flex flex-col gap-1 font-body text-sm text-ink-soft">
         <FieldInfo htmlFor="invite-role" label="Role" defaultOpen>
           Co-admins can view the assessment results and send invites, in addition to answering. Members only answer the assessment.
         </FieldInfo>
-        <select id="invite-role" name="role" required defaultValue="Member" className={inputClass}>
+        <select id="invite-role" name="role" required defaultValue="Member" disabled={closed} className={inputClass}>
           <option value="Member">Member</option>
           <option value="Co-admin">Co-admin</option>
         </select>
       </div>
 
-      <button type="submit" aria-disabled={pending}
-        onClick={(e) => { if (pending) e.preventDefault() }}
+      <button type="submit" aria-disabled={pending || closed}
+        onClick={(e) => { if (pending || closed) e.preventDefault() }}
         className="mt-1 rounded-md border border-line bg-ink px-4 py-2 font-body text-paper transition-opacity hover:opacity-90 aria-disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
         {pending ? 'Inviting…' : 'Send invitation'}
       </button>
