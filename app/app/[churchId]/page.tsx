@@ -2,7 +2,9 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadChurchForMember } from '@/lib/data/churches'
-import { churchMembers } from '@/lib/data/members'
+import { churchMembers, memberDeadline } from '@/lib/data/members'
+import { completionWindowState, completionBannerText } from '@/lib/deadlines/countdown'
+import { DeadlineBanner } from '@/components/deadline-banner'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { coverage, type CoverageRow, type CoverageStatus } from '@/lib/coverage/coverage'
@@ -49,6 +51,11 @@ export default async function DashboardPage({
   const { church, role } = await loadChurchForMember(supabase, churchId, user?.id ?? '')
   if (!church) notFound()
   const isAdmin = role === 'admin'
+
+  const now = new Date()
+  const deadlineAt = await memberDeadline(supabase, churchId, user?.id ?? '')
+  const completion = completionWindowState(deadlineAt ? new Date(deadlineAt) : null, now)
+  const completionText = completionBannerText(completion)
 
   // Admins read the church-wide aggregate (needed to gate diagnosis generation on all-8-covered)
   // for the header, status dots, and gate below; viewers read their OWN coverage, which drives
@@ -144,6 +151,9 @@ export default async function DashboardPage({
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 px-6 py-10">
       <RefreshOnFocus />
+      {completionText && (
+        <DeadlineBanner text={completionText} tone={completion.open ? 'info' : 'closed'} />
+      )}
       <header className="flex items-center gap-4">
         <div
           className="flex h-14 w-14 items-center justify-center rounded-md font-display text-xl text-white"
