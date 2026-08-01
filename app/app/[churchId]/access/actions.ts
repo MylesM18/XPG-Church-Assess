@@ -7,6 +7,7 @@ import { removeChurchMember } from '@/lib/data/members'
 import { sendMemberInvitationEmail } from '@/lib/email/send-member-invitation'
 import { acceptLink } from '@/lib/access/accept-state'
 import { mapRoleInput } from '@/lib/access/roles'
+import { WINDOW_DAYS, DAY_MS } from '@/lib/deadlines/countdown'
 
 export interface InviteResult {
   link: string | null
@@ -76,6 +77,20 @@ export async function resendInvitation(_prev: ManageResult, formData: FormData):
   const id = String(formData.get('invite_id') ?? '')
   const { supabase, error: authErr } = await requireChurchAdmin(churchId)
   if (authErr) return { error: authErr }
+
+  // Mirror the invite-window guard: resend bumps expires_at directly (RLS UPDATE), never through
+  // create_member_invitation, so the window must be re-checked here. Closed once the earliest invite
+  // for this church is older than the window.
+  const { data: earliest } = await supabase
+    .from('member_invitations')
+    .select('created_at')
+    .eq('church_id', churchId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (earliest && new Date(earliest.created_at).getTime() < Date.now() - WINDOW_DAYS * DAY_MS) {
+    return { error: 'Your 3-day invitation window has closed.' }
+  }
 
   // Re-read the still-pending invite (RLS-scoped SELECT). No expiry filter: Resend deliberately
   // revives a lapsed-but-unrevoked invite, resetting the 14-day clock in the UPDATE below.
