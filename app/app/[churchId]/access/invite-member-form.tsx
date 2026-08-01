@@ -21,14 +21,14 @@ export function InviteMemberForm({ churchId, inviteWindow }: { churchId: string;
 
       <label className="flex flex-col gap-1 font-body text-sm text-ink-soft">
         Their email
-        <input name="email" type="email" required disabled={closed} className={inputClass} />
+        <input name="email" type="email" required className={inputClass} />
       </label>
 
       <div className="flex flex-col gap-1 font-body text-sm text-ink-soft">
         <FieldInfo htmlFor="invite-role" label="Role" defaultOpen>
           Co-admins can view the assessment results and send invites, in addition to answering. Members only answer the assessment.
         </FieldInfo>
-        <select id="invite-role" name="role" required defaultValue="Member" disabled={closed} className={inputClass}>
+        <select id="invite-role" name="role" required defaultValue="Member" className={inputClass}>
           <option value="Member">Member</option>
           <option value="Co-admin">Co-admin</option>
         </select>
