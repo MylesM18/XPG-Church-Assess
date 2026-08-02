@@ -121,3 +121,18 @@ export async function resendInvitation(_prev: ManageResult, formData: FormData):
   revalidatePath(`/app/${churchId}/access`)
   return { error: null }
 }
+
+export async function extendMemberDeadline(_prev: ManageResult, formData: FormData): Promise<ManageResult> {
+  const churchId = String(formData.get('church_id') ?? '')
+  const userId = String(formData.get('user_id') ?? '')
+  const { supabase, error: authErr } = await requireChurchAdmin(churchId)
+  if (authErr) return { error: authErr }
+  // extend_member_deadline is admin-gated + a no-op on untimed members (the founder) server-side.
+  const { error } = await supabase.rpc('extend_member_deadline', {
+    p_church_id: churchId, p_user_id: userId,
+  })
+  if (error) return { error: error.message }
+  revalidatePath(`/app/${churchId}/access`)
+  revalidatePath(`/app/${churchId}`)
+  return { error: null }
+}
