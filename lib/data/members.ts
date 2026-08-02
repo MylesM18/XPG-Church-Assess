@@ -24,6 +24,25 @@ export async function memberRole(
 }
 
 /**
+ * The caller's completion deadline in a church (church_members.assessment_deadline_at), or null when
+ * untimed (founder / pre-existing rows) or when they hold no row. Reads through the anon-key RLS
+ * client (members_select gates visibility); no service role.
+ */
+export async function memberDeadline(
+  supabase: SupabaseServerClient,
+  churchId: string,
+  userId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('church_members')
+    .select('assessment_deadline_at')
+    .eq('church_id', churchId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  return (data?.assessment_deadline_at as string | null) ?? null
+}
+
+/**
  * Remove a member from a church via the last-admin-guarded `remove_member` RPC. Returns the RPC's
  * refusal message (e.g. removing the last admin) rather than throwing, so callers can surface it.
  */

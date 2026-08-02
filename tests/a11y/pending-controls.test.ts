@@ -124,18 +124,23 @@ describe('pending controls', () => {
   // app/app/[churchId]/access/resend-invite-button.tsx — aria-disabled={pending} with a matching
   // e.preventDefault() guard, driven by useActionState(resendInvitation). See §2 of
   // docs/superpowers/plans/2026-07-20-m6d-i3-pending-focus.md.
-  it('covers all eleven known pending controls', () => {
+  // Bumped from 11 to 12 when the assessment-deadlines feature added the admin
+  // "Extend 3 days" roster control in app/app/[churchId]/access/extend-deadline-button.tsx —
+  // aria-disabled={pending} with a matching e.preventDefault() guard, driven by
+  // useActionState(extendMemberDeadline). (The §2 note in
+  // docs/superpowers/plans/2026-07-20-m6d-i3-pending-focus.md is a deferred PR follow-up.)
+  it('covers all twelve known pending controls', () => {
     const count = FILES.reduce(
       (n, f) => n + (f.source.match(new RegExp(ARIA_DISABLED, 'g'))?.length ?? 0),
       0,
     )
     expect(
       count,
-      'expected exactly 11 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
+      'expected exactly 12 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
         'control in the spec’s scope table. A LOWER count means a site was missed or reverted. A ' +
         'HIGHER count is not a defect: a new pending control was added, which is fine — add it to ' +
         '§2 of the design doc and bump this number. The answer-form wizard contributes two: the ' +
         'Submit/Next control and the Back navigation boundary (aria-disabled={step === 0}).',
-    ).toBe(11)
+    ).toBe(12)
   })
 })
