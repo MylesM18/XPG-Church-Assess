@@ -63,12 +63,12 @@ select throws_ok(
   $$select save_diagnosis((select id from churches where name = 'Save Test Church'), 'hash-xyz', '0.1.0', '{}'::jsonb)$$,
   '42501', 'must be an admin of this church', 'a non-member cannot save a diagnosis');
 
--- no active run → raise (the run is complete again after the idempotent save above)
+-- run already complete → raise (the run is complete again after the idempotent save above)
 set local request.jwt.claims to '{"sub":"d1111111-1111-1111-1111-111111111111","email":"saveadmin@test.com","role":"authenticated"}';
 select throws_ok(
   $$select save_diagnosis((select id from churches where name = 'Save Test Church'), 'hash-abc', '0.1.0', '{"overall_score":50}'::jsonb)$$,
-  'no active run for this church',
-  'admin save with no in_progress run is rejected');
+  'run is already complete',
+  'admin save on an already-complete run is rejected');
 
 select * from finish();
 rollback;
