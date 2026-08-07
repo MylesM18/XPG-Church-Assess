@@ -32,6 +32,34 @@ function fixtureMethodology(): Methodology {
   } as unknown as Methodology;
 }
 
+// A second item with an intermediate `since` isolates the boundary the fixture
+// above can't reach: whether an item introduced in exactly the run's own version
+// is kept (>=) or wrongly dropped (>). Kept as a separate fixture so none of the
+// existing assertions above have to change shape.
+function fixtureMethodologyWithIntermediateItem(): Methodology {
+  return {
+    questions: {
+      version: '0.3.0',
+      categories: [
+        {
+          id: 'guest',
+          name: 'Guest Experience',
+          items: [
+            { id: 'G1', text: 'Old question', signal: 'evidence', anchors: { lo: 'l', mid: 'm', hi: 'h' } },
+            {
+              id: 'G2',
+              text: 'Mid question',
+              signal: 'evidence',
+              since: '0.2.0',
+              anchors: { lo: 'l', mid: 'm', hi: 'h' },
+            },
+          ],
+        },
+      ],
+    },
+  } as unknown as Methodology;
+}
+
 describe('predatesOutreach', () => {
   it('null predates (pre-stamping runs)', () => {
     expect(predatesOutreach(null)).toBe(true);
@@ -71,5 +99,18 @@ describe('effectiveMethodologyForRun', () => {
     effectiveMethodologyForRun(m, '0.2.0');
     expect(m.questions.categories[0]!.items).toHaveLength(2);
     expect(m.questions.version).toBe('0.3.0');
+  });
+});
+
+describe('effectiveMethodologyForRun: since boundary is inclusive (>=, not >)', () => {
+  it("keeps an item whose since exactly equals the run's version", () => {
+    const m = fixtureMethodologyWithIntermediateItem();
+    const eff = effectiveMethodologyForRun(m, '0.2.0');
+    expect(eff.questions.categories[0]!.items.map((i) => i.id)).toEqual(['G1', 'G2']);
+  });
+  it.each([null, '0.1.0'])('drops an item whose since is after the run version (%s)', (v) => {
+    const m = fixtureMethodologyWithIntermediateItem();
+    const eff = effectiveMethodologyForRun(m, v as string | null);
+    expect(eff.questions.categories[0]!.items.map((i) => i.id)).toEqual(['G1']);
   });
 });
