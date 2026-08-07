@@ -181,10 +181,10 @@ export default function Home() {
             <span>✚</span>
           </div>
           <blockquote data-reveal="0" className="xp-what-quote">
-            <p className="xp-what-quote-p">
+            <p className="xp-what-quote-p xp-what-quote-p-lede">
               Church health is not ultimately about bigger attendance, stronger systems, or larger budgets. It is
               about forming disciples, strengthening leaders, serving communities, and advancing the{' '}
-              <span className="xp-hl">Kingdom of God.</span>
+              <span className="xp-hl">Kingdom&nbsp;of&nbsp;God.</span>
             </p>
             <p className="xp-what-quote-sub">
               Systems matter because people matter. Healthy structure creates greater capacity for discipleship,

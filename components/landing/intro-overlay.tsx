@@ -51,7 +51,7 @@ export function IntroOverlay() {
         <span className="xp-intro-tag">CHURCH HEALTH ASSESSMENT</span>
       </div>
       <div className="xp-intro-bottom">
-        <span className="xp-intro-walk">WALKING THE CHAIN…</span>
+        <span className="xp-intro-walk">WALKING THE JOURNEY…</span>
         <span className="xp-intro-count">{String(count).padStart(3, '0')}</span>
       </div>
     </div>
