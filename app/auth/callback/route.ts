@@ -1,15 +1,19 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { resolveNext } from '@/lib/auth/resolve-next'
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
+  const url = new URL(request.url)
+  const { searchParams, origin } = url
   const code = searchParams.get('code')
-  // Only allow relative redirects — `${origin}${next}` with an absolute or
-  // userinfo-bearing `next` (e.g. "@evil.com") would be an open redirect. Also rejects
-  // protocol-relative (`//evil.com`) and backslash-protocol-relative (`/\evil.com`)
-  // forms, consistent with resolveNext in lib/auth/resolve-next.ts.
-  let next = searchParams.get('next') ?? '/'
-  if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) next = '/'
+  // Single source of truth for both the open-redirect guard and the fallback destination.
+  // `${origin}${next}` with an absolute or userinfo-bearing `next` (e.g. "@evil.com") would be
+  // an open redirect, as would protocol-relative (`//evil.com`) and backslash forms — resolveNext
+  // rejects all three. Its default fallback is `/get-started`, NOT `/`: a member who reaches the
+  // callback without a `next` (e.g. a plain sign-in, or a redirect that lost the param) must be
+  // routed onward — /get-started forwards a returning member to /app/{churchId} — rather than
+  // dumped on the marketing landing page with a live session and nowhere to go.
+  const next = resolveNext(url.search)
 
   if (code) {
     const supabase = await createClient()

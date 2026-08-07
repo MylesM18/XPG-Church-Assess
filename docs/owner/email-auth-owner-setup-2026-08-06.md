@@ -63,13 +63,28 @@ reach real inboxes you need a verified sending domain and a From address on it.
 ## Part B — Supabase Auth → Magic Link email
 
 The **"Send magic link"** button on `/sign-in` triggers an email that **Supabase** sends (not the
-app), so it can only be rebranded in the Supabase dashboard. The sign-in flow is magic-link
-(`signInWithOtp`) + Google OAuth with **no email/password signup**, so **Magic Link is the only
-Supabase Auth template that fires** — you don't need to touch Confirm/Invite/Recovery/Change.
+app), so it can only be rebranded in the Supabase dashboard.
 
-### B1. Paste the branded template
+> **⚠️ Corrected 2026-08-07 — brand TWO templates, not one.**
+> An earlier version of this doc claimed Magic Link was the only template that fires. **That was
+> wrong**, and it is why a branded template can look like it "didn't apply."
+> `app/sign-in/page.tsx` calls `signInWithOtp` **without** `shouldCreateUser: false`, so auth-js
+> sends `create_user: true`. For an email address that has **no account yet** — which is every
+> first-time invited member — GoTrue treats that request as a **signup** and renders the
+> **"Confirm signup"** template. Only a **returning** user gets **"Magic Link"**.
+> Brand both, or brand-new invitees keep seeing Supabase's stock unstyled email.
 
-1. Supabase Dashboard → **Authentication → Emails → Templates → "Magic Link"** tab.
+### B1. Paste the branded template (into BOTH tabs)
+
+Two template files live beside this doc, same visual design, different copy for each flow:
+
+| Supabase tab | File | Who receives it | Subject to set |
+| --- | --- | --- | --- |
+| **Confirm signup** | `docs/owner/confirm-signup-template.html` | **First-time invitees** — the common case | `Confirm your email — 360 Church Health Assessment` |
+| **Magic Link** | `docs/owner/magic-link-template.html` | Returning users signing in again | `Your sign-in link — 360 Church Health Assessment` |
+
+1. Supabase Dashboard → **Authentication → Emails → Templates**. Open each tab, paste the matching
+   file's full contents into the message body, set the subject, and **Save each tab separately**.
 2. **Subject:** `Your sign-in link for the 360 Church Health Assessment`
 3. **Message body (HTML):** replace the entire contents with the template in
    **`docs/owner/magic-link-template.html`** (also inlined below). It is the *same* branded shell as
@@ -139,6 +154,18 @@ Supabase Auth template that fires** — you don't need to touch Confirm/Invite/R
   built-in email service is rate-limited and best for testing; custom SMTP is the reliable path for
   real member volume.
 
+### B2a. What the Supabase auth email can and cannot say
+
+The auth email **cannot** carry the church name, the member's role, or any other personalization.
+The sign-in call sends no user metadata (auth-js fills `data: {}`), so the only values Supabase can
+interpolate are generic ones: `{{ .ConfirmationURL }}`, `{{ .Token }}`, `{{ .SiteURL }}`,
+`{{ .Email }}`. No dashboard setting changes this — it would take a code change to thread church and
+role through as user metadata.
+
+Church- and role-specific wording already lives where it belongs: the app's **own** invitation email
+(`lib/email/send-member-invitation.ts`), sent via Resend. Treat the Supabase auth email as a plain
+branded "here's your sign-in link" and keep the personality in the invitation.
+
 ### B3. Add the redirect allow-list URLs
 
 The sign-in code sends users to `…/auth/callback?next=…` after they click the link, so that path
@@ -150,7 +177,23 @@ must be allow-listed or Supabase will reject the redirect.
     - `https://www.360churchhealthassessment.com/**`
     - `https://www.360churchhealthassessment.com/auth/callback`
 
-  (The `/**` wildcard already covers the callback path; the explicit entry is belt-and-suspenders.)
+  (The `/**` wildcard is the entry that actually matters. The app emits a **query-bearing** URL —
+  `…/auth/callback?next=…` — and a bare `…/auth/callback` entry with no wildcard does not match it.
+  If `redirect_to` fails to match the allow-list, **Supabase silently ignores it and sends the user
+  to the Site URL instead, raising no error** — which lands an invited member on the marketing home
+  page rather than their assessment. Also add the apex `https://360churchhealthassessment.com/**`
+  and `https://*.vercel.app/**` if the app is ever served from those hosts.)
+
+### B3a. `APP_URL` must match an allow-listed origin
+
+Invitation links are built from `APP_URL` (`app/app/[churchId]/access/actions.ts`), whose code
+fallback is `http://127.0.0.1:3000`. The invitee's browser origin at sign-in comes from that link,
+and `emailRedirectTo` is derived from it — so if `APP_URL` is unset, apex-without-`www`, or an old
+`*.vercel.app` host, the emitted `redirect_to` cannot match a `www`-only allow-list and the redirect
+silently falls back to the Site URL.
+
+- Vercel → Production env: set **`APP_URL`** to exactly `https://www.360churchhealthassessment.com`
+  (same origin as the Site URL), then **redeploy**.
 
 ### B4. Known caveat — Gmail link pre-fetch / `otp_expired` (unchanged, just re-flagged)
 
@@ -192,6 +235,43 @@ Google provider.
    **Publish** the app so any user can complete Google sign-in. (Uploading a logo / changing branding
    on a public app can trigger a Google verification review — allow lead time before launch.)
 
+### C2. OAuth client URLs — the field everyone gets backwards
+
+**Google Cloud Console → APIs & Services → Credentials → your Web application OAuth 2.0 Client ID.**
+
+> **⚠️ The Authorized redirect URI is a SUPABASE URL, not this app's URL.**
+> Google redirects the user back to **Supabase**, and Supabase then redirects on to the app. Putting
+> `…/auth/callback` on the app's own domain here is the single most common way to break Google
+> sign-in, and it produces a `redirect_uri_mismatch` error from Google.
+
+| Google field | What goes in it |
+| --- | --- |
+| **Authorized redirect URIs** | `https://<project-ref>.supabase.co/auth/v1/callback` — **only this** |
+| **Authorized JavaScript origins** | `https://www.360churchhealthassessment.com` (the app's origin, no path, no trailing slash) |
+
+Find `<project-ref>` without guessing: Supabase Dashboard → **Authentication → Providers → Google**
+displays the exact **Callback URL (for OAuth)** with a copy button. Copy it from there and paste it
+straight into Google. It is the same value as your Project URL (Project Settings → API) with
+`/auth/v1/callback` appended.
+
+If the app is also served from the apex domain or from Vercel previews, add those origins to
+**Authorized JavaScript origins** as well — but **never** add them to Authorized redirect URIs. That
+field stays a single Supabase URL forever.
+
+### C3. Three different URL settings — don't cross-wire them
+
+These live in three separate consoles and do three different jobs:
+
+| Setting | Where | Value |
+| --- | --- | --- |
+| Authorized redirect URIs | Google Cloud Console | `https://<project-ref>.supabase.co/auth/v1/callback` |
+| Redirect URLs (allow-list) | Supabase → Auth → URL Configuration | `https://www.360churchhealthassessment.com/**` |
+| Site URL (fallback) | Supabase → Auth → URL Configuration | `https://www.360churchhealthassessment.com` |
+
+Google's field controls *Google → Supabase*. Supabase's allow-list controls *Supabase → this app*,
+and it is what governs whether an invited member lands on their assessment or gets silently dumped on
+the marketing home page (see B3).
+
 ---
 
 ## Quick checklist
@@ -199,8 +279,14 @@ Google provider.
 - [ ] **A** — Resend domain `360churchhealthassessment.com` verified (DNS).
 - [ ] **A** — `INVITE_FROM` + `REMINDER_FROM` (or single `EMAIL_FROM`) set in Vercel **Production**; `RESEND_API_KEY` present; **redeployed**.
 - [ ] **A** — Sent myself a real invitation; it arrived branded.
-- [ ] **B** — Magic Link template pasted (`{{ .ConfirmationURL }}` intact); subject set.
+- [ ] **B** — **"Confirm signup"** template pasted (`{{ .ConfirmationURL }}` intact); subject set.
+      ← *this is the one first-time invitees actually receive*
+- [ ] **B** — **"Magic Link"** template pasted (`{{ .ConfirmationURL }}` intact); subject set.
+      ← *returning users*
 - [ ] **B** — Supabase sender **name** = "XP Gathering" (optionally custom SMTP via Resend).
-- [ ] **B** — Site URL + both redirect URLs added.
+- [ ] **B** — Site URL + redirect URLs added, **including the `/**` wildcard entry**.
+- [ ] **B** — `APP_URL` set in Vercel **Production** to the same origin as the Site URL; **redeployed**.
 - [ ] **C** — OAuth consent: app name, support/developer emails, authorized domain set.
+- [ ] **C** — Google **Authorized redirect URIs** = `https://<project-ref>.supabase.co/auth/v1/callback` (Supabase URL, **not** the app's).
+- [ ] **C** — Google **Authorized JavaScript origins** = `https://www.360churchhealthassessment.com`.
 - [ ] **C** — Square ≥120×120 PNG logo uploaded (new owner asset, not the yellow wordmark).
