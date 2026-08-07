@@ -13,7 +13,9 @@ export const ItemSchema = z.object({
   id: z.string().min(1),
   text: z.string().min(1),
   signal: SignalSchema,
+  since: z.string().min(1).optional(),
   anchors: AnchorsSchema,
+  reflection: z.string().min(1).optional(),
 });
 
 export const CategorySchema = z.object({

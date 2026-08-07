@@ -49,6 +49,36 @@ describe('QuestionsSchema', () => {
     };
     expect(() => QuestionsSchema.parse(bad)).toThrow();
   });
+
+  it('accepts items carrying since and reflection', () => {
+    const parsed = {
+      version: '0.1.0',
+      categories: eightCategories.map((c, i) =>
+        i === 0 ? { ...c, items: [{ ...c.items[0], since: '0.3.0', reflection: 'Tell us.' }] } : c,
+      ),
+    };
+    expect(QuestionsSchema.safeParse(parsed).success).toBe(true);
+  });
+
+  it('rejects an empty-string since', () => {
+    const parsed = {
+      version: '0.1.0',
+      categories: eightCategories.map((c, i) =>
+        i === 0 ? { ...c, items: [{ ...c.items[0], since: '' }] } : c,
+      ),
+    };
+    expect(QuestionsSchema.safeParse(parsed).success).toBe(false);
+  });
+
+  it('rejects an empty-string reflection', () => {
+    const parsed = {
+      version: '0.1.0',
+      categories: eightCategories.map((c, i) =>
+        i === 0 ? { ...c, items: [{ ...c.items[0], reflection: '' }] } : c,
+      ),
+    };
+    expect(QuestionsSchema.safeParse(parsed).success).toBe(false);
+  });
 });
 
 describe('RulesSchema', () => {
