@@ -31,8 +31,10 @@ describe('helpers', () => {
   it('acceptLink builds the URL', () => {
     expect(acceptLink('http://127.0.0.1:3000', 'abc')).toBe('http://127.0.0.1:3000/accept/abc')
   })
-  it('roleLabel maps admin→co-admin, viewer→viewer', () => {
+  it('roleLabel maps admin→co-admin, viewer→member', () => {
     expect(roleLabel('admin')).toBe('co-admin')
-    expect(roleLabel('viewer')).toBe('viewer')
+    // 'viewer' is the DB permission name; invitees must never read it.
+    expect(roleLabel('viewer')).toBe('member')
+    expect(roleLabel('viewer')).not.toBe('viewer')
   })
 })
