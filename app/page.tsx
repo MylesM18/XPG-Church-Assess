@@ -521,6 +521,8 @@ export default function Home() {
             <div className="xp-footer-nav">
               <span className="xp-footer-heading">DOCUMENTATION</span>
               <Link href="/methodology" className="xp-footer-link">METHODOLOGY</Link>
+              <Link href="/terms" className="xp-footer-link">TERMS OF SERVICE</Link>
+              <Link href="/privacy" className="xp-footer-link">PRIVACY POLICY</Link>
             </div>
           </div>
           <div className="xp-footer-legal">
