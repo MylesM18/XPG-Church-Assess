@@ -4,10 +4,12 @@
 // Constraints baked in (email clients strip <style>, classes, web fonts, and SVG, and pre-fetch
 // images), so:
 //   - table-based layout, ALL styles inline
-//   - a serif *text* wordmark (Georgia stack) — no logo image, no SVG
+//   - the official "+ XP GATHERING" wordmark as a hosted PNG (<img>), with alt="XP Gathering" so
+//     image-blocking clients still show the brand name; the serif H1 stack stays for the heading
 //   - a plaintext `text` mirror alongside `html` for deliverability + accessibility
 //   - every interpolated value HTML-escaped in the html branch
-//   - palette limited to the approved brand set — NO reserved berry (#8E2B3E), NO yellow
+//   - HTML-markup palette limited to the approved brand set — NO reserved berry (#8E2B3E) and NO
+//     yellow HEX; the logo's yellow lives inside the PNG binary, never as a color in the markup
 
 export interface EmailCta {
   label: string
@@ -38,12 +40,18 @@ const SANS =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 
 // Approved brand palette (mirrors app/globals.css @theme). Berry (#8E2B3E) is reserved and never
-// used here; the yellow master logo is off-palette and never referenced.
+// used here. The header shows the official "+ XP GATHERING" logo — its yellow is carried inside the
+// hosted PNG, so no yellow HEX ever appears as a color value in this markup.
 const PAPER = '#FBF9F5'
 const CARD = '#FFFFFF'
 const INK = '#1A1C22'
 const INK_SOFT = '#565962'
 const LINE = '#E4DED3'
+
+// Official homepage lockup ("+ XP GATHERING", dark text + yellow XP) for light backgrounds, served
+// as an absolute prod URL so email clients can fetch it. alt="XP Gathering" is the image-blocked
+// fallback. Mirrors the same asset the sign-in page and homepage render (public/landing/logo-dark.png).
+const LOGO_URL = 'https://www.360churchhealthassessment.com/landing/logo-dark.png'
 
 function escapeHtml(value: string): string {
   return value
@@ -106,7 +114,7 @@ export function renderBrandedEmail(args: BrandedEmailArgs): { html: string; text
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px;max-width:560px;background-color:${CARD};border:1px solid ${LINE};border-radius:14px;">
 <tr>
 <td style="padding:40px 40px 0;">
-<div style="font-family:${SERIF};font-size:21px;font-weight:500;line-height:1;color:${INK};">XP Gathering</div>
+<img src="${LOGO_URL}" width="200" height="27" alt="XP Gathering" style="display:block;width:200px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;">
 <div style="margin-top:6px;font-family:${SANS};font-size:11px;font-weight:600;letter-spacing:2.4px;color:${INK_SOFT};">CHURCH HEALTH</div>
 </td>
 </tr>

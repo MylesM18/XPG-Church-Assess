@@ -1,9 +1,10 @@
 // Source-reading tripwire (node env, no DOM): the /sign-in page restyle is additive/visual only.
-// It must gain the refined brand lockup (serif "XP Gathering" wordmark + "Church Health" eyebrow),
-// a warmer reassurance line, and a real 4-color Google "G" on the OAuth button — WITHOUT dropping
-// any of the preserved auth logic (magic-link OTP, Google OAuth, redirect guard, dual-channel error
-// surfacing, LiveStatus, focus management, ?email= prefill). Comments are stripped so an
-// explanatory comment can neither satisfy nor break the markup assertions.
+// It must gain the official "+ XP GATHERING" logo (public/landing/logo-dark.png, rendered via
+// next/image with an alt="XP Gathering" fallback) + the "Church Health" eyebrow, a warmer
+// reassurance line, and a real 4-color Google "G" on the OAuth button — WITHOUT dropping any of the
+// preserved auth logic (magic-link OTP, Google OAuth, redirect guard, dual-channel error surfacing,
+// LiveStatus, focus management, ?email= prefill). Comments are stripped so an explanatory comment
+// can neither satisfy nor break the markup assertions.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -14,8 +15,9 @@ const SOURCE = fs.readFileSync(path.join(ROOT, 'app', 'sign-in', 'page.tsx'), 'u
 const CODE = SOURCE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
 
 describe('/sign-in brand restyle (additive markup)', () => {
-  it('shows the serif XP Gathering wordmark and Church Health eyebrow', () => {
-    expect(CODE).toContain('XP Gathering')
+  it('shows the official XP Gathering logo and Church Health eyebrow', () => {
+    expect(CODE).toContain('logo-dark.png') // official "+ XP GATHERING" homepage lockup
+    expect(CODE).toContain('XP Gathering') // survives as the logo's alt fallback
     expect(CODE).toContain('Church Health')
   })
 

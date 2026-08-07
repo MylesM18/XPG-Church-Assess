@@ -3,8 +3,10 @@ import { renderBrandedEmail, inviteFrom, reminderFrom } from '@/lib/email/layout
 
 // The branded email shell is the single source of brand truth for every outgoing app email.
 // These tests pin the invariants the spec locks: table-based inline-styled HTML + a plaintext
-// mirror, HTML-escaped interpolation, an optional bulletproof CTA, the default team signoff, and
-// a palette with NO reserved berry (#8E2B3E) and NO off-palette yellow.
+// mirror, the official "+ XP GATHERING" logo (hosted PNG, alt="XP Gathering" fallback for
+// image-blocking clients), HTML-escaped interpolation, an optional bulletproof CTA, the default
+// team signoff, and a markup palette with NO reserved berry (#8E2B3E) and NO yellow HEX — the
+// logo's yellow lives inside the image binary, not the HTML.
 
 const APPROVED_HEXES = new Set([
   '#FBF9F5', // paper (page bg)
@@ -31,9 +33,10 @@ describe('renderBrandedEmail', () => {
     expect(text.length).toBeGreaterThan(0)
   })
 
-  it('carries the serif wordmark and CHURCH HEALTH eyebrow', () => {
+  it('carries the official XP Gathering logo and CHURCH HEALTH eyebrow', () => {
     const { html } = renderBrandedEmail({ previewText: 'p', heading: 'H', paragraphs: ['x'] })
-    expect(html).toContain('XP Gathering')
+    expect(html).toContain('logo-dark.png') // official "+ XP GATHERING" hosted PNG
+    expect(html).toContain('XP Gathering') // survives as the logo's alt fallback
     expect(html).toContain('CHURCH HEALTH')
     expect(html).toContain('<table')
   })

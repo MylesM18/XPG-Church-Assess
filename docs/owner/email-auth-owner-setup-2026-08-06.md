@@ -52,8 +52,9 @@ reach real inboxes you need a verified sending domain and a From address on it.
 4. **Redeploy** (env changes only take effect on the next deploy) → **Deployments → Redeploy**.
 
 5. **Smoke test:** send one real invitation to yourself and confirm it arrives from the branded
-   address and renders (serif "XP Gathering" wordmark, ink "Accept your invitation" button, signoff
-   "— The XP Gathering team").
+   address and renders (the official "+ XP GATHERING" logo, ink "Accept your invitation" button,
+   signoff "— The XP Gathering team"). If your mail client blocks images by default, the logo falls
+   back to the text "XP Gathering".
 
 `.env.example` documents `INVITE_FROM` / `REMINDER_FROM` for reference.
 
@@ -98,7 +99,7 @@ Supabase Auth template that fires** — you don't need to touch Confirm/Invite/R
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px;max-width:560px;background-color:#FFFFFF;border:1px solid #E4DED3;border-radius:14px;">
 <tr>
 <td style="padding:40px 40px 0;">
-<div style="font-family:Georgia, 'Times New Roman', Times, serif;font-size:21px;font-weight:500;line-height:1;color:#1A1C22;">XP Gathering</div>
+<img src="https://www.360churchhealthassessment.com/landing/logo-dark.png" width="200" height="27" alt="XP Gathering" style="display:block;width:200px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;">
 <div style="margin-top:6px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:11px;font-weight:600;letter-spacing:2.4px;color:#565962;">CHURCH HEALTH</div>
 </td>
 </tr>
