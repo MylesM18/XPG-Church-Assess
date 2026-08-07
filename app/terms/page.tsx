@@ -369,15 +369,6 @@ export default function TermsPage() {
           </Link>
         </div>
 
-        <div className="mt-10 rounded-lg border border-line bg-sand/40 p-4">
-          <p className="font-body text-sm leading-relaxed text-ink-soft">
-            <strong className="text-ink">Draft status:</strong> this document is a plain-English
-            draft prepared by XP Gathering and should be reviewed by a licensed attorney before
-            being treated as final, including confirmation of the operating legal entity and the
-            governing state noted above.
-          </p>
-        </div>
-
         <div className="mt-12 border-t border-line pt-6">
           <Link
             href="/"

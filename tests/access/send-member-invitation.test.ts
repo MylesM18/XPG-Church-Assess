@@ -32,11 +32,14 @@ describe('sendMemberInvitationEmail', () => {
     expect(arg.html).toContain('http://x/accept/t')
   })
 
-  it('maps viewer → viewer', async () => {
+  it('maps viewer → member', async () => {
     process.env.RESEND_API_KEY = 'test-key'
     sendMock.mockResolvedValue({ error: null })
     await sendMemberInvitationEmail({ to: 'a@test.com', link: 'http://x/accept/t', churchName: 'Grace', role: 'viewer' })
-    expect(sendMock.mock.calls[0]![0].html).toContain('viewer')
+    const { html } = sendMock.mock.calls[0]![0]
+    expect(html).toContain('as a member')
+    // The DB permission name must not reach the invitee's inbox.
+    expect(html).not.toContain('viewer')
   })
 
   it('sends from EMAIL_FROM when set (verified-domain address)', async () => {

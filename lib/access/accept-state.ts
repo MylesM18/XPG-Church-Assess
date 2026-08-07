@@ -35,8 +35,15 @@ export function acceptLink(appUrl: string, token: string): string {
   return `${appUrl}/accept/${token}`
 }
 
+/**
+ * DB role → the word an invitee reads. The DB value 'viewer' is an internal
+ * permission name; everywhere a person sees it (the admin's access screen, the
+ * invite form) it has always read "Member", so this is the one place that leaked
+ * the raw value into invitee-facing copy. Keep this aligned with mapRoleInput
+ * (lib/access/roles.ts), which maps the same pair in the other direction.
+ */
 export function roleLabel(role: string): string {
   if (role === 'admin') return 'co-admin'
-  if (role === 'viewer') return 'viewer'
+  if (role === 'viewer') return 'member'
   return role
 }
