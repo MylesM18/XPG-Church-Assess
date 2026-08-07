@@ -6,12 +6,12 @@ const ITEMS = [
   {
     num: 'Q.01',
     q: 'What is the Church Health Assessment, exactly?',
-    a: 'A guided diagnostic for church leaders. You answer evidence-anchored questions across eight areas of ministry; instead of returning eight scores, it walks your ministry chain in order — Guest Experience to Generosity — and stops at the first place it breaks. You get one verdict, the evidence behind it, and a single next step.',
+    a: 'A guided diagnostic for church leaders. You answer evidence-anchored questions across eight areas of ministry; instead of returning eight scores, it walks the discipleship journey in order — Welcome, Belong, Become, Build, Multiply — and looks for the earliest meaningful gap. You get one clear finding, the evidence behind it, and a single next step.',
   },
   {
     num: 'Q.02',
-    q: 'Why one verdict instead of eight scores?',
-    a: 'Because eight numbers, all shouting at once, don\'t tell you where to start. Your ministry is a chain where each stage depends on the one before it — so the assessment walks it in order and stops at the first break. That break is your real constraint; the broken-looking areas downstream are just echoes to leave alone for now.',
+    q: 'Why one priority instead of eight scores?',
+    a: 'Because eight numbers, all shouting at once, don\'t tell you where to start. Each stage of the journey strengthens the next, so the assessment walks it in order and names the earliest significant gap. Other concerns may still matter, but that earliest gap often explains why later stages are struggling — so it is where your leaders should focus first.',
   },
   {
     num: 'Q.03',
@@ -21,7 +21,7 @@ const ITEMS = [
   {
     num: 'Q.04',
     q: 'What does the AI actually do?',
-    a: 'Less than you\'d think — on purpose. The verdict, the scores, and the constraint are calculated the same way every time, straight from your answers. AI is used only to phrase the report in plain, warm language. Turn it off entirely and you get the identical verdict, just in rougher words.',
+    a: 'Less than you\'d think — on purpose. The finding, the scores, and the primary constraint are calculated the same way every time, straight from your answers. AI is used only to phrase the report in plain, warm language. Turn it off entirely and you get the identical finding, just in rougher words.',
   },
   {
     num: 'Q.05',
@@ -31,7 +31,7 @@ const ITEMS = [
   {
     num: 'Q.06',
     q: 'What if nothing is actually wrong?',
-    a: 'Then it says so, plainly. If your chain is healthy the assessment won\'t invent a problem to sell you — it moves to a capacity conversation about the next ceiling you\'ll hit. An assessment that can say "you\'re fine" is one you can trust when it says "you\'re not."',
+    a: 'Then it says so, plainly. If the journey is healthy the assessment won\'t invent a problem to sell you — it moves to a capacity conversation about the next ceiling you\'ll hit. An assessment that can say "you\'re fine" is one you can trust when it says "you\'re not."',
   },
 ]
 

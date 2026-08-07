@@ -288,9 +288,13 @@ html:has(.xp-landing) {
   background: #FFE300;
   border: 1px solid #0A0A0A;
 }
+/* The 6.4vw scaler tops out right as the 1280px hero grid does, so the H1 stops
+   growing once its measure stops growing — that keeps it at 4 lines on desktop
+   and the lead + CTAs above the fold. Below 688px the 44px floor holds, so the
+   mobile hero is unchanged. */
 .xp-h1 {
   font-family: var(--xp-font-archivo-black), sans-serif;
-  font-size: clamp(44px, 11vw, 118px);
+  font-size: clamp(44px, 6.4vw, 82px);
   line-height: .92;
   letter-spacing: -.015em;
   text-transform: uppercase;
@@ -571,6 +575,13 @@ html:has(.xp-landing) {
   margin: 0;
   max-width: 980px;
   text-wrap: balance;
+}
+/* The Kingdom statement is a paragraph, not a one-line pull quote: at the shared
+   52px/980px it ran to nine lines. A longer measure and a smaller face bring it
+   back to a readable block without demoting it below the sibling quote. */
+.xp-what-quote-p-lede {
+  font-size: clamp(26px, 4.4vw, 42px);
+  max-width: 1120px;
 }
 .xp-what-quote-sub {
   font-size: clamp(15px, 1.8vw, 17px);
@@ -1358,7 +1369,10 @@ html:has(.xp-landing) {
 .xp-start-cta-row {
   margin-top: 28px;
   display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   justify-content: center;
+  align-items: center;
 }
 
 /* Footer */

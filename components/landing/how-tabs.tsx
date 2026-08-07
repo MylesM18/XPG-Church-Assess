@@ -165,14 +165,14 @@ export function HowTabs() {
                   </div>
                   <div className="xp-diag-body">
                     <div>
-                      <div className="xp-diag-label">THE VERDICT</div>
+                      <div className="xp-diag-label">PRIMARY FINDING</div>
                       <div className="xp-diag-verdict">
-                        Your constraint is <span className="xp-diag-hl">Community & Connection.</span>
+                        Your earliest gap is <span className="xp-diag-hl">Belong — community &amp; connection.</span>
                       </div>
                     </div>
                     <div className="xp-diag-row">
-                      <span className="xp-diag-key">Do not work on</span>
-                      <span className="xp-diag-strike">Generosity — symptom</span>
+                      <span className="xp-diag-key">Not yet</span>
+                      <span className="xp-diag-strike">Generosity — downstream</span>
                     </div>
                     <div className="xp-diag-row">
                       <span className="xp-diag-key">Next step</span>
@@ -184,9 +184,10 @@ export function HowTabs() {
               <div className="xp-how-panel-copy">
                 <h3 className="xp-h3">Read your diagnosis.</h3>
                 <p className="xp-how-panel-p">
-                  Not a scorecard. A verdict: the one constraint holding you back, the evidence
-                  behind it, what <em>not</em> to waste a year on, and the single next step.
-                  Visible only to you and whoever you approve.
+                  Not just another scorecard. A clear next-step priority: the one thing most
+                  limiting health and discipleship right now, the evidence behind it, what{' '}
+                  <em>not</em> to spend a year on, and the single next step. Visible only to you
+                  and whoever you approve.
                 </p>
               </div>
             </div>

@@ -82,8 +82,8 @@ export default function MethodologyPage() {
             <p>
               Most church surveys hand you a wall of numbers and leave you to guess what matters.
               This one does the opposite. It treats your ministry as a journey people move through
-              (from first-time guest to engaged, giving member) and looks for the first point where
-              that journey stalls.
+              (from first-time guest to connected, mature, serving, generous, and multiplying
+              disciple) and looks for the first point where that journey stalls.
             </p>
             <p>
               That first stall is your <strong className="text-ink">primary constraint</strong>: the
