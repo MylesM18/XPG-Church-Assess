@@ -1358,7 +1358,10 @@ html:has(.xp-landing) {
 .xp-start-cta-row {
   margin-top: 28px;
   display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   justify-content: center;
+  align-items: center;
 }
 
 /* Footer */
