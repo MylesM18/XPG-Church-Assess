@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import { roleLabel } from '@/lib/access/accept-state'
+import { renderBrandedEmail, inviteFrom } from '@/lib/email/layout'
 
 export interface SendMemberInvitationArgs {
   to: string
@@ -13,12 +14,10 @@ export interface SendMemberInvitationArgs {
  * is called, so any failure here is soft: log and return { ok: false }; the caller surfaces the
  * copyable link.
  *
- * From-address is EMAIL_FROM (an address on a domain verified in Resend, e.g.
- * invites@360churchhealthassessment.com). It falls back to onboarding@resend.dev — Resend's
- * shared test address, which only delivers to the Resend account owner, so to reach real members
- * EMAIL_FROM must be set to a verified-domain address. Everyone else relies on the copyable link.
+ * From-address resolves via inviteFrom(): INVITE_FROM → EMAIL_FROM → onboarding@resend.dev (Resend's
+ * shared test address, which only delivers to the Resend account owner). To reach real members a
+ * verified-domain sender must be set; everyone else relies on the copyable link.
  */
-const DEFAULT_FROM = 'onboarding@resend.dev'
 export async function sendMemberInvitationEmail(
   { to, link, churchName, role }: SendMemberInvitationArgs,
 ): Promise<{ ok: boolean }> {
@@ -28,16 +27,25 @@ export async function sendMemberInvitationEmail(
     return { ok: false }
   }
   const label = roleLabel(role)
-  const from = process.env.EMAIL_FROM?.trim() || DEFAULT_FROM
+  const subject = `You're invited to help lead ${churchName}`
+  const { html, text } = renderBrandedEmail({
+    previewText: `${churchName} invited you to the 360 Church Health Assessment.`,
+    heading: subject,
+    paragraphs: [
+      `${churchName} has invited you to help lead as a ${label}.`,
+      'The 360 Church Health Assessment is a short, guided reflection on your church’s health. Your perspective helps paint the full picture.',
+    ],
+    cta: { label: 'Accept your invitation', url: link },
+    fallbackLinkLabel: 'Or paste this link into your browser:',
+  })
   try {
     const resend = new Resend(key)
     const { error } = await resend.emails.send({
-      from,
+      from: inviteFrom(),
       to,
-      subject: `You're invited to help lead ${churchName}`,
-      html: `<p>${churchName} has invited you to help lead as a ${label}.</p>
-             <p><a href="${link}">Accept your invitation</a></p>
-             <p>Or paste this link into your browser:<br>${link}</p>`,
+      subject,
+      html,
+      text,
     })
     if (error) {
       console.error('sendMemberInvitationEmail: Resend returned an error', error)
