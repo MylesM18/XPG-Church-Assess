@@ -1,8 +1,10 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { resolveAcceptState, roleLabel, type AcceptPreview } from '@/lib/access/accept-state'
 import { AcceptButton } from './accept-button'
 import { AnonymityNote } from '@/components/anonymity-note'
+import { LiveStatus } from '@/components/live-status'
 
 const shell = 'mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-4 px-6'
 
@@ -65,11 +67,37 @@ export default async function AcceptPage({ params }: { params: Promise<{ token: 
     )
   }
 
-  // state === 'ready'
+  // state === 'ready' — signed in AS the invited address, so accept on arrival and drop them
+  // straight into the assessment. Every terminal/auth branch above has already returned, which is
+  // what keeps this safe against email-client link prefetch: Gmail fetches the URL with no session
+  // cookie, resolves to 'sign_in', and returns before reaching this line. Never hoist this call
+  // above those guards. The authoritative gate remains server-side — accept_member_invitation is
+  // security definer and re-checks auth, pending status, expiry and the invited email — so this is
+  // a convenience, not a relaxation. No revalidatePath: it throws during render, and /app/[churchId]
+  // is dynamic so there is nothing cached to invalidate.
+  const { data: acceptedChurchId, error: acceptError } = await supabase.rpc(
+    'accept_member_invitation',
+    { p_token: token },
+  )
+  // redirect() throws NEXT_REDIRECT by design — must stay outside any try/catch.
+  if (!acceptError && acceptedChurchId) redirect(`/app/${acceptedChurchId as string}`)
+
+  // Auto-accept failed. Fall back to the manual button rather than dead-ending, and say why —
+  // e.g. the RPC compares the invited email case-SENSITIVELY where resolveAcceptState does not,
+  // so a case difference can pass the pre-check and still be refused here.
   return (
     <main id="main-content" tabIndex={-1} className={shell}>
       <h1 className="font-display text-2xl text-ink">Join {p.church_name}</h1>
       <p className="font-body text-ink-soft">Accept your invitation to help lead {p.church_name} as a {label}.</p>
+      <LiveStatus
+        message={
+          acceptError
+            ? `We couldn’t accept this automatically: ${acceptError.message}. Use the button below.`
+            : null
+        }
+        tone="error"
+        className="font-body text-sm text-berry"
+      />
       <AnonymityNote />
       <AcceptButton token={token} />
     </main>
