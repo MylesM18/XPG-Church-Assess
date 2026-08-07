@@ -29,7 +29,7 @@ export default async function AcceptPage({ params }: { params: Promise<{ token: 
   if (state === 'accepted') {
     return <main id="main-content" tabIndex={-1} className={shell}><h1 className="font-display text-2xl text-ink">Already accepted</h1>
       <p className="font-body text-ink-soft">You’ve already accepted this invitation.</p>
-      <Link href="/app" className="font-body text-sm text-ink underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">Go to your churches</Link></main>
+      <Link href="/get-started" className="font-body text-sm text-ink underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">Go to your assessment</Link></main>
   }
   if (state === 'expired') {
     return <main id="main-content" tabIndex={-1} className={shell}><h1 className="font-display text-2xl text-ink">Invitation expired</h1>
