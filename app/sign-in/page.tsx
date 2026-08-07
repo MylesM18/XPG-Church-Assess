@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import { LiveStatus } from '@/components/live-status'
 import { createClient } from '@/lib/supabase/client'
 import { resolveNext } from '@/lib/auth/resolve-next'
@@ -86,26 +87,18 @@ export default function SignInPage() {
 
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 px-6">
-      <div className="flex items-center gap-[11px]">
-        <svg
-          viewBox="0 0 32 32"
-          fill="none"
-          aria-hidden="true"
-          focusable="false"
-          className="h-[30px] w-[30px] shrink-0 text-ink"
-        >
-          <circle cx="6" cy="16" r="3.4" stroke="currentColor" strokeWidth="1.6" />
-          <circle cx="16" cy="16" r="3.4" fill="currentColor" className="text-berry" />
-          <circle cx="26" cy="16" r="3.4" stroke="currentColor" strokeWidth="1.6" />
-          <line x1="9.4" y1="16" x2="12.6" y2="16" stroke="currentColor" strokeWidth="1.6" />
-          <line x1="19.4" y1="16" x2="22.6" y2="16" stroke="currentColor" strokeWidth="1.6" />
-        </svg>
-        <div className="font-display text-[19px] font-medium leading-none tracking-[.1px] text-ink">
-          XP Gathering
-          <small className="mt-[3px] block font-body text-[9px] font-semibold uppercase tracking-[2.4px] text-ink-soft">
-            Church Health
-          </small>
-        </div>
+      <div className="flex flex-col items-start gap-[6px]">
+        <Image
+          src="/landing/logo-dark.png"
+          alt="XP Gathering"
+          width={750}
+          height={100}
+          priority
+          className="h-auto w-[180px]"
+        />
+        <small className="font-body text-[9px] font-semibold uppercase tracking-[2.4px] text-ink-soft">
+          Church Health
+        </small>
       </div>
 
       <div className="flex flex-col gap-2">
