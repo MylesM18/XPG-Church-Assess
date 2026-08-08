@@ -191,19 +191,24 @@ export function AnswerForm({
               id={`reflection-${currentItem.id}`}
               value={reflections[currentItem.id] ?? ''}
               onChange={(e) => setReflections((prev) => ({ ...prev, [currentItem.id]: e.target.value }))}
-              maxLength={2000}
               rows={4}
-              aria-describedby={`reflection-hint-${currentItem.id}`}
+              aria-describedby={`reflection-hint-${currentItem.id} reflection-counter-${currentItem.id}`}
               className="mt-2 w-full rounded-md border border-line bg-paper p-3 font-body text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
             />
             <p id={`reflection-hint-${currentItem.id}`} className="font-body text-xs text-ink-soft">
               Optional — shown unattributed in your church&rsquo;s report.
             </p>
-            {(reflections[currentItem.id] ?? '').length >= 1800 && (
-              <p className="font-body text-xs text-ink-soft">
-                {2000 - (reflections[currentItem.id] ?? '').length} characters left
-              </p>
-            )}
+            <div id={`reflection-counter-${currentItem.id}`}>
+              <LiveStatus
+                message={
+                  (reflections[currentItem.id] ?? '').length >= 1800
+                    ? `${Math.max(0, 2000 - (reflections[currentItem.id] ?? '').length)} characters left`
+                    : null
+                }
+                tone="status"
+                className="font-body text-xs text-ink-soft"
+              />
+            </div>
           </div>
         )}
       </fieldset>
