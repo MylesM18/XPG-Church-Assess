@@ -23,6 +23,7 @@ interface RunResponseRow {
   value: number
   respondent_label: string
   respondent_user_id: string | null
+  reflection: string | null
 }
 
 export default async function DiagnosisPage({
@@ -44,7 +45,7 @@ export default async function DiagnosisPage({
 
   const { data: run } = await supabase
     .from('assessment_runs')
-    .select('id, status')
+    .select('id, status, methodology_version')
     .eq('church_id', churchId)
     .order('created_at', { ascending: true })
     .limit(1)
@@ -94,9 +95,20 @@ export default async function DiagnosisPage({
     respondent_label: r.respondent_label,
     respondent_id: r.respondent_user_id ?? r.respondent_label,
   }))
-  const derived = deriveDiagnosisForRun(responses, methodology, {
-    attendance_band: church.attendance_band ?? '',
-  })
+  const derived = deriveDiagnosisForRun(
+    responses,
+    methodology,
+    { attendance_band: church.attendance_band ?? '' },
+    run!.methodology_version ?? null,
+  )
+
+  // The edition the scoring actually used — the current methodology for a current-edition run, the
+  // item-filtered '0.2.0' clone for a run that predates the outreach questions. The whole report is
+  // built FROM it (view + prose) so the view's own version comparison sees the same value the
+  // re-derived diagnosis is stamped with; handing it `methodology` instead would fire the
+  // stale-methodology branch on every legacy report. The not-ok arm carries no methodology and
+  // builds no view, so `methodology` is a never-read placeholder there.
+  const reportMethodology = derived.ok ? derived.effectiveMethodology : methodology
 
   // `blocks` stays a lazy thunk taking the FRESH diagnosis — it is only evaluated on the
   // scoreable path (resolveReportView, lib/report/view.ts). PROSE_MODE gates the AI prose read
@@ -104,11 +116,11 @@ export default async function DiagnosisPage({
   const PROSE_MODE = process.env.PROSE_MODE ?? 'fallback'
   const resolution = resolveReportView(
     derived,
-    methodology,
+    reportMethodology,
     (d) =>
       PROSE_MODE !== 'fallback' && diagRow.prose
         ? (diagRow.prose as ReportBlocks)
-        : fallbackProse(d, methodology),
+        : fallbackProse(d, reportMethodology),
     { audience: 'screen' },
   )
 

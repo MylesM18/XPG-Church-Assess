@@ -37,6 +37,10 @@ const OK: DeriveResult = {
     loadFixtureMethodology(),
     { attendance_band: '100_249' },
   ),
+  // The edition this diagnosis was scored against. deriveDiagnosisForRun now returns it on the ok
+  // arm so every report surface can build the view from the SAME methodology the diagnosis is
+  // stamped with; here it is simply the fixture, since `diagnose` above used exactly that.
+  effectiveMethodology: loadFixtureMethodology(),
 };
 
 describe('resolveReportView maps a DeriveResult to a scoreable-or-not resolution (CT-2c)', () => {
