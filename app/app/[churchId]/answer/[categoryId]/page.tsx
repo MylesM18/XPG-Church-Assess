@@ -27,7 +27,7 @@ export default async function AnswerPage({
   const category = methodology.questions.categories.find((c) => c.id === categoryId)
   if (!category) notFound()
 
-  const items = category.items.map((i) => ({ id: i.id, text: i.text, anchors: i.anchors }))
+  const items = category.items.map((i) => ({ id: i.id, text: i.text, anchors: i.anchors, reflection: i.reflection }))
 
   // Resume: pull the caller's OWN saved answers for this category (own-data only; responses stays
   // default-deny — the read goes through the security-definer RPC). Empty on the first visit.
@@ -37,8 +37,10 @@ export default async function AnswerPage({
   })
   if (savedError) throw savedError
   const initialValues: Record<string, number> = {}
-  for (const row of (savedRows ?? []) as { item_id: string; value: number }[]) {
+  const initialReflections: Record<string, string> = {}
+  for (const row of (savedRows ?? []) as { item_id: string; value: number; reflection: string | null }[]) {
     initialValues[row.item_id] = row.value
+    if (row.reflection) initialReflections[row.item_id] = row.reflection
   }
 
   // Review-only once the run is complete. v1 is single-run and completion is terminal, so a
@@ -67,6 +69,7 @@ export default async function AnswerPage({
             categoryName={category.name}
             items={items}
             initialValues={initialValues}
+            initialReflections={initialReflections}
           />
         </>
       ) : (

@@ -11,12 +11,14 @@ export function SelfForm({
   categoryName,
   items,
   initialValues,
+  initialReflections,
 }: {
   churchId: string
   categoryId: string
   categoryName: string
   items: AnswerFormItem[]
   initialValues: Record<string, number>
+  initialReflections?: Record<string, string>
 }) {
   const router = useRouter()
   async function onSaveAnswer(answer: AnswerInput) {
@@ -30,6 +32,7 @@ export function SelfForm({
       categoryName={categoryName}
       items={items}
       initialValues={initialValues}
+      initialReflections={initialReflections}
       onSaveAnswer={onSaveAnswer}
       onComplete={onComplete}
     />
