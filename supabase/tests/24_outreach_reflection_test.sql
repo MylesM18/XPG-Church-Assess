@@ -141,14 +141,22 @@ select is(
   'an absent reflection key on a fresh answer stores NULL');
 
 -- ── (6) get_my_category_answers returns the caller's own reflection ────────
+-- A bare re-submit (not an assertion -- plan(N) is unaffected) gives G7 a real,
+-- non-null reflection first, so this proves the RPC round-trips populated text
+-- (its actual production purpose: prefilling the member's own textarea), not
+-- just that it can return NULL.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"d1111111-1111-1111-1111-111111111111","email":"refladmin@test.com","role":"authenticated"}';
+select submit_self_response(
+  (select id from churches where name = 'Outreach Reflection Church'), 'guest',
+  '[{"item_id":"G7","value":5,"reflection":"grateful for the warm welcome we received"}]'::jsonb);
+
 select is(
   (select reflection from get_my_category_answers(
      (select id from churches where name = 'Outreach Reflection Church'), 'guest')
    where item_id = 'G7'),
-  null::text,
-  'get_my_category_answers surfaces the reflection column (NULL for G7, mirroring the stored row)');
+  'grateful for the warm welcome we received',
+  'get_my_category_answers surfaces the caller''s own populated reflection text');
 
 -- ── (7) get_run_responses / get_completed_run_responses return reflection ──
 reset role;
@@ -200,10 +208,14 @@ select is(
 -- The structural proof that reflections cannot leak to the anon share surface:
 -- the column isn't in the RETURNS TABLE at all, so referencing it is a parse
 -- error (42703), not a permissions error. Still anon from bullet 8 above.
+-- 2-arg (sqlstate only) is deliberate, not an omitted description: pgTAP's 3-arg
+-- throws_ok dispatches on the byte length of the 2nd arg, and a 5-byte value like
+-- '42703' routes into the branch where the 3rd arg becomes a REQUIRED exact
+-- errmsg match against SQLERRM ('column "reflection" does not exist') rather than
+-- a free-text description -- adding one back would silently break this assertion.
 select throws_ok(
   $$select reflection from public.get_shared_run_responses('dddddddd-dddd-dddd-dddd-dddddddddddd')$$,
-  '42703',
-  'get_shared_run_responses has no reflection column -- the shared surface cannot leak it');
+  '42703');
 
 -- ── (10) grants are unchanged by the reflection migrations ─────────────────
 -- anon cannot execute the three member-facing RPCs that now return reflection
