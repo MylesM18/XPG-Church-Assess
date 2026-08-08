@@ -59,6 +59,15 @@ const area = {
   watchFor: 'Belief runs 22 points ahead of the countable evidence.',
 };
 
+// area carries no `outreachVoices` key at all (Task 14's absent-key contract for "nothing to
+// show"), so it doubles as the "no voices" fixture below without any modification.
+const areaWithVoices = {
+  ...area,
+  outreachVoices: [
+    { itemId: 'G6', reflectionPrompt: 'Tell us about one person.', entries: ['She came back.', 'He stayed.'] },
+  ],
+};
+
 describe('AreaDossier', () => {
   it('renders the score and all six fields inline', () => {
     const tree = AreaDossier({ area });
@@ -98,6 +107,53 @@ describe('AreaDossier', () => {
     expect(text).toContain('Discipleship is holding but not compounding.'); // reading — untouched
     expect(text).toContain('p62 of the benchmark prior'); // position — untouched
     expect(text).toContain('Systems (74) gates this · feeds Volunteers (48)'); // dependsOn — untouched
+  });
+
+  // --- Outreach voices (Task 15, spec: unattributed "voices on outreach") -------------------
+  //
+  // Task 14 groups reflections into OutreachVoicesGroup[] — itemId, reflectionPrompt, and a
+  // trimmed, lexicographically-sorted entries[] — and omits the outreachVoices key entirely
+  // (never an empty array) when an area has nothing to show. These four cases pin: a real
+  // rendered group (heading + prompt + every entry, each as its own semantic <blockquote>, so a
+  // mutation that drops the prompt, drops an entry, or collapses entries into one blockquote or
+  // plain text fails); the absent-key case rendering identically to every pre-Task-15 area (no
+  // heading text AND no stray <blockquote>/container — a mutation that always renders the
+  // wrapper div, even empty, adds no visible text and would slip past a text-only assertion, so
+  // the structural check is load-bearing); and that no respondent identifier, label, or ordinal
+  // ever accompanies a voice, which is the entire premise of the feature.
+  it('renders outreach voices when the area carries them', () => {
+    const tree = AreaDossier({ area: areaWithVoices });
+    const text = textOf(tree);
+    expect(text).toContain('Voices on outreach');
+    expect(text).toContain('Tell us about one person.');
+    expect(text).toContain('She came back.');
+    expect(text).toContain('He stayed.');
+    // Each entry renders as its OWN quote element, not merged into one blockquote or plain
+    // text — a mutation that joins entries with a separator into a single <blockquote> would
+    // still pass every toContain() above but fail this count.
+    expect(walk(tree).filter((n) => n.type === 'blockquote')).toHaveLength(2);
+  });
+
+  it('renders no voices heading when the area has none', () => {
+    const text = textOf(AreaDossier({ area }));
+    expect(text).not.toContain('Voices on outreach');
+  });
+
+  it('leaves no stray container or quote element when the area has no voices', () => {
+    // Text-only assertions can't catch an implementation that always renders the wrapper <div>
+    // (and its per-group "mt-2" div) but with zero groups mapped inside — no new text, but a
+    // real leftover container. Asserting on element TYPE closes that gap: zero <blockquote>s is
+    // only possible if the whole conditional block was skipped, not just its text content.
+    const tree = AreaDossier({ area });
+    expect(walk(tree).some((n) => n.type === 'blockquote')).toBe(false);
+  });
+
+  it('never attributes a voice to a respondent — no name, label, index, or identifier', () => {
+    // OutreachVoicesGroup carries no per-person field, so this mostly documents the contract —
+    // but it fails hard against a regression that adds a per-entry ordinal like "Member 1" or
+    // "Respondent A" alongside a quote, which is the exact failure mode the feature must avoid.
+    const text = textOf(AreaDossier({ area: areaWithVoices }));
+    expect(text).not.toMatch(/member\s*\d|respondent\s*[a-z\d]/i);
   });
 });
 

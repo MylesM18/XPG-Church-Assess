@@ -48,6 +48,24 @@ export function AreaDossier({ area }: { area: AreaDossierView }) {
         {field('Depends on', area.dependsOn)}
         {field('Watch for', area.watchFor)}
       </dl>
+      {area.outreachVoices?.length ? (
+        <div className="mt-4">
+          <p className="font-body text-xs uppercase tracking-wide text-ink-soft">Voices on outreach</p>
+          {area.outreachVoices.map((group) => (
+            <div key={group.itemId} className="mt-2">
+              <p className="font-body text-sm text-ink-soft">{group.reflectionPrompt}</p>
+              {group.entries.map((entry, i) => (
+                <blockquote
+                  key={i}
+                  className="mt-1 border-l-2 border-line pl-3 font-body text-sm text-ink break-words"
+                >
+                  {entry}
+                </blockquote>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </section>
   )
 }
