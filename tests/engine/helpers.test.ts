@@ -3,10 +3,16 @@ import { loadFixtureMethodology, answers, buildResponses, partialAnswers } from 
 
 const m = loadFixtureMethodology();
 
+// Derived from the loaded methodology rather than hardcoded, so these stay correct as
+// items are added to categories in future methodology versions (see task-3-report.md).
+function itemCount(categoryId: string): number {
+  return m.questions.categories.find(c => c.id === categoryId)!.items.length;
+}
+
 describe('fixture helpers', () => {
   it('answers() builds one response per item, uniform value', () => {
     const rs = answers(m, 'guest', 7);
-    expect(rs).toHaveLength(5);
+    expect(rs).toHaveLength(itemCount('guest'));
     expect(rs.every(r => r.value === 7 && r.category_id === 'guest')).toBe(true);
     expect(rs.every(r => r.respondent_label === 'Pastor')).toBe(true);
   });
@@ -19,13 +25,13 @@ describe('fixture helpers', () => {
     expect(rs.every(r => r.respondent_label === 'Elder')).toBe(true);
   });
   it('buildResponses() flattens groups', () => {
-    expect(buildResponses(answers(m, 'guest', 7), answers(m, 'conn', 3))).toHaveLength(10);
+    expect(buildResponses(answers(m, 'guest', 7), answers(m, 'conn', 3))).toHaveLength(itemCount('guest') + itemCount('conn'));
   });
 });
 
 describe('partialAnswers', () => {
-  it('emits only the requested items, unlike answers() which emits all five', () => {
-    expect(answers(m, 'vol', 6, 'Pastor')).toHaveLength(5);
+  it('emits only the requested items, unlike answers() which emits every item', () => {
+    expect(answers(m, 'vol', 6, 'Pastor')).toHaveLength(itemCount('vol'));
     const partial = partialAnswers(m, 'vol', ['V1'], 1, 'Elder');
     expect(partial).toHaveLength(1);
     expect(partial[0]!.item_id).toBe('V1');

@@ -27,7 +27,13 @@ describe('normalize', () => {
 
 describe('normalize keys respondents on identity, not label', () => {
   it('keeps two unnamed members apart even though both are labelled "Member"', () => {
-    const rows: Response[] = ['G1', 'G2', 'G3', 'G4', 'G5'].flatMap((item_id) => [
+    // Derived from the loaded methodology (not hardcoded G1..G5) so both respondents answer
+    // every item in the category — the engine's fit model only scores a complete rectangle,
+    // and hardcoding a stale item list would silently exclude these respondents from fit
+    // entirely as items are added to guest in future methodology versions. See
+    // tests/methodology/questions-yaml-outreach.test.ts and task-3-report.md.
+    const guestItems = m.questions.categories.find((c) => c.id === 'guest')!.items.map((i) => i.id);
+    const rows: Response[] = guestItems.flatMap((item_id) => [
       { category_id: 'guest', item_id, value: 8, respondent_label: 'Member', respondent_id: 'u-1' },
       { category_id: 'guest', item_id, value: 2, respondent_label: 'Member', respondent_id: 'u-2' },
     ]);
