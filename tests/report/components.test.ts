@@ -61,10 +61,15 @@ const area = {
 
 // area carries no `outreachVoices` key at all (Task 14's absent-key contract for "nothing to
 // show"), so it doubles as the "no voices" fixture below without any modification.
+//
+// entries are in genuine lexicographic order — 'H' < 'S', matching buildOutreachVoices's plain
+// `(a, b) => (a < b ? -1 : a > b ? 1 : 0)` sort in lib/report/view.ts — so this fixture models
+// what Task 14 actually hands the component, not an arbitrary order a reader might mistake for
+// the thing under test.
 const areaWithVoices = {
   ...area,
   outreachVoices: [
-    { itemId: 'G6', reflectionPrompt: 'Tell us about one person.', entries: ['She came back.', 'He stayed.'] },
+    { itemId: 'G6', reflectionPrompt: 'Tell us about one person.', entries: ['He stayed.', 'She came back.'] },
   ],
 };
 
@@ -126,12 +131,18 @@ describe('AreaDossier', () => {
     const text = textOf(tree);
     expect(text).toContain('Voices on outreach');
     expect(text).toContain('Tell us about one person.');
-    expect(text).toContain('She came back.');
     expect(text).toContain('He stayed.');
-    // Each entry renders as its OWN quote element, not merged into one blockquote or plain
-    // text — a mutation that joins entries with a separator into a single <blockquote> would
-    // still pass every toContain() above but fail this count.
-    expect(walk(tree).filter((n) => n.type === 'blockquote')).toHaveLength(2);
+    expect(text).toContain('She came back.');
+    // Each entry renders as its OWN quote element, in the EXACT order Task 14 handed it in
+    // (lexicographic on text — never insertion order, never respondent order: that sort is an
+    // anonymity property, not a display detail, since it's what keeps the order from carrying
+    // any information about who said what). A mutation that joins entries into one blockquote,
+    // or that reverses/re-sorts `entries` before mapping, would still pass every toContain()
+    // above but fail this exact-order equality.
+    expect(walk(tree).filter((n) => n.type === 'blockquote').map(textOf)).toEqual([
+      'He stayed.',
+      'She came back.',
+    ]);
   });
 
   it('renders no voices heading when the area has none', () => {
@@ -157,10 +168,21 @@ describe('AreaDossier', () => {
 
   it('never attributes a voice to a respondent — no name, label, index, or identifier', () => {
     // OutreachVoicesGroup carries no per-person field, so this mostly documents the contract —
-    // but it fails hard against a regression that adds a per-entry ordinal like "Member 1" or
+    // but it fails hard against a regression that adds a per-entry label like "Member 1" or
     // "Respondent A" alongside a quote, which is the exact failure mode the feature must avoid.
-    const text = textOf(AreaDossier({ area: areaWithVoices }));
-    expect(text).not.toMatch(/member\s*\d|respondent\s*[a-z\d]/i);
+    const tree = AreaDossier({ area: areaWithVoices });
+    expect(textOf(tree)).not.toMatch(/member\s*\d|respondent\s*[a-z\d]/i);
+    // Keyword-anchored regexes miss a bare ordinal prefix like "1. " or "#2 " — defense-in-depth
+    // against that too. Checked per rendered entry, not the page's flattened text: `^` only
+    // anchors to the start of a string a mutation would actually prepend to, so testing the
+    // whole concatenated page text would never match regardless of what any implementation did
+    // (real content always precedes the quotes) — that would make the check vacuous.
+    const entryTexts = walk(tree)
+      .filter((n) => n.type === 'blockquote')
+      .map(textOf);
+    for (const entryText of entryTexts) {
+      expect(entryText).not.toMatch(/^\s*[#(]?\d+[.):]?\s/);
+    }
   });
 });
 
