@@ -1,56 +1,55 @@
 import { describe, expect, it } from 'vitest'
 import { isExemptMember } from '@/lib/coverage/exemption'
+import { predatesOutreach } from '@/lib/methodology/effective'
 
-const NOW = new Date('2026-08-07T12:00:00.000Z')
-const PAST = '2026-08-01T12:00:00.000Z'
-const FUTURE = '2026-08-20T12:00:00.000Z'
-// NOW minus 1ms: the smallest possible "strictly past" deadline, paired with the
-// exact-boundary test below to pin the operator's direction on both sides.
-const JUST_PAST = new Date(NOW.getTime() - 1).toISOString()
-
+// Owner ruling (2026-08-08): isExemptMember USED to be a three-way AND of (has a deadline, run
+// predates 0.3.0, that deadline has strictly passed) — "closed window, closed test": only a member
+// whose window had already closed was measured against the run's old (smaller) item list, because
+// only THEY were structurally unable to answer new items (the answer page served the CURRENT
+// methodology to everyone, so an open-window member on an old run could, in principle, still answer
+// the new items before their deadline).
+//
+// That precondition no longer holds. The answer page (app/app/[churchId]/answer/[categoryId]/
+// page.tsx) now serves each run's EFFECTIVE methodology (effectiveMethodologyForRun), so a
+// pre-0.3.0 run never offers the new items to ANY member, open window or closed. Continuing to key
+// exemption off the deadline would reintroduce the exact bug this predicate exists to prevent, from
+// the other direction: an open-window member on an old run would be offered the small item list by
+// the answer page but measured against the big one by the dashboard/completion screens, reading as
+// permanently incomplete despite having answered everything they were ever shown.
+//
+// So the item-list question now has exactly one input: does the run predate 0.3.0? isExemptMember
+// is kept as a named, coverage-domain predicate (rather than inlining predatesOutreach at every
+// call site) purely for vocabulary — lib/coverage/member-matrix.ts's own comments reference it by
+// this name — but it is now a run-level fact, not a per-member one; every member of the same church
+// (one run per church, ADR 0001) gets the same answer.
 describe('isExemptMember', () => {
-  it('no deadline means no exemption', () => {
-    // Mutation guard: a dropped/inverted `deadlineAt === null` check. Without this
-    // early return, a null deadline would hit `new Date(null)` (epoch 1970) and always
-    // read as "past" -> wrongly exempting every untimed (founder / pre-existing) member.
-    expect(isExemptMember(null, '0.2.0', NOW)).toBe(false)
+  it('a run stamped 0.2.0 (predates the outreach questions) exempts', () => {
+    // Mutation guard: catches the predatesOutreach delegation being dropped (e.g. replaced with a
+    // hardcoded `false`, or a direct `=== '0.2.0'` that would miss '0.1.0' and other predating values).
+    expect(isExemptMember('0.2.0')).toBe(true)
   })
 
-  it('an open window means no exemption', () => {
-    // Mutation guard: catches `<` swapped in for `>` (wrong comparison direction).
-    // NOW is well before FUTURE, so only the correct direction reports "not yet exempt".
-    expect(isExemptMember(FUTURE, '0.2.0', NOW)).toBe(false)
+  it('a null (unstamped, pre-versioning) run exempts', () => {
+    // Mutation guard: catches a version check that assumes non-null and would throw or misbehave —
+    // predatesOutreach(null) === true is the documented contract this must keep honoring.
+    expect(isExemptMember(null)).toBe(true)
   })
 
-  it('closed window on a pre-0.3.0 run exempts', () => {
-    // Mutation guard: catches `<` swapped in for `>`, and catches a dropped/inverted
-    // predatesOutreach call collapsing to `return false` unconditionally.
-    expect(isExemptMember(PAST, '0.2.0', NOW)).toBe(true)
+  it('a run stamped 0.3.0 (current edition) does NOT exempt', () => {
+    // Mutation guard: catches the predatesOutreach gate being dropped entirely (unconditional true).
+    expect(isExemptMember('0.3.0')).toBe(false)
   })
 
-  it('closed window on a null-version run exempts', () => {
-    // Mutation guard: catches a version check that assumes non-null (e.g. `runMethodologyVersion < OUTREACH_VERSION`
-    // called directly instead of via predatesOutreach, which would throw/misbehave on null).
-    expect(isExemptMember(PAST, null, NOW)).toBe(true)
+  it('a run stamped past 0.3.0 does NOT exempt', () => {
+    expect(isExemptMember('0.4.0')).toBe(false)
   })
 
-  it('closed window on a 0.3.0 run does NOT exempt', () => {
-    // Mutation guard: catches the predatesOutreach gate being dropped entirely (which
-    // would exempt on deadline alone, regardless of methodology version).
-    expect(isExemptMember(PAST, '0.3.0', NOW)).toBe(false)
-  })
-
-  it('at the boundary instant the window is still open', () => {
-    // THE discriminating test: with `>=` this would wrongly report true (exempt) at the
-    // exact instant now === deadline. Only strict `>` yields false here. Mutation-tested
-    // for real (see task-19-report.md) by flipping the operator and re-running.
-    expect(isExemptMember(NOW.toISOString(), '0.2.0', NOW)).toBe(false)
-  })
-
-  it('one millisecond past the boundary is exempt', () => {
-    // Companion to the boundary test above: confirms the operator's "past" side actually
-    // fires at the smallest possible margin, not just at "clearly after" (PAST, 6 days
-    // prior) where `>` and `>=` cannot be told apart.
-    expect(isExemptMember(JUST_PAST, '0.2.0', NOW)).toBe(true)
+  it('agrees with predatesOutreach for every input — no independent comparison logic to drift', () => {
+    // Mutation guard: catches a hand-rolled version comparison creeping back in (e.g. string equality
+    // instead of the lexicographic compare predatesOutreach uses) that could disagree with the engine's
+    // own effectiveMethodologyForRun on some input, splitting "what's served" from "what's exempt".
+    for (const v of [null, '0.1.0', '0.2.0', '0.2.9', '0.3.0', '0.3.1', '1.0.0']) {
+      expect(isExemptMember(v)).toBe(predatesOutreach(v))
+    }
   })
 })

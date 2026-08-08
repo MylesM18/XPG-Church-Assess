@@ -82,17 +82,29 @@ describe('buildMemberMatrix', () => {
     })
     expect(matrix[0]!.cells).toHaveLength(categories.length)
   })
-  // Beyond the brief's 4 cases: exercises the REAL isExemptMember (Task 19) at its strict `>`
-  // boundary through opts.isExempt, instead of a synthetic predicate. Proves buildMemberMatrix
-  // has no boundary logic of its own to get wrong -- it purely delegates to what it's given.
-  it('a member exactly at their deadline instant is not exempt, so still classifies against the current items', () => {
-    const now = new Date(EXEMPT_MEMBER.assessment_deadline_at)
+  // Beyond the brief's 4 cases: exercises the REAL isExemptMember (Task 19, revised by the owner
+  // ruling in Task 26) through opts.isExempt, instead of a synthetic predicate. Proves
+  // buildMemberMatrix has no exemption logic of its own to get wrong -- it purely delegates to
+  // what it's given.
+  //
+  // REVISED (owner ruling, 2026-08-08): this used to prove a member exactly AT their deadline
+  // instant was NOT yet exempt (isExemptMember's old strict `>` boundary). isExemptMember no longer
+  // takes a deadline or a clock at all -- exemption is purely a fact about the run's methodology
+  // version -- so there is no boundary left to pin here. What replaces it: proving that even a
+  // member whose window is still WIDE OPEN (deadline far in the future) reads exempt, because the
+  // answer page never serves the outreach items to anyone on a pre-0.3.0 run regardless of their
+  // own deadline. This is the exact open-window interaction the owner ruling fixes.
+  it('an open-window member (deadline far in the future) is still exempt via the REAL isExemptMember, because exemption is now run-scoped only', () => {
+    const OPEN_WINDOW_MEMBER = { user_id: 'u1', full_name: 'A', email: 'a@x.com', assessment_deadline_at: '2099-01-01T00:00:00.000Z' }
     const matrix = buildMemberMatrix(
-      [EXEMPT_MEMBER],
+      [OPEN_WINDOW_MEMBER],
       [{ respondent_user_id: 'u1', category_id: 'guest', answered_count: 2 }],
       categories,
-      { isExempt: (m) => isExemptMember(m.assessment_deadline_at, '0.2.0', now), effectiveCategories },
+      { isExempt: () => isExemptMember('0.2.0'), effectiveCategories },
     )
-    expect(matrix[0]!.cells[0]!.status).toBe('partial')
+    // 2/2 effective items answered -> covered. Under the OLD semantics an open-window member would
+    // NOT have been exempt (measured against categories' full 3 items) and would have read
+    // 'partial' forever for G3 -- an item the answer page will never even show them.
+    expect(matrix[0]!.cells[0]!.status).toBe('covered')
   })
 })

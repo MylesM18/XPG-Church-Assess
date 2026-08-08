@@ -9,9 +9,15 @@
 // "Concerns" #1). This file closes that gap directly on the three route sources:
 //   - the screen route (app/app/[churchId]/diagnosis/page.tsx, Task 16) must pass reflections;
 //   - the PDF route (app/api/report/[runId]/pdf/route.ts, Task 17) must pass reflections;
-//   - the public share route (app/r/[shareToken]/page.tsx) must NEVER pass reflections — that is
-//     one of the three independent layers tests/outreach/shared-exclusion.test.ts also pins, from
-//     the SQL and row-type side; this test pins it from the call-site side.
+//   - the public share route (app/r/[shareToken]/page.tsx) must NEVER pass reflections — private
+//     free-text is excluded from the public share surface at four independent layers (the RPC
+//     never selects the reflection column; the row type doesn't name it; this call site never
+//     threads a `reflections` array into the view opts; and buildReportView's own audience check
+//     drops it again even if a caller somehow did — see app/r/[shareToken]/page.tsx's row-type
+//     comment and lib/report/view.ts's buildReportView doc comment for the canonical list of all
+//     four). tests/outreach/shared-exclusion.test.ts pins the SQL and row-type layers; this test
+//     pins the call-site layer, more precisely (the resolveReportView opts literal itself, not
+//     just a whole-file substring check).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -73,7 +79,7 @@ describe('report routes wire reflections into resolveReportView only on the auth
       /\breflections\b/.test(tail!),
       'the shared surface must NEVER receive reflections — a "helpful" symmetry edit that adds ' +
         'it here would put private free-text reflections behind nothing but the audience gate ' +
-        "inside buildReportView, undoing one of the feature's three independent exclusion layers.",
+        "inside buildReportView, undoing one of the feature's four independent exclusion layers.",
     ).toBe(false)
   })
 })

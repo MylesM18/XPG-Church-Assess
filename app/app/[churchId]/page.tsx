@@ -99,19 +99,21 @@ export default async function DashboardPage({
 
   // Task 2's pre-0.3.0 item list for THIS run: a property of the shared church run
   // (assessment_runs is one row per church — 20260727000100), not of whichever user is viewing
-  // the page. Safe to reuse unconditionally for every roster member in the matrix below — each
-  // member's OWN exemption is decided separately, per-member, by opts.isExempt there.
+  // the page. Safe to reuse unconditionally for every roster member in the matrix below — every
+  // member's OWN exemption (opts.isExempt there) now resolves to this SAME run-level fact.
   // effectiveMethodologyForRun no-ops (returns the SAME categories reference) when the run
   // doesn't predate 0.3.0.
   const runEffectiveCategories = effectiveMethodologyForRun(methodology, run?.methodology_version ?? null).questions.categories
 
-  // "Closed window, closed test" (lib/coverage/exemption.ts): the CURRENT user's own exemption —
-  // deadlineAt is THEIR deadline (church_members.assessment_deadline_at, read above). Gates the
-  // viewer's own progress views (header count, whole-assessment CTA, per-card counters) ONLY. The
-  // admin church-wide header/dots/gate below deliberately stay on the full `categories` — an
-  // accepted conservative mismatch — and the matrix above computes exemption independently per
-  // roster member, never from this flag.
-  const exempt = isExemptMember(deadlineAt, run?.methodology_version ?? null, now)
+  // "Old edition, old test" (lib/coverage/exemption.ts): exemption is a fact about the shared
+  // church run, not about the CURRENT user's own deadline (owner ruling, 2026-08-08) — the answer
+  // page never serves the outreach items to any member of a pre-0.3.0 run, open window or closed,
+  // so there is no longer a "still has time to answer them" case a deadline could distinguish.
+  // Gates the viewer's own progress views (header count, whole-assessment CTA, per-card counters)
+  // ONLY. The admin church-wide header/dots/gate below deliberately stay on the full `categories`
+  // — an accepted conservative mismatch — and the matrix below applies this SAME run-level fact to
+  // every roster member via opts.isExempt, never gated by whichever admin/viewer is looking.
+  const exempt = isExemptMember(run?.methodology_version ?? null)
   const exemptAwareCats = exempt ? runEffectiveCategories : categories
 
   // Admin: church-wide result, never exempted (drives the header, status dots, and diagnosis
@@ -158,7 +160,7 @@ export default async function DashboardPage({
       (matrixRows ?? []) as MemberCategoryCoverageRow[],
       categories,
       {
-        isExempt: (m) => isExemptMember(m.assessment_deadline_at, run?.methodology_version ?? null, now),
+        isExempt: () => isExemptMember(run?.methodology_version ?? null),
         effectiveCategories: runEffectiveCategories,
       },
     )
