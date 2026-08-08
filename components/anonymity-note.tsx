@@ -19,7 +19,7 @@ export function AnonymityNote({
       <strong className="text-ink">Your answers are private.</strong>{' '}
       {variant === 'short'
         ? 'The report shows only your church’s combined results, never who said what.'
-        : 'Your individual answers are never shown to anyone — the report shows only your church’s combined results, never who said what.'}
+        : 'Your individual answers are never shown to anyone — the report shows only your church’s combined results, never who said what. Anything you type in an optional reflection appears in the report exactly as written, unattributed — never with your name.'}
     </p>
   )
 }
