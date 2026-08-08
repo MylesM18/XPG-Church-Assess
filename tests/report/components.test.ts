@@ -140,11 +140,18 @@ describe('AreaDossier', () => {
   });
 
   it('leaves no stray container or quote element when the area has no voices', () => {
-    // Text-only assertions can't catch an implementation that always renders the wrapper <div>
-    // (and its per-group "mt-2" div) but with zero groups mapped inside — no new text, but a
-    // real leftover container. Asserting on element TYPE closes that gap: zero <blockquote>s is
-    // only possible if the whole conditional block was skipped, not just its text content.
+    // Text-only assertions can't catch an implementation that swaps the ternary's `null` false
+    // branch for an always-rendered-but-empty <div> (a real leftover container, no visible
+    // text) — confirmed by hand: that exact mutation slips past every toContain()/not.toContain()
+    // assertion in this file. Asserting the <section>'s LAST rendered child is still the <dl> —
+    // i.e. nothing at all follows it, not even an empty node — is what actually catches it: any
+    // extra sibling, empty or not, changes what's last. Filtering falsy children first means a
+    // `null`/`false` false-branch (the correct implementation) is invisible here, exactly as it
+    // is to React itself.
     const tree = AreaDossier({ area });
+    const children = (tree.props as { children: unknown[] }).children.filter(Boolean) as ReactElement[];
+    expect(children[children.length - 1]?.type).toBe('dl');
+    // Belt-and-suspenders: no quote element anywhere when there's nothing to quote.
     expect(walk(tree).some((n) => n.type === 'blockquote')).toBe(false);
   });
 
