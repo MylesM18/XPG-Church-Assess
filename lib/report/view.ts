@@ -15,6 +15,19 @@ export interface CoverView {
   gatedBy: Array<{ name: string; score: number }>;
 }
 
+/**
+ * One reflection-prompted item's unattributed free-text "voices on outreach" for a single
+ * dossier area. itemId/reflectionPrompt let Tasks 15-17 render which prompt each entry
+ * answered; entries is the trimmed, non-empty, deterministically-sorted respondent text —
+ * never attributed to a respondent (the same anonymity discipline the rest of this file's
+ * dispersion/disagreement fields already follow).
+ */
+export interface OutreachVoicesGroup {
+  itemId: string;
+  reflectionPrompt: string;
+  entries: string[];
+}
+
 export interface AreaDossierView {
   category_id: string;
   name: string;
@@ -27,6 +40,10 @@ export interface AreaDossierView {
   position: string | null;
   dependsOn: string[];
   watchFor: string | null;
+  // Present only when this area has at least one non-empty voice AND buildReportView's
+  // audience gate let them through (never 'shared') — absent, not an empty array, when there
+  // is nothing to show, so renderers can branch on simple presence.
+  outreachVoices?: OutreachVoicesGroup[];
 }
 
 export interface SystemView {
@@ -204,6 +221,50 @@ function buildCover(d: Diagnosis, methodology: Methodology): CoverView {
 }
 
 /**
+ * Groups reflection free-text by the methodology item that prompted it, keyed by category_id
+ * so buildAreas can attach a category's groups with one Map.get(). Pure: no I/O, no
+ * randomness — same (methodology, reflections) always produces the same Map. A category with
+ * no surviving group is simply absent from the Map, which is what leaves outreachVoices off
+ * that area's AreaDossierView entirely (see buildAreas's conditional spread).
+ *
+ * Per item: `!item.reflection` skips any item the methodology doesn't prompt for a
+ * reflection. Because this is checked against the METHODOLOGY handed in — the effective,
+ * possibly-filtered edition a run was actually scored against (Task 13's
+ * effectiveMethodologyForRun) — a pre-0.3.0 run's item list has no reflection-prompted items
+ * at all, so it renders no voices even if orphaned reflection rows exist for an item id that
+ * edition no longer carries.
+ *
+ * Per entry: trim with JS's full-Unicode `.trim()`, a strict superset of Postgres btrim's
+ * ASCII-space-only default (Task 4's column CHECK doesn't trim at all; Task 5's RPC only
+ * nullifies via `nullif(btrim(...), '')`, which leaves literal '\n\n' or '\t' untouched) —
+ * then drop anything empty afterward, so neither slips through as a blank quote bubble. Sort
+ * with a PLAIN lexicographic compare — never localeCompare, which is locale- and
+ * ICU-version-dependent and would make report output non-deterministic across machines.
+ */
+function buildOutreachVoices(
+  methodology: Methodology,
+  reflections: Array<{ item_id: string; reflection: string | null }>,
+): Map<string, OutreachVoicesGroup[]> {
+  const byCategory = new Map<string, OutreachVoicesGroup[]>();
+  for (const cat of methodology.questions.categories) {
+    const groups: OutreachVoicesGroup[] = [];
+    for (const item of cat.items) {
+      if (!item.reflection) continue;
+      const entries = reflections
+        .filter((r) => r.item_id === item.id && r.reflection !== null)
+        .map((r) => (r.reflection as string).trim())
+        .filter((t) => t.length > 0)
+        // Plain lexicographic compare — deterministic across locales. Never localeCompare.
+        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      if (entries.length === 0) continue;
+      groups.push({ itemId: item.id, reflectionPrompt: item.reflection, entries });
+    }
+    if (groups.length > 0) byCategory.set(cat.id, groups);
+  }
+  return byCategory;
+}
+
+/**
  * Iterates [...rules.chain, ...Object.keys(rules.enablers)] — never sorted by
  * score — so the eight dossiers land in the same fixed order on every report
  * and two assessments 90 days apart are directly comparable side by side (spec
@@ -211,8 +272,16 @@ function buildCover(d: Diagnosis, methodology: Methodology): CoverView {
  * matched category, so a category missing from `d.categories` still resolves
  * to a sensible fallback dossier instead of throwing — the same defensive
  * posture chain-walk.ts already takes on the identical chain-iteration shape.
+ *
+ * `voices` is buildOutreachVoices's output (or an empty Map when there is nothing to show,
+ * per buildReportView's audience gate) — attached via a conditional spread so an area with no
+ * voices carries no `outreachVoices` key at all, rather than one present-but-undefined.
  */
-function buildAreas(d: Diagnosis, methodology: Methodology): AreaDossierView[] {
+function buildAreas(
+  d: Diagnosis,
+  methodology: Methodology,
+  voices: Map<string, OutreachVoicesGroup[]>,
+): AreaDossierView[] {
   const { chain, enablers, thresholds } = methodology.rules;
   const ids = [...chain, ...Object.keys(enablers)];
   const chainSet = new Set(chain);
@@ -227,6 +296,7 @@ function buildAreas(d: Diagnosis, methodology: Methodology): AreaDossierView[] {
     const n = cat?.respondent_count ?? 0;
     const state = cat?.state ?? 'ok';
     const band = readingBand(state, score, thresholds.severe);
+    const v = voices.get(categoryId);
 
     return {
       category_id: categoryId,
@@ -240,6 +310,7 @@ function buildAreas(d: Diagnosis, methodology: Methodology): AreaDossierView[] {
       position: positionFor(cat?.cohort_percentile ?? null),
       dependsOn: dependsOnFor(categoryId, d.dependencies, names),
       watchFor: watchForFor(categoryId, d, methodology, names),
+      ...(v ? { outreachVoices: v } : {}),
     };
   });
 }
@@ -306,12 +377,23 @@ function buildSystem(
  * dossiers in fixed chain-then-enabler order, never sorted by score. Names never
  * reach system.calibrationText or any dossier field — every sentence is built
  * from copy.yaml templates plus scores/ids, the same discipline Task 17 audits.
+ *
+ * opts.reflections is optional and, when given, is grouped into each area's outreachVoices
+ * via buildOutreachVoices — but ONLY for a non-'shared' audience. Private free-text is already
+ * excluded from the public share surface at two other independent layers (the SQL:
+ * get_shared_report never selects reflection; the row type: SharedRunResponseRow has no
+ * reflection field) — this audience check is belt-and-braces on top of both, not a
+ * simplification of them, so 'shared' gets zero voices even if a caller somehow passes
+ * reflections anyway.
  */
 export function buildReportView(
   d: Diagnosis,
   blocks: ReportBlocks,
   methodology: Methodology,
-  opts: { audience: ReportAudience },
+  opts: {
+    audience: ReportAudience;
+    reflections?: Array<{ item_id: string; reflection: string | null }>;
+  },
 ): ReportView {
   const primaryId = d.primary_constraint?.category_id ?? null;
 
@@ -322,6 +404,11 @@ export function buildReportView(
   // Same resolution pattern chain-walk.ts uses, so the chain section and the
   // appendix never disagree on how a category_id is displayed.
   const names = new Map(methodology.questions.categories.map((c) => [c.id, c.name]));
+
+  const voices =
+    opts.audience !== 'shared' && opts.reflections
+      ? buildOutreachVoices(methodology, opts.reflections)
+      : new Map<string, OutreachVoicesGroup[]>();
 
   return {
     verdict: blocks.verdict,
@@ -359,7 +446,7 @@ export function buildReportView(
     },
 
     cover: buildCover(d, methodology),
-    areas: buildAreas(d, methodology),
+    areas: buildAreas(d, methodology, voices),
     system: buildSystem(d, blocks, methodology),
   };
 }
@@ -393,7 +480,10 @@ export function resolveReportView(
   derived: DeriveResult,
   methodology: Methodology,
   blocks: (d: Diagnosis) => ReportBlocks,
-  opts: { audience: ReportAudience },
+  opts: {
+    audience: ReportAudience;
+    reflections?: Array<{ item_id: string; reflection: string | null }>;
+  },
 ): ReportViewResolution {
   if (!derived.ok) {
     return {

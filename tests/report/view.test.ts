@@ -3,6 +3,7 @@ import { buildReportView } from '@/lib/report/view';
 import { loadMethodology } from '@/lib/methodology/load';
 import type { Diagnosis } from '@/lib/engine/types';
 import type { ReportBlocks } from '@/lib/ai/fallback';
+import type { Methodology } from '@/lib/methodology/schema';
 import { loadFixtureMethodology, answers } from '../engine/helpers';
 import { diagnose } from '../../lib/engine';
 import { fallbackProse } from '../../lib/ai/fallback';
@@ -360,5 +361,165 @@ describe('ReportView shape', () => {
   it('interpolates the calibration spread into calibrationText rather than leaving the token literal', () => {
     expect(view.system.calibrationText).not.toMatch(/\{spread\}/);
     expect(view.system.calibrationText).toContain(String(d.calibration.spread));
+  });
+});
+
+/**
+ * Pushes a synthetic 0.3.0-only, reflection-prompted item ('X9') onto the FIRST category
+ * of `m`. Mirrors tests/report/derive.test.ts's withOutreachItem in shape and intent.
+ *
+ * Task brief's literal snippet indexes `aug.questions.categories[0].items` and later
+ * `m.questions.categories[0].id` / `area.outreachVoices![0].itemId` with no non-null
+ * assertions. This repo's tsconfig sets `noUncheckedIndexedAccess: true`, so every one of
+ * those bare index accesses is `T | undefined` and fails to compile (verified directly:
+ * `npx tsc --noEmit` on the brief's literal text reports "Object is possibly 'undefined'"
+ * at each site). The `!` assertions below are the fix, matching this file's own established
+ * convention for the identical access (tests/methodology/effective.test.ts:89,95,100,109,114
+ * — `eff.questions.categories[0]!.items...`). The brief's redundant
+ * `as (typeof aug.questions.categories)[number]['items'][number]` cast is dropped: it
+ * type-asserts the pushed object, not the actual undefined-index problem, and
+ * tests/report/derive.test.ts's withOutreachItem pushes an identically-shaped literal with
+ * no cast at all — contextual typing already narrows `signal: 'evidence'` correctly.
+ */
+function withReflectionItem(m: Methodology): Methodology {
+  const aug = structuredClone(m);
+  aug.questions.categories[0]!.items.push({
+    id: 'X9', text: 'q', signal: 'evidence', since: '0.3.0',
+    anchors: { lo: 'l', mid: 'm', hi: 'h' }, reflection: 'Tell us.',
+  });
+  return aug;
+}
+
+describe('outreachVoices', () => {
+  const reflections = [
+    { item_id: 'X9', reflection: '  zebra story  ' },
+    { item_id: 'X9', reflection: 'apple story' },
+    { item_id: 'X9', reflection: '   ' },
+    { item_id: 'X9', reflection: null },
+  ];
+
+  it('groups, trims, drops empties and sorts deterministically', () => {
+    const m = withReflectionItem(methodology);
+    const view = buildReportView(diagnosis(), blocks(), m, { audience: 'screen', reflections });
+    const area = view.areas.find((a) => a.category_id === m.questions.categories[0]!.id)!;
+    expect(area.outreachVoices).toHaveLength(1);
+    expect(area.outreachVoices![0]!.itemId).toBe('X9');
+    expect(area.outreachVoices![0]!.reflectionPrompt).toBe('Tell us.');
+    expect(area.outreachVoices![0]!.entries).toEqual(['apple story', 'zebra story']);
+  });
+
+  it('omits the field entirely when no reflections are given', () => {
+    const m = withReflectionItem(methodology);
+    const view = buildReportView(diagnosis(), blocks(), m, { audience: 'screen' });
+    for (const area of view.areas) expect(area.outreachVoices).toBeUndefined();
+  });
+
+  it('never populates voices on the shared audience', () => {
+    const m = withReflectionItem(methodology);
+    const view = buildReportView(diagnosis(), blocks(), m, { audience: 'shared', reflections });
+    for (const area of view.areas) expect(area.outreachVoices).toBeUndefined();
+  });
+
+  it('omits groups whose entries are all empty', () => {
+    const m = withReflectionItem(methodology);
+    const view = buildReportView(diagnosis(), blocks(), m, {
+      audience: 'screen',
+      reflections: [{ item_id: 'X9', reflection: '   ' }],
+    });
+    for (const area of view.areas) expect(area.outreachVoices).toBeUndefined();
+  });
+
+  it('ignores reflections for items the methodology does not prompt', () => {
+    const view = buildReportView(diagnosis(), blocks(), methodology, {
+      audience: 'screen',
+      reflections: [{ item_id: 'X9', reflection: 'orphan' }],
+    });
+    for (const area of view.areas) expect(area.outreachVoices).toBeUndefined();
+  });
+
+  // Distinct from the 'orphan' case above (an item id absent from the methodology
+  // entirely — the pre-0.3.0 safety net). This is a real, present item ('G1') that simply
+  // has no reflection PROMPT of its own — questions.yaml only puts `reflection:` on G6/G7 in
+  // the guest category. A stray reflection row for a non-prompted item (plausible: e.g. a
+  // prompt removed from a later methodology edition while old response rows persist) must
+  // still be ignored. The `.toBeUndefined()` guard on `promptless.reflection` pins the
+  // fixture's own premise, so a future edit to questions.yaml that added a prompt to G1
+  // would fail loudly here instead of silently making this test vacuous.
+  it('ignores a reflection row keyed to a real item that has no reflection prompt of its own', () => {
+    const m = withReflectionItem(methodology);
+    const promptless = m.questions.categories[0]!.items[0]!;
+    expect(promptless.reflection).toBeUndefined();
+    const view = buildReportView(diagnosis(), blocks(), m, {
+      audience: 'screen',
+      reflections: [{ item_id: promptless.id, reflection: 'should not appear' }],
+    });
+    for (const area of view.areas) expect(area.outreachVoices).toBeUndefined();
+  });
+
+  // --- Additional coverage beyond the brief's literal Step 1 block ------------------
+  // The brief's own sort fixture ('apple story' vs 'zebra story') sorts IDENTICALLY under
+  // both a plain lexicographic compare and .localeCompare() — it cannot tell them apart.
+  // Requirement #1 (task instructions) is explicit that localeCompare must never be used,
+  // so this test uses a pair where the two algorithms disagree: every uppercase code point
+  // (e.g. 'B' = U+0042) sorts below every lowercase one (e.g. 'a' = U+0061) under plain '<',
+  // but a locale-aware/case-insensitive collation alphabetizes 'apple' before 'Banana'.
+  it('sorts by plain code-unit order, not locale-aware collation', () => {
+    const m = withReflectionItem(methodology);
+    const view = buildReportView(diagnosis(), blocks(), m, {
+      audience: 'screen',
+      reflections: [
+        { item_id: 'X9', reflection: 'apple story' },
+        { item_id: 'X9', reflection: 'Banana tale' },
+      ],
+    });
+    const area = view.areas.find((a) => a.category_id === m.questions.categories[0]!.id)!;
+    expect(area.outreachVoices![0]!.entries).toEqual(['Banana tale', 'apple story']);
+  });
+
+  // Requirement #2's hazard is specifically NON-space whitespace: Postgres btrim() with no
+  // second argument strips only the ASCII space (0x20), so a reflection of literal '\n\n' or
+  // '\t' survives the DB layer (Task 4's CHECK constraint doesn't trim; Task 5's RPC only
+  // nullifies it if btrim leaves '' behind, which it won't for these two). A filter that
+  // checks `.length > 0` without trimming — or that reimplements btrim's ASCII-only
+  // behavior instead of using JS's full-Unicode `.trim()` — would let these leak into the
+  // report as blank-looking quote bubbles. These two tests use the exact characters named in
+  // the task brief, not just plain spaces (which any naive implementation already handles).
+  it('drops entries that are blank after a full Unicode trim, using tab and newline (not just spaces)', () => {
+    const m = withReflectionItem(methodology);
+    const view = buildReportView(diagnosis(), blocks(), m, {
+      audience: 'screen',
+      reflections: [
+        { item_id: 'X9', reflection: '\n\n' },
+        { item_id: 'X9', reflection: '\t' },
+        { item_id: 'X9', reflection: 'valid story' },
+      ],
+    });
+    const area = view.areas.find((a) => a.category_id === m.questions.categories[0]!.id)!;
+    expect(area.outreachVoices).toHaveLength(1);
+    expect(area.outreachVoices![0]!.entries).toEqual(['valid story']);
+  });
+
+  it('omits the group when every entry is blank via tab/newline whitespace only', () => {
+    const m = withReflectionItem(methodology);
+    const view = buildReportView(diagnosis(), blocks(), m, {
+      audience: 'screen',
+      reflections: [
+        { item_id: 'X9', reflection: '\n\n' },
+        { item_id: 'X9', reflection: '\t' },
+      ],
+    });
+    for (const area of view.areas) expect(area.outreachVoices).toBeUndefined();
+  });
+
+  // The brief's own rationale for buildAreas's conditional spread is "an area without voices
+  // has no undefined-valued key" — a claim about key PRESENCE that toBeUndefined() alone
+  // cannot distinguish from "key present, value undefined" (e.g. an unconditional
+  // `outreachVoices: voices.get(categoryId)`, which is undefined for any category absent
+  // from the Map). hasOwnProperty pins the stronger claim directly.
+  it('leaves the outreachVoices key absent, not present-but-undefined, on areas with no voices', () => {
+    const m = withReflectionItem(methodology);
+    const view = buildReportView(diagnosis(), blocks(), m, { audience: 'screen' });
+    const area = view.areas.find((a) => a.category_id === m.questions.categories[0]!.id)!;
+    expect(Object.prototype.hasOwnProperty.call(area, 'outreachVoices')).toBe(false);
   });
 });
