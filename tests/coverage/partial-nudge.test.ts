@@ -11,8 +11,8 @@ function cat(id: string, itemIds: string[]): Category {
 }
 const CATS: Category[] = [cat('guest', ['G1', 'G2', 'G3', 'G4', 'G5']), cat('conn', ['C1', 'C2', 'C3', 'C4', 'C5'])]
 const MEMBERS = [
-  { user_id: 'u1', full_name: 'Ann', email: 'ann@t.com' },
-  { user_id: 'u2', full_name: 'Ben', email: 'ben@t.com' },
+  { user_id: 'u1', full_name: 'Ann', email: 'ann@t.com', assessment_deadline_at: null },
+  { user_id: 'u2', full_name: 'Ben', email: 'ben@t.com', assessment_deadline_at: null },
 ]
 
 describe('partialNudges', () => {
