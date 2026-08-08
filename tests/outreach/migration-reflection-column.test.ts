@@ -10,7 +10,7 @@ const body = sql.replace(/--[^\n]*$/gm, '');
 describe('20260807000100 responses.reflection column', () => {
   it('adds the column to public.responses', () => {
     expect(body).toContain('alter table public.responses');
-    expect(body).toContain('add column reflection text');
+    expect(body).toContain('add column if not exists reflection text');
   });
 
   it('constrains length to 1..2000, null allowed', () => {

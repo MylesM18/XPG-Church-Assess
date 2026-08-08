@@ -34,9 +34,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // denormalized onto every row because the anon page cannot query churches or assessment_runs.
 //
 // There is DELIBERATELY no `reflection` field here. Free-text reflections are excluded from the
-// public share surface at three independent layers, and this row type is one of them: the RPC
-// never selects the column, this shape does not name it, and nothing on this page passes
-// reflections down. Adding it here would quietly undo one of the three.
+// public share surface at four independent layers, and this row type is one of them: the RPC
+// (get_shared_run_responses) never selects the column, this shape does not name it, this page
+// never passes a `reflections` array down, and buildReportView's own audience check
+// (lib/report/view.ts) drops them again even if a caller somehow did. Adding it here would
+// quietly undo one of the four.
 interface SharedRunResponseRow {
   category_id: string
   item_id: string
@@ -96,9 +98,12 @@ export default async function SharedReportPage({
 
   // The edition the scoring actually used: a forwarded link to a legacy run must render the
   // question set that run was actually scored against, never the current one. Reverting this to
-  // `methodology` compiles and leaves every test green — see lib/report/derive.ts's DeriveResult
-  // doc for why it is wrong anyway. Never read on the not-ok arm — that path returns the notice
-  // below without building a view.
+  // `methodology` is wrong, and the revert is caught, not silent — the view path reads
+  // `questions.categories[].items` via buildOutreachVoices (lib/report/view.ts), so a legacy run
+  // would surface outreach voices for questions it was never asked, and
+  // tests/report/route-methodology-wiring.test.ts source-reads this exact call site and fails the
+  // revert immediately. See lib/report/derive.ts's DeriveResult doc for the full rationale. Never
+  // read on the not-ok arm — that path returns the notice below without building a view.
   const reportMethodology = derived.ok ? derived.effectiveMethodology : methodology
 
   // Deliberately NOT gated on PROSE_MODE — this public path never reads AI prose (which could

@@ -251,7 +251,7 @@ function buildOutreachVoices(
     for (const item of cat.items) {
       if (!item.reflection) continue;
       const entries = reflections
-        .filter((r) => r.item_id === item.id && r.reflection !== null)
+        .filter((r) => r.item_id === item.id && r.reflection != null)
         .map((r) => (r.reflection as string).trim())
         .filter((t) => t.length > 0)
         // Plain lexicographic compare — deterministic across locales. Never localeCompare.
@@ -380,11 +380,12 @@ function buildSystem(
  *
  * opts.reflections is optional and, when given, is grouped into each area's outreachVoices
  * via buildOutreachVoices — but ONLY for a non-'shared' audience. Private free-text is already
- * excluded from the public share surface at two other independent layers (the SQL:
- * get_shared_report never selects reflection; the row type: SharedRunResponseRow has no
- * reflection field) — this audience check is belt-and-braces on top of both, not a
- * simplification of them, so 'shared' gets zero voices even if a caller somehow passes
- * reflections anyway.
+ * excluded from the public share surface at three other independent layers (the SQL:
+ * get_shared_run_responses never selects reflection; the row type: SharedRunResponseRow has no
+ * reflection field; the caller: app/r/[shareToken]/page.tsx never threads a `reflections` array
+ * into opts for this audience) — this audience check is a fourth, belt-and-braces layer on top
+ * of all three, not a simplification of them, so 'shared' gets zero voices even if a caller
+ * somehow passes reflections anyway.
  */
 export function buildReportView(
   d: Diagnosis,

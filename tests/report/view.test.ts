@@ -522,4 +522,27 @@ describe('outreachVoices', () => {
     const area = view.areas.find((a) => a.category_id === m.questions.categories[0]!.id)!;
     expect(Object.prototype.hasOwnProperty.call(area, 'outreachVoices')).toBe(false);
   });
+
+  // Whole-branch review Fix 1: the filter used `r.reflection !== null`, so an entry whose
+  // `reflection` key is entirely ABSENT (not `null` — genuinely missing) has
+  // `r.reflection === undefined`, and `undefined !== null` is `true`. That absent-key entry
+  // then survived the filter and reached `(r.reflection as string).trim()`, throwing
+  // `TypeError: Cannot read properties of undefined (reading 'trim')`. This is reachable in
+  // production: all three producers build this array from an untyped `supabase.rpc()` result
+  // cast through a hand-written interface, so a `reflection` column that hasn't been migrated
+  // in yet arrives as a genuinely missing key, not a `null` value — TypeScript cannot catch
+  // this because the cast asserts the shape rather than checking it. The `as unknown as ...`
+  // cast below reproduces exactly that shape: a literal with no `reflection` property at all.
+  it('skips a reflection entry whose reflection key is entirely absent, rather than throwing', () => {
+    const m = withReflectionItem(methodology);
+    const missingKey = { item_id: 'X9' } as unknown as { item_id: string; reflection: string | null };
+    const reflections = [missingKey, { item_id: 'X9', reflection: 'valid story' }];
+    expect(() =>
+      buildReportView(diagnosis(), blocks(), m, { audience: 'screen', reflections }),
+    ).not.toThrow();
+    const view = buildReportView(diagnosis(), blocks(), m, { audience: 'screen', reflections });
+    const area = view.areas.find((a) => a.category_id === m.questions.categories[0]!.id)!;
+    expect(area.outreachVoices).toHaveLength(1);
+    expect(area.outreachVoices![0]!.entries).toEqual(['valid story']);
+  });
 });

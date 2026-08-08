@@ -20,15 +20,14 @@ import { effectiveMethodologyForRun } from '../methodology/effective';
  * rather than from the current methodology, because a report must describe the question set its
  * run was actually scored against.
  *
- * READ THIS BEFORE "SIMPLIFYING" ANY CALL SITE BACK TO THE CURRENT METHODOLOGY. That substitution
- * is output-identical TODAY: the view path reads only `questions.categories[].name`
- * (buildReportView, lib/report/view.ts) and the filter drops items, never categories, so every
- * name is present either way. Nothing on the view path reads `questions.version` — the only
- * stored-vs-current compare in the codebase lives in ReportBody (diagnosis/report/shared.tsx) and
- * is fed two deliberately identical current-methodology values. So no output-based test can catch
- * the revert, and the suite will stay green. It stops being harmless the moment a surface reads
- * `questions.categories[].items`: a legacy run handed the current methodology would then surface
- * outreach questions nobody in that run was ever asked.
+ * DO NOT "SIMPLIFY" ANY CALL SITE BACK TO THE CURRENT METHODOLOGY. That substitution is NOT
+ * harmless: the view path reads `questions.categories[].items` via buildOutreachVoices
+ * (lib/report/view.ts, called from buildAreas), which groups a run's reflections by
+ * `item.id`/`item.reflection`. Handing a legacy run (methodology_version '0.2.0' or null) the
+ * current methodology would therefore surface outreach voices for questions that run's
+ * respondents were never asked. The revert is also no longer silent — it is caught immediately:
+ * tests/report/route-methodology-wiring.test.ts source-reads every call site on all three report
+ * routes and fails if any of them pass `methodology` instead of `reportMethodology`.
  *
  * The two failure arms mirror generateDiagnosis's own pre-flight checks (app/app/[churchId]/
  * actions.ts): a run can be un-scoreable either because some area has no fully-covered

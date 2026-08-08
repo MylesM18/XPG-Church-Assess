@@ -113,10 +113,13 @@ export default async function DiagnosisPage({
   // The edition the scoring actually used — the current methodology for a current-edition run, the
   // item-filtered '0.2.0' clone for a run that predates the outreach questions. The whole report is
   // built FROM it (view + prose) so it describes the question set this run was actually scored
-  // against. Reverting this to `methodology` compiles and keeps the whole suite green — nothing on
-  // the view path reads questions.items yet — and is still wrong; lib/report/derive.ts's
-  // DeriveResult doc explains why, and must be read before touching it. The not-ok arm carries no
-  // methodology and builds no view, so `methodology` is a never-read placeholder there.
+  // against. Reverting this to `methodology` is wrong, not merely stylistic: the view path reads
+  // `questions.categories[].items` via buildOutreachVoices (lib/report/view.ts), so a legacy run
+  // would surface outreach voices for questions it was never asked. The revert is caught, not
+  // silent — tests/report/route-methodology-wiring.test.ts source-reads this exact call site and
+  // fails immediately; lib/report/derive.ts's DeriveResult doc explains the full rationale. The
+  // not-ok arm carries no methodology and builds no view, so `methodology` is a never-read
+  // placeholder there.
   const reportMethodology = derived.ok ? derived.effectiveMethodology : methodology
 
   // `blocks` stays a lazy thunk taking the FRESH diagnosis — it is only evaluated on the

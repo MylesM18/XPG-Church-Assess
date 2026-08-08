@@ -5,16 +5,15 @@
 // Task 13 computes, on all three report routes:
 //   const reportMethodology = derived.ok ? derived.effectiveMethodology : methodology
 // and threads it into BOTH resolveReportView's methodology argument AND the prose thunk's
-// fallbackProse(d, reportMethodology) call — never the raw `methodology`. Today that
-// substitution is OUTPUT-IDENTICAL to passing plain `methodology`: nothing on the view path
-// reads questions.version or .items yet (lib/report/derive.ts's DeriveResult doc explains this
-// in full, and warns that grepping for a version comparison will find nothing — that absence is
-// expected, not evidence the wiring is cargo-cult). So reverting either call site back to plain
-// `methodology` COMPILES and keeps the whole suite green. It only becomes observably wrong once a
-// legacy run (predating the outreach questions, methodology_version '0.2.0' or null) is handed
-// the CURRENT methodology: outreach voices would then be built as if that run had answered
-// questions it was never asked. Only a source-reading tripwire can catch the revert before that
-// day arrives. (Task 13's own report flagged this exact gap under "Concerns" #3.)
+// fallbackProse(d, reportMethodology) call — never the raw `methodology`. Reverting either call
+// site back to plain `methodology` is NOT output-identical: the view path reads
+// `questions.categories[].items` via buildOutreachVoices (lib/report/view.ts), which groups a
+// run's reflections by `item.id`/`item.reflection` (lib/report/derive.ts's DeriveResult doc has
+// the full rationale). A legacy run (predating the outreach questions, methodology_version
+// '0.2.0' or null) handed the CURRENT methodology would therefore surface outreach voices for
+// questions it was never asked — and this file is what catches that: the tripwire below
+// source-reads all three call sites and fails the revert immediately, rather than relying on
+// rendered output. (Task 13's own report flagged this exact gap under "Concerns" #3.)
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'

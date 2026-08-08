@@ -5,5 +5,5 @@
 -- so a stored reflection is always 1..2000 real characters.
 
 alter table public.responses
-  add column reflection text
+  add column if not exists reflection text
   check (reflection is null or char_length(reflection) between 1 and 2000);
