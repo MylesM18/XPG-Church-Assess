@@ -82,6 +82,9 @@ const s = StyleSheet.create({
   fieldRow: { marginTop: 4 },
   fieldLabel: { fontSize: 8, color: INK_SOFT, textTransform: 'uppercase', letterSpacing: 0.5 },
   fieldValue: { fontSize: 10, marginTop: 1 },
+  voicesLabel: { fontSize: 8, color: INK_SOFT, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 6 },
+  voicesPrompt: { fontSize: 9, color: INK_SOFT, marginTop: 3 },
+  voicesQuote: { fontSize: 10, marginTop: 2, paddingLeft: 8, borderLeftWidth: 1, borderLeftColor: RULE },
 
   // Layer 4 — booking CTA + appendix
   ctaButton: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: INK, color: '#FFFFFF',
@@ -172,20 +175,38 @@ function DossierField({ label, value }: { label: string; value: string | string[
 }
 
 /** One inline area dossier — never collapsed (PDF cannot collapse anyway; spec §7.8).
- *  `wrap={false}` keeps a single area's six fields from splitting across a page boundary. */
+ *  The header row and six fields stay atomic (`wrap={false}` on the inner View) so they never
+ *  split across a page boundary; free-text outreach voices are a sibling outside that inner
+ *  View so a long quote CAN flow across a page break instead of overflowing or being clipped. */
 function AreaDossierBlock({ area }: { area: AreaDossierView }) {
+  const voices = area.outreachVoices ?? [];
   return (
-    <View style={s.dossier} wrap={false}>
-      <View style={s.dossierHeaderRow}>
-        <Text style={s.dossierName}>{area.name}</Text>
-        <Text style={s.dossierMeta}>{area.score}</Text>
+    <View style={s.dossier}>
+      <View wrap={false}>
+        <View style={s.dossierHeaderRow}>
+          <Text style={s.dossierName}>{area.name}</Text>
+          <Text style={s.dossierMeta}>{area.score}</Text>
+        </View>
+        <DossierField label="Reading" value={area.reading} />
+        <DossierField label="Inside it" value={area.insideIt} />
+        <DossierField label="Agreement" value={area.agreement} />
+        <DossierField label="Position" value={area.position} />
+        <DossierField label="Depends on" value={area.dependsOn} />
+        <DossierField label="Watch for" value={area.watchFor} />
       </View>
-      <DossierField label="Reading" value={area.reading} />
-      <DossierField label="Inside it" value={area.insideIt} />
-      <DossierField label="Agreement" value={area.agreement} />
-      <DossierField label="Position" value={area.position} />
-      <DossierField label="Depends on" value={area.dependsOn} />
-      <DossierField label="Watch for" value={area.watchFor} />
+      {voices.length > 0 && (
+        <View>
+          <Text style={s.voicesLabel}>Voices on outreach</Text>
+          {voices.map((group) => (
+            <View key={group.itemId}>
+              <Text style={s.voicesPrompt}>{group.reflectionPrompt}</Text>
+              {group.entries.map((entry, i) => (
+                <Text key={i} style={s.voicesQuote}>{entry}</Text>
+              ))}
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
