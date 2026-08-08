@@ -11,9 +11,9 @@ const EVIDENCE = new Set(['G1','G2','G4','G5','C2','C3','C5','D3','V1','V2','GEN
 const byId = Object.fromEntries(q.categories.map(c => [c.id, c])) as Record<string, any>;
 
 describe('questions.yaml', () => {
-  it('has 8 categories and 40 items', () => {
+  it('has 8 categories and 50 items', () => {
     expect(q.categories).toHaveLength(8);
-    expect(q.categories.flatMap(c => c.items)).toHaveLength(40);
+    expect(q.categories.flatMap(c => c.items)).toHaveLength(50);
   });
 
   it('has the exact stage/enabler shape', () => {
