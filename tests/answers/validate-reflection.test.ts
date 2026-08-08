@@ -73,6 +73,25 @@ describe('validateSingleAnswer reflection', () => {
     const r = validateSingleAnswer('guest', { item_id: 'G6', value: 7, reflection: padded }, CATS)
     expect(r.ok).toBe(true)
   })
+
+  // The server's guard is char_length(btrim(reflection)) > 2000, and Postgres btrim()'s default
+  // character set is ASCII space (0x20) ONLY — unlike JS .trim(), which also strips \n, \t, \r,
+  // and other Unicode whitespace. A guard written as rawReflection.trim().length would therefore
+  // be strictly LOOSER than the server for any padding built from non-space whitespace: it would
+  // accept text the RPC then rejects with a raw Postgres error. 2000 'x's plus one trailing
+  // newline is exactly that case: raw length 2001, JS-trimmed length 2000 (wrongly under the
+  // cap), ASCII-space-trimmed length 2001 (correctly over it).
+  it('rejects 2000 characters padded with a trailing newline (mirrors Postgres btrim, not JS .trim)', () => {
+    const withNewline = 'x'.repeat(2000) + '\n'
+    const r = validateSingleAnswer('guest', { item_id: 'G6', value: 7, reflection: withNewline }, CATS)
+    expect(r.ok).toBe(false)
+  })
+
+  it('rejects 2000 characters padded with a leading tab, for the same reason', () => {
+    const withTab = '\t' + 'x'.repeat(2000)
+    const r = validateSingleAnswer('guest', { item_id: 'G6', value: 7, reflection: withTab }, CATS)
+    expect(r.ok).toBe(false)
+  })
 })
 
 describe('validateCategoryAnswers reflection', () => {
@@ -99,6 +118,35 @@ describe('validateCategoryAnswers reflection', () => {
 
   it('rejects a non-string reflection anywhere in the batch', () => {
     const bad = [{ item_id: 'G1', value: 3 }, { item_id: 'G6', value: 7, reflection: 42 }]
+    expect(validateCategoryAnswers('guest', bad, CATS).ok).toBe(false)
+  })
+
+  // validateCategoryAnswers carries its own, independently-written copy of the reflection guard
+  // (not a shared call into validateSingleAnswer), so every boundary case above needs a batch-path
+  // sibling — otherwise a regression introduced only here (e.g. `>` slipping to `>=`, or the
+  // btrim-mirror fix landing in one function but not the other) would be caught on one path and
+  // pass silently on the other.
+
+  it('accepts exactly 2000 characters on the batch path', () => {
+    const at = [{ item_id: 'G1', value: 3 }, { item_id: 'G6', value: 7, reflection: 'x'.repeat(2000) }]
+    expect(validateCategoryAnswers('guest', at, CATS).ok).toBe(true)
+  })
+
+  it('measures length after trimming, not before, on the batch path too', () => {
+    const padded = `${' '.repeat(10)}${'x'.repeat(1990)}${' '.repeat(10)}` // trimmed 1990, raw 2010
+    const batch = [{ item_id: 'G1', value: 3 }, { item_id: 'G6', value: 7, reflection: padded }]
+    expect(validateCategoryAnswers('guest', batch, CATS).ok).toBe(true)
+  })
+
+  it('carries whitespace-only text through untouched on the batch path too', () => {
+    const batch = [{ item_id: 'G1', value: 3 }, { item_id: 'G6', value: 7, reflection: '   ' }]
+    const r = validateCategoryAnswers('guest', batch, CATS)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.answers.find((a) => a.item_id === 'G6')?.reflection).toBe('   ')
+  })
+
+  it('rejects 2000 characters padded with a trailing newline anywhere in the batch (btrim mirror)', () => {
+    const bad = [{ item_id: 'G1', value: 3 }, { item_id: 'G6', value: 7, reflection: 'x'.repeat(2000) + '\n' }]
     expect(validateCategoryAnswers('guest', bad, CATS).ok).toBe(false)
   })
 })

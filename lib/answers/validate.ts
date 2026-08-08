@@ -10,6 +10,16 @@ export type ValidateResult =
   | { ok: true; answers: AnswerInput[] }
   | { ok: false; error: string }
 
+// The server's length guard is char_length(btrim(reflection)) > 2000, and Postgres btrim() with
+// no explicit character set trims ASCII space (0x20) ONLY. JS's String.prototype.trim() strips
+// the full Unicode whitespace class (\n, \t, \r, NBSP, ...), which is a strict superset — so
+// measuring with .trim() would be looser than the server and let some over-length text through
+// client-side that the RPC then rejects with a raw Postgres error. This mirrors btrim's default
+// charset for the length check ONLY; the stored/returned value is never touched by this function.
+function trimAsciiSpacesForLengthCheck(s: string): string {
+  return s.replace(/^ +/, '').replace(/ +$/, '')
+}
+
 /**
  * Methodology-semantic validation (the single source of methodology truth is the YAML, so this
  * lives here, not in SQL). Checks: category exists, exactly N answers where N = the category's
@@ -50,7 +60,7 @@ export function validateCategoryAnswers(
       if (typeof rawReflection !== 'string') {
         return { ok: false, error: `Reflection for ${itemId} must be text.` }
       }
-      if (rawReflection.trim().length > 2000) {
+      if (trimAsciiSpacesForLengthCheck(rawReflection).length > 2000) {
         return { ok: false, error: `Reflection for ${itemId} is too long (max 2000 characters).` }
       }
     }
@@ -100,7 +110,7 @@ export function validateSingleAnswer(
     if (typeof rawReflection !== 'string') {
       return { ok: false, error: `Reflection for ${itemId} must be text.` }
     }
-    if (rawReflection.trim().length > 2000) {
+    if (trimAsciiSpacesForLengthCheck(rawReflection).length > 2000) {
       return { ok: false, error: `Reflection for ${itemId} is too long (max 2000 characters).` }
     }
   }
