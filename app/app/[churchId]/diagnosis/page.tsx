@@ -95,6 +95,14 @@ export default async function DiagnosisPage({
     respondent_label: r.respondent_label,
     respondent_id: r.respondent_user_id ?? r.respondent_label,
   }))
+  // A second, separate array from the SAME raw rows — never merged into `responses` above
+  // (Response has no reflection field). No respondent identifier travels alongside: buildAreas
+  // (lib/report/view.ts) groups these by item_id only, so outreachVoices carries free text and
+  // nothing that could attribute it to a person.
+  const reflections = (rawResponses ?? []).map((r: RunResponseRow) => ({
+    item_id: r.item_id,
+    reflection: r.reflection,
+  }))
   const derived = deriveDiagnosisForRun(
     responses,
     methodology,
@@ -122,7 +130,7 @@ export default async function DiagnosisPage({
       PROSE_MODE !== 'fallback' && diagRow.prose
         ? (diagRow.prose as ReportBlocks)
         : fallbackProse(d, reportMethodology),
-    { audience: 'screen' },
+    { audience: 'screen', reflections },
   )
 
   // A run that cannot be scored under the current methodology (some area has no complete
