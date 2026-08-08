@@ -27,7 +27,7 @@ function textOf(node: unknown): string {
 }
 
 const REFLECTION_SENTENCE =
-  'Anything you type in an optional reflection appears in the report exactly as written, unattributed — never with your name.'
+  'If you add an optional reflection, though, it appears in the report exactly as written, unattributed — never with your name.'
 
 describe('answer page privacy note', () => {
   it('imports the AnonymityNote component', () => {
