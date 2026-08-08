@@ -11,11 +11,14 @@ describe('20260807000200 submit_self_response reflection', () => {
   it('replaces the function in place (same signature, no drop)', () => {
     expect(body).toContain('create or replace function public.submit_self_response');
     expect(body).not.toContain('drop function');
+    expect(body).toContain(
+      'grant execute on function public.submit_self_response(uuid, text, jsonb)',
+    );
   });
 
   it('rejects reflections longer than 2000 characters', () => {
     expect(body).toContain("char_length(btrim(a->>'reflection')) > 2000");
-    expect(body).toContain('raise exception');
+    expect(body).toContain("raise exception 'reflection too long (max 2000 characters)'");
   });
 
   it('normalises empty reflections to NULL on insert', () => {
@@ -33,9 +36,9 @@ describe('20260807000200 submit_self_response reflection', () => {
   });
 
   it('length guard runs before the insert', () => {
-    expect(body.indexOf("char_length(btrim(a->>'reflection'))")).toBeLessThan(
-      body.indexOf('insert into public.responses'),
-    );
+    const guardIndex = body.indexOf("char_length(btrim(a->>'reflection'))");
+    expect(guardIndex).toBeGreaterThanOrEqual(0);
+    expect(guardIndex).toBeLessThan(body.indexOf('insert into public.responses'));
   });
 
   it('re-issues the grants', () => {
