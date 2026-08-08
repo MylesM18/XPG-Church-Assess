@@ -51,16 +51,29 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
   // The run row, read BEFORE scoring rather than inside the AI-prose block below, because its
   // `methodology_version` decides which edition of the questions this run is scored against
   // (deriveDiagnosisForRun → effectiveMethodologyForRun). Same filters as before; `run.id` is
-  // reused for the prose cache-check further down. An unresolvable run degrades to a null version,
-  // which effectiveMethodologyForRun treats as predating the outreach questions — the safe
-  // direction, since a run that old cannot have answers to them.
-  const { data: run } = await supabase
+  // reused for the prose cache-check further down.
+  //
+  // A READ ERROR MUST NOT FALL THROUGH. It yields run === null → a null version → a CURRENT run
+  // scored as if it predated the outreach questions: its outreach answers silently dropped, the
+  // diagnosis stamped '0.2.0', and then persisted by save_diagnosis below with no error shown. So
+  // bail on `runError`. `!run` is deliberately NOT guarded: the genuine no-row case is
+  // self-limiting, because get_run_responses resolves its own run the same way and returns nothing,
+  // which blocks every area at the gate and produces a friendly error before any save.
+  //
+  // SINGLE-RUN INVARIANT: this lookup is status-agnostic while get_run_responses resolves
+  // `status = 'in_progress' order by created_at asc limit 1`. They agree only because v1 seeds
+  // exactly one run per church (create_church; multi-run deferred by ADR 0001). Under multi-run
+  // they could resolve DIFFERENT rows and a run's responses would be scored against another run's
+  // edition — and, unlike the prose-cache mismatch this pre-dated, that edition is now baked into
+  // a persisted diagnosis. Any multi-run work must thread one resolved run id through both.
+  const { data: run, error: runError } = await supabase
     .from('assessment_runs')
     .select('id, methodology_version')
     .eq('church_id', churchId)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
+  if (runError) return { ok: false, error: runError.message }
 
   // normalize → diagnosis gate → attendance-band guard → assemble, the SAME sequence the three
   // report surfaces re-derive with at render (deriveDiagnosisForRun, lib/report/derive.ts). Sharing

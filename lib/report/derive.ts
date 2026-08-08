@@ -16,10 +16,19 @@ import { effectiveMethodologyForRun } from '../methodology/effective';
  *
  * `effectiveMethodology` is the edition the scoring actually used — the same reference that was
  * passed in for a current-edition run, or the item-filtered, `0.2.0`-stamped clone for a run that
- * predates the outreach questions. Every caller must render the report FROM it (prose, view,
- * appendix): the diagnosis it accompanies is stamped with ITS version, so handing a report
- * surface the current methodology instead would make the two disagree and fire the
- * stale-methodology branch on every legacy report.
+ * predates the outreach questions. Every caller must build the report FROM it (view + prose)
+ * rather than from the current methodology, because a report must describe the question set its
+ * run was actually scored against.
+ *
+ * READ THIS BEFORE "SIMPLIFYING" ANY CALL SITE BACK TO THE CURRENT METHODOLOGY. That substitution
+ * is output-identical TODAY: the view path reads only `questions.categories[].name`
+ * (buildReportView, lib/report/view.ts) and the filter drops items, never categories, so every
+ * name is present either way. Nothing on the view path reads `questions.version` — the only
+ * stored-vs-current compare in the codebase lives in ReportBody (diagnosis/report/shared.tsx) and
+ * is fed two deliberately identical current-methodology values. So no output-based test can catch
+ * the revert, and the suite will stay green. It stops being harmless the moment a surface reads
+ * `questions.categories[].items`: a legacy run handed the current methodology would then surface
+ * outreach questions nobody in that run was ever asked.
  *
  * The two failure arms mirror generateDiagnosis's own pre-flight checks (app/app/[churchId]/
  * actions.ts): a run can be un-scoreable either because some area has no fully-covered

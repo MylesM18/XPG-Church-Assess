@@ -94,10 +94,11 @@ export default async function SharedReportPage({
     responseRows[0]?.methodology_version ?? null,
   )
 
-  // The edition the scoring actually used (see app/app/[churchId]/diagnosis/page.tsx): a forwarded
-  // link to a legacy run must render the questions that run actually asked, and the view's version
-  // comparison must see the same value the re-derived diagnosis carries. Never read on the not-ok
-  // arm — that path returns the notice below without building a view.
+  // The edition the scoring actually used: a forwarded link to a legacy run must render the
+  // question set that run was actually scored against, never the current one. Reverting this to
+  // `methodology` compiles and leaves every test green — see lib/report/derive.ts's DeriveResult
+  // doc for why it is wrong anyway. Never read on the not-ok arm — that path returns the notice
+  // below without building a view.
   const reportMethodology = derived.ok ? derived.effectiveMethodology : methodology
 
   // Deliberately NOT gated on PROSE_MODE — this public path never reads AI prose (which could

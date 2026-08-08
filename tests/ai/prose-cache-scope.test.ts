@@ -75,9 +75,14 @@ describe('generateDiagnosis AI prose cache-check', () => {
         { id: CHURCH_A, attendance_band: '500_999' },
         { id: CHURCH_B, attendance_band: '500_999' },
       ],
+      // methodology_version is load-bearing, not decoration: generateDiagnosis now reads it to
+      // pick the scoring edition, so a row without it is treated as PREDATING the outreach
+      // questions, the diagnosis is stamped '0.2.0', and its responseHash no longer collides with
+      // HASH above — which silently defuses this whole test (the cache lookup would match nothing
+      // regardless of scoping). Stamped with the current version, as create_church really does.
       assessment_runs: [
-        { id: 'run-a', church_id: CHURCH_A, status: 'complete', created_at: '2026-01-01' },
-        { id: 'run-b', church_id: CHURCH_B, status: 'complete', created_at: '2026-01-02' },
+        { id: 'run-a', church_id: CHURCH_A, status: 'complete', created_at: '2026-01-01', methodology_version: m.questions.version },
+        { id: 'run-b', church_id: CHURCH_B, status: 'complete', created_at: '2026-01-02', methodology_version: m.questions.version },
       ],
       // Church A generated AI prose earlier off the same answers. Church B's row was just
       // inserted by save_diagnosis and has no prose yet.
@@ -107,5 +112,51 @@ describe('generateDiagnosis AI prose cache-check', () => {
     expect(mockGenerateProse).toHaveBeenCalledTimes(1);
     expect(saveProseCalls).toHaveLength(1);
     expect(saveProseCalls[0]?.p_church_id).toBe(CHURCH_B);
+  });
+});
+
+/**
+ * The run lookup moved ABOVE the derive (it now selects the scoring edition), which changed what a
+ * failed read costs. It used to mean one prose cache miss — harmless. Now `run === null` means a
+ * null methodology_version, so a CURRENT run is scored as if it predated the outreach questions:
+ * its outreach answers are dropped, the diagnosis is stamped '0.2.0', and save_diagnosis PERSISTS
+ * it with no error shown to the admin. This pins the bail.
+ */
+describe('generateDiagnosis when the run lookup errors', () => {
+  beforeEach(() => { vi.stubEnv('PROSE_MODE', 'fallback'); });
+  afterEach(() => { vi.unstubAllEnvs(); });
+
+  it('returns the error and never reaches save_diagnosis', async () => {
+    const rpcCalls: string[] = [];
+    const base = fakeDb({ churches: [{ id: CHURCH_A, attendance_band: '500_999' }] });
+
+    mockCreateClient.mockResolvedValue({
+      auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) },
+      from: (table: string) => {
+        if (table !== 'assessment_runs') return base(table);
+        // A transient read failure. `data` is null exactly as it would be for a genuine no-row
+        // result — the error is the ONLY thing that distinguishes the two, which is why the guard
+        // has to key on it rather than on `!run`.
+        const api = {
+          select: () => api,
+          eq: () => api,
+          order: () => api,
+          limit: () => api,
+          maybeSingle: async () => ({ data: null, error: { message: 'connection reset' } }),
+        };
+        return api;
+      },
+      rpc: async (name: string) => {
+        rpcCalls.push(name);
+        return { data: name === 'get_run_responses' ? responses : null, error: null };
+      },
+    });
+
+    const result = await generateDiagnosis(CHURCH_A);
+
+    expect(result).toEqual({ ok: false, error: 'connection reset' });
+    // The mutation target: without the bail, these responses score clean against the filtered
+    // '0.2.0' edition and get persisted.
+    expect(rpcCalls).not.toContain('save_diagnosis');
   });
 });
