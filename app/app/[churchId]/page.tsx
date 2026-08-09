@@ -118,7 +118,7 @@ export default async function DashboardPage({
 
   // Admin: church-wide result, never exempted (drives the header, status dots, and diagnosis
   // gate below). Viewer: own result, exempt-aware — this IS their own progress.
-  const result = isAdmin ? coverage(rows, categories) : coverage(rows, exemptAwareCats)
+  const result = isAdmin ? coverage(rows, runEffectiveCategories) : coverage(rows, exemptAwareCats)
 
   // The whole-assessment CTA always reflects the CURRENT user's own progress, so an admin
   // resumes where THEY left off. Church-wide coverage still drives the header, the status

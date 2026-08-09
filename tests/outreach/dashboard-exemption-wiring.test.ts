@@ -45,16 +45,25 @@ describe('dashboard exemption wiring', () => {
     expect(src).not.toContain('of {cat.items.length}');
   });
 
-  it('the admin church-wide result still uses the full category list', () => {
-    expect(src).toContain('coverage(rows, categories)');
+  it('the admin church-wide result uses the run-scoped effective category list, not the full current one', () => {
+    // REVISED (owner ruling, 2026-08-08, admin-header fix): the answer page now serves each run's
+    // EFFECTIVE methodology unconditionally (Task 29), so no member of a pre-0.3.0 run can EVER
+    // produce a response for a since:"0.3.0" item. Leaving the admin arm on the full `categories`
+    // list therefore pinned church-wide coverage at 'partial'/0-of-8 PERMANENTLY for every existing
+    // (all pre-0.3.0) church — not the "conservative mismatch" it was accepted as, since that
+    // rationale assumed an open-window member could still go answer the new items elsewhere. Fixed
+    // by exempting the admin arm too, reusing the SAME run-derived list the matrix already uses
+    // (runEffectiveCategories) rather than computing a second one.
+    expect(src).toContain('coverage(rows, runEffectiveCategories)');
+    expect(src).not.toContain('coverage(rows, categories)');
   });
 
-  it('the admin/viewer fork is explicit: only viewers get the exempt-aware own-progress result', () => {
+  it('the admin/viewer fork is explicit: admin gets the run-scoped list, viewer gets the exempt-aware own-progress list', () => {
     // Tighter than the assertion above: pins the actual ternary, not just an incidental substring
-    // match. Mutation guard: catches the branches being swapped (admin becomes exempt-aware,
-    // viewer stays church-wide) or collapsed to one branch shared by both roles — either of which
-    // would leak the exemption into the admin's church-wide header/dots/gate, or deny it to viewers.
-    expect(CODE).toContain('isAdmin ? coverage(rows, categories) : coverage(rows, exemptAwareCats)');
+    // match. Mutation guard: catches the admin arm reverting to the full `categories` list (exactly
+    // the bug this fix closes), the branches being swapped, or both collapsing to one shared
+    // expression.
+    expect(CODE).toContain('isAdmin ? coverage(rows, runEffectiveCategories) : coverage(rows, exemptAwareCats)');
   });
 
   it("the admin's own-CTA refetch is fed the exempt-aware list", () => {
