@@ -19,6 +19,7 @@ interface RunResponseRow {
   value: number
   respondent_label: string
   respondent_user_id: string | null
+  reflection: string | null
 }
 
 /** Filename-safe ASCII slug. There is no slug column; derive from the name. */
@@ -64,7 +65,7 @@ export async function GET(
 
   const { data: run, error: runError } = await supabase
     .from('assessment_runs')
-    .select('church_id, churches(name, brand_color, attendance_band)')
+    .select('church_id, churches(name, brand_color, attendance_band), methodology_version')
     .eq('id', runId)
     .maybeSingle()
 
@@ -94,21 +95,38 @@ export async function GET(
       respondent_label: r.respondent_label,
       respondent_id: r.respondent_user_id ?? r.respondent_label,
     }))
-    const derived = deriveDiagnosisForRun(responses, methodology, {
-      attendance_band: church.attendance_band ?? '',
-    })
+    // A second, separate array from the SAME raw rows — never merged into `responses` above
+    // (Response has no reflection field). No respondent identifier travels alongside: buildAreas
+    // (lib/report/view.ts) groups these by item_id only, so outreachVoices carries free text and
+    // nothing that could attribute it to a person. Mirrors app/app/[churchId]/diagnosis/page.tsx.
+    const reflections = (rawResponses ?? []).map((r: RunResponseRow) => ({
+      item_id: r.item_id,
+      reflection: r.reflection,
+    }))
+    const derived = deriveDiagnosisForRun(
+      responses,
+      methodology,
+      { attendance_band: church.attendance_band ?? '' },
+      run!.methodology_version ?? null,
+    )
+
+    // The edition the scoring actually used (see app/app/[churchId]/diagnosis/page.tsx): the PDF
+    // must be built from the same methodology the re-derived diagnosis is stamped with, or an
+    // exported legacy report would describe questions that run never asked. Never read on the
+    // not-ok arm — that path 409s below without building a view.
+    const reportMethodology = derived.ok ? derived.effectiveMethodology : methodology
 
     // `blocks` stays a lazy thunk taking the fresh diagnosis, evaluated only on the scoreable
     // path (resolveReportView, lib/report/view.ts).
     const PROSE_MODE = process.env.PROSE_MODE ?? 'fallback'
     const resolution = resolveReportView(
       derived,
-      methodology,
+      reportMethodology,
       (d) =>
         PROSE_MODE !== 'fallback' && diag.prose
           ? (diag.prose as ReportBlocks)
-          : fallbackProse(d, methodology),
-      { audience: 'pdf' },
+          : fallbackProse(d, reportMethodology),
+      { audience: 'pdf', reflections },
     )
 
     if (!resolution.scoreable) {

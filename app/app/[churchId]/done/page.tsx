@@ -2,7 +2,9 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { requireChurchMembership } from '@/lib/auth/require-church-membership'
+import { currentRun } from '@/lib/runs/current-run'
 import { loadMethodology } from '@/lib/methodology/load'
+import { effectiveMethodologyForRun } from '@/lib/methodology/effective'
 import { coverage, type CoverageRow } from '@/lib/coverage/coverage'
 
 export default async function DonePage({
@@ -26,7 +28,13 @@ export default async function DonePage({
   if (coverageError) throw coverageError
   const rows = (coverageData ?? []) as CoverageRow[]
 
-  const categories = loadMethodology().questions.categories
+  // `categories` is the run's EFFECTIVE list (owner ruling, 2026-08-08): the answer page never
+  // serves a pre-0.3.0 run's members the 10 outreach items, so full completion must be judged
+  // against that SAME filtered list — otherwise a member who answered every item they were ever
+  // shown would be measured against a bigger denominator they can structurally never reach, and get
+  // bounced back to the dashboard forever.
+  const run = await currentRun(supabase, churchId)
+  const categories = effectiveMethodologyForRun(loadMethodology(), run?.methodology_version ?? null).questions.categories
   const result = coverage(rows, categories)
   if (result.coveredCount !== categories.length) redirect(`/app/${churchId}`)
 

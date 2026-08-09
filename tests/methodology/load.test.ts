@@ -7,7 +7,7 @@ import { loadMethodology } from '../../lib/methodology/load';
 describe('loadMethodology', () => {
   it('loads all five methodology files', () => {
     const m = loadMethodology();
-    expect(m.questions.version).toBe('0.2.0');
+    expect(m.questions.version).toBe('0.3.0');
     expect(m.rules.chain).toEqual(['guest', 'conn', 'disc', 'vol', 'gen']);
     expect(m.offers.no_constraint.type).toBe('capacity');
     expect(Object.keys(m.copy.blocks).length).toBeGreaterThan(0);

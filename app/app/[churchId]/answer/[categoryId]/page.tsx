@@ -5,6 +5,7 @@ import { requireChurchMembership } from '@/lib/auth/require-church-membership'
 import { currentRun, canAcceptAnswers } from '@/lib/runs/current-run'
 import { sectionNav } from '@/lib/review/section-nav'
 import { loadMethodology } from '@/lib/methodology/load'
+import { effectiveMethodologyForRun } from '@/lib/methodology/effective'
 import { SelfForm } from './self-form'
 import { AnonymityNote } from '@/components/anonymity-note'
 
@@ -23,31 +24,45 @@ export default async function AnswerPage({
     signInNext: `/app/${churchId}/answer/${categoryId}`,
   })
 
+  // The run's edition governs which items this member is ever offered (owner ruling, 2026-08-08):
+  // assessment_runs.methodology_version is stamped once at church creation and never updated (ADR
+  // 0001 — exactly one run per church), so a pre-0.3.0 run must never serve the 10 outreach items —
+  // any reflection written on one would be stored and then never render anywhere
+  // (effectiveMethodologyForRun already excludes them from SCORING, lib/report/derive.ts; this
+  // closes the matching gap on what's SERVED). Resolved status-agnostically here; `writable` below
+  // is a separate, later concern over this SAME run.
+  const run = await currentRun(supabase, churchId)
   const methodology = loadMethodology()
-  const category = methodology.questions.categories.find((c) => c.id === categoryId)
+  const effectiveMethodology = effectiveMethodologyForRun(methodology, run?.methodology_version ?? null)
+  const category = effectiveMethodology.questions.categories.find((c) => c.id === categoryId)
   if (!category) notFound()
 
-  const items = category.items.map((i) => ({ id: i.id, text: i.text, anchors: i.anchors }))
+  const items = category.items.map((i) => ({ id: i.id, text: i.text, anchors: i.anchors, reflection: i.reflection }))
 
   // Resume: pull the caller's OWN saved answers for this category (own-data only; responses stays
-  // default-deny — the read goes through the security-definer RPC). Empty on the first visit.
+  // default-deny — the read goes through the security-definer RPC). Empty on the first visit. A row
+  // for an item outside the effective list above (possible if this run once offered it before the
+  // owner ruling — the outreach items were servable from Task 3 until this fix) is simply never
+  // looked up by id anywhere below: harmless, never rendered, never blocks resume.
   const { data: savedRows, error: savedError } = await supabase.rpc('get_my_category_answers', {
     p_church_id: churchId,
     p_category_id: categoryId,
   })
   if (savedError) throw savedError
   const initialValues: Record<string, number> = {}
-  for (const row of (savedRows ?? []) as { item_id: string; value: number }[]) {
+  const initialReflections: Record<string, string> = {}
+  for (const row of (savedRows ?? []) as { item_id: string; value: number; reflection: string | null }[]) {
     initialValues[row.item_id] = row.value
+    if (row.reflection) initialReflections[row.item_id] = row.reflection
   }
 
   // Review-only once the run is complete. v1 is single-run and completion is terminal, so a
   // completed run cannot receive answers (docs/adr/0001-review-only-completion-defer-multi-run.md).
-  // Resolve the run status-agnostically and gate the editable form on the named write policy —
-  // rendering SelfForm on a completed run is exactly what produced the "no active run" write throw
-  // on the old "Take Again" path.
-  const run = await currentRun(supabase, churchId)
+  // Gate the editable form on the named write policy — rendering SelfForm on a completed run is
+  // exactly what produced the "no active run" write throw on the old "Take Again" path.
   const writable = canAcceptAnswers(run)
+  // Categories themselves are invariant across editions (effectiveMethodologyForRun only ever drops
+  // items, never categories), so prev/next section navigation is correct off the raw methodology.
   const nav = sectionNav(methodology.questions.categories, categoryId)
 
   return (
@@ -67,6 +82,7 @@ export default async function AnswerPage({
             categoryName={category.name}
             items={items}
             initialValues={initialValues}
+            initialReflections={initialReflections}
           />
         </>
       ) : (

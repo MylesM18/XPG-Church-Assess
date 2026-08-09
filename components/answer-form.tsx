@@ -10,6 +10,7 @@ export interface AnswerFormItem {
   id: string
   text: string
   anchors: { lo: string; mid: string; hi: string }
+  reflection?: string
 }
 
 const RANGE_LABEL: Record<'lo' | 'mid' | 'hi', string> = { lo: '1–3', mid: '4–7', hi: '8–10' }
@@ -18,18 +19,21 @@ export function AnswerForm({
   categoryName,
   items,
   initialValues,
+  initialReflections = {},
   onSaveAnswer,
   onComplete,
 }: {
   categoryName: string
   items: AnswerFormItem[]
   initialValues: Record<string, number>
+  initialReflections?: Record<string, string>
   onSaveAnswer: (answer: AnswerInput) => Promise<{ ok: boolean; error?: string }>
   onComplete: () => void
 }) {
   const [values, setValues] = useState<Record<string, number | null>>(
     () => Object.fromEntries(items.map((i) => [i.id, initialValues[i.id] ?? null])),
   )
+  const [reflections, setReflections] = useState<Record<string, string>>(initialReflections)
   // Open at the first unanswered question; if all are answered (Take Again), open at step 0.
   const [step, setStep] = useState(() => firstUnansweredStep(items.map((i) => i.id), initialValues))
   const [pending, setPending] = useState(false)
@@ -60,7 +64,11 @@ export function AnswerForm({
     setError(null)
     setPending(true)
     try {
-      const result = await onSaveAnswer({ item_id: currentItem.id, value: v })
+      const result = await onSaveAnswer(
+        currentItem.reflection
+          ? { item_id: currentItem.id, value: v, reflection: (reflections[currentItem.id] ?? '').trim() }
+          : { item_id: currentItem.id, value: v },
+      )
       if (!result.ok) {
         setError(result.error ?? 'Something went wrong. Please try again.')
         return false
@@ -172,6 +180,37 @@ export function AnswerForm({
             )
           })}
         </ul>
+
+        {currentItem.reflection && (
+          <div className="mt-6">
+            <label htmlFor={`reflection-${currentItem.id}`} className="font-body text-sm text-ink">
+              {currentItem.reflection}{' '}
+              <span className="font-body text-xs text-ink-soft">(Optional)</span>
+            </label>
+            <textarea
+              id={`reflection-${currentItem.id}`}
+              value={reflections[currentItem.id] ?? ''}
+              onChange={(e) => setReflections((prev) => ({ ...prev, [currentItem.id]: e.target.value }))}
+              rows={4}
+              aria-describedby={`reflection-hint-${currentItem.id} reflection-counter-${currentItem.id}`}
+              className="mt-2 w-full rounded-md border border-line bg-paper p-3 font-body text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            />
+            <p id={`reflection-hint-${currentItem.id}`} className="font-body text-xs text-ink-soft">
+              Optional — shown unattributed in your church&rsquo;s report.
+            </p>
+            <div id={`reflection-counter-${currentItem.id}`}>
+              <LiveStatus
+                message={
+                  (reflections[currentItem.id] ?? '').length >= 1800
+                    ? `${Math.max(0, 2000 - (reflections[currentItem.id] ?? '').length)} characters left`
+                    : null
+                }
+                tone="status"
+                className="font-body text-xs text-ink-soft"
+              />
+            </div>
+          </div>
+        )}
       </fieldset>
 
       <div className="flex items-center justify-between gap-3">

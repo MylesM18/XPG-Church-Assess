@@ -3,11 +3,22 @@ import type { Category } from '@/lib/methodology/schema'
 export interface AnswerInput {
   item_id: string
   value: number
+  reflection?: string
 }
 
 export type ValidateResult =
   | { ok: true; answers: AnswerInput[] }
   | { ok: false; error: string }
+
+// The server's length guard is char_length(btrim(reflection)) > 2000, and Postgres btrim() with
+// no explicit character set trims ASCII space (0x20) ONLY. JS's String.prototype.trim() strips
+// the full Unicode whitespace class (\n, \t, \r, NBSP, ...), which is a strict superset — so
+// measuring with .trim() would be looser than the server and let some over-length text through
+// client-side that the RPC then rejects with a raw Postgres error. This mirrors btrim's default
+// charset for the length check ONLY; the stored/returned value is never touched by this function.
+function trimAsciiSpacesForLengthCheck(s: string): string {
+  return s.replace(/^ +/, '').replace(/ +$/, '')
+}
 
 /**
  * Methodology-semantic validation (the single source of methodology truth is the YAML, so this
@@ -44,7 +55,16 @@ export function validateCategoryAnswers(
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 10) {
       return { ok: false, error: `Value for ${itemId} must be an integer 1–10.` }
     }
-    clean.push({ item_id: itemId, value })
+    const rawReflection = (a as Record<string, unknown>).reflection
+    if (rawReflection !== undefined) {
+      if (typeof rawReflection !== 'string') {
+        return { ok: false, error: `Reflection for ${itemId} must be text.` }
+      }
+      if (trimAsciiSpacesForLengthCheck(rawReflection).length > 2000) {
+        return { ok: false, error: `Reflection for ${itemId} is too long (max 2000 characters).` }
+      }
+    }
+    clean.push({ item_id: itemId, value, ...(rawReflection !== undefined ? { reflection: rawReflection } : {}) })
   }
 
   // all items present (length + membership + no-dup already guarantees this, but be explicit)
@@ -85,5 +105,17 @@ export function validateSingleAnswer(
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 10) {
     return { ok: false, error: `Value for ${itemId} must be an integer 1–10.` }
   }
-  return { ok: true, answer: { item_id: itemId, value } }
+  const rawReflection = (answer as Record<string, unknown>).reflection
+  if (rawReflection !== undefined) {
+    if (typeof rawReflection !== 'string') {
+      return { ok: false, error: `Reflection for ${itemId} must be text.` }
+    }
+    if (trimAsciiSpacesForLengthCheck(rawReflection).length > 2000) {
+      return { ok: false, error: `Reflection for ${itemId} is too long (max 2000 characters).` }
+    }
+  }
+  return {
+    ok: true,
+    answer: { item_id: itemId, value, ...(rawReflection !== undefined ? { reflection: rawReflection } : {}) },
+  }
 }

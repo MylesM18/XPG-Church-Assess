@@ -23,6 +23,7 @@ interface RunResponseRow {
   value: number
   respondent_label: string
   respondent_user_id: string | null
+  reflection: string | null
 }
 
 export default async function DiagnosisPage({
@@ -44,7 +45,7 @@ export default async function DiagnosisPage({
 
   const { data: run } = await supabase
     .from('assessment_runs')
-    .select('id, status')
+    .select('id, status, methodology_version')
     .eq('church_id', churchId)
     .order('created_at', { ascending: true })
     .limit(1)
@@ -94,9 +95,32 @@ export default async function DiagnosisPage({
     respondent_label: r.respondent_label,
     respondent_id: r.respondent_user_id ?? r.respondent_label,
   }))
-  const derived = deriveDiagnosisForRun(responses, methodology, {
-    attendance_band: church.attendance_band ?? '',
-  })
+  // A second, separate array from the SAME raw rows — never merged into `responses` above
+  // (Response has no reflection field). No respondent identifier travels alongside: buildAreas
+  // (lib/report/view.ts) groups these by item_id only, so outreachVoices carries free text and
+  // nothing that could attribute it to a person.
+  const reflections = (rawResponses ?? []).map((r: RunResponseRow) => ({
+    item_id: r.item_id,
+    reflection: r.reflection,
+  }))
+  const derived = deriveDiagnosisForRun(
+    responses,
+    methodology,
+    { attendance_band: church.attendance_band ?? '' },
+    run!.methodology_version ?? null,
+  )
+
+  // The edition the scoring actually used — the current methodology for a current-edition run, the
+  // item-filtered '0.2.0' clone for a run that predates the outreach questions. The whole report is
+  // built FROM it (view + prose) so it describes the question set this run was actually scored
+  // against. Reverting this to `methodology` is wrong, not merely stylistic: the view path reads
+  // `questions.categories[].items` via buildOutreachVoices (lib/report/view.ts), so a legacy run
+  // would surface outreach voices for questions it was never asked. The revert is caught, not
+  // silent — tests/report/route-methodology-wiring.test.ts source-reads this exact call site and
+  // fails immediately; lib/report/derive.ts's DeriveResult doc explains the full rationale. The
+  // not-ok arm carries no methodology and builds no view, so `methodology` is a never-read
+  // placeholder there.
+  const reportMethodology = derived.ok ? derived.effectiveMethodology : methodology
 
   // `blocks` stays a lazy thunk taking the FRESH diagnosis — it is only evaluated on the
   // scoreable path (resolveReportView, lib/report/view.ts). PROSE_MODE gates the AI prose read
@@ -104,12 +128,12 @@ export default async function DiagnosisPage({
   const PROSE_MODE = process.env.PROSE_MODE ?? 'fallback'
   const resolution = resolveReportView(
     derived,
-    methodology,
+    reportMethodology,
     (d) =>
       PROSE_MODE !== 'fallback' && diagRow.prose
         ? (diagRow.prose as ReportBlocks)
-        : fallbackProse(d, methodology),
-    { audience: 'screen' },
+        : fallbackProse(d, reportMethodology),
+    { audience: 'screen', reflections },
   )
 
   // A run that cannot be scored under the current methodology (some area has no complete

@@ -18,6 +18,7 @@ interface RunResponseRow {
   value: number
   respondent_label: string
   respondent_user_id: string | null
+  reflection: string | null
 }
 
 export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean; error?: string }> {
@@ -47,15 +48,45 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
     .eq('id', churchId)
     .maybeSingle()
 
+  // The run row, read BEFORE scoring rather than inside the AI-prose block below, because its
+  // `methodology_version` decides which edition of the questions this run is scored against
+  // (deriveDiagnosisForRun → effectiveMethodologyForRun). Same filters as before; `run.id` is
+  // reused for the prose cache-check further down.
+  //
+  // A READ ERROR MUST NOT FALL THROUGH. It yields run === null → a null version → a CURRENT run
+  // scored as if it predated the outreach questions: its outreach answers silently dropped, the
+  // diagnosis stamped '0.2.0', and then persisted by save_diagnosis below with no error shown. So
+  // bail on `runError`. `!run` is deliberately NOT guarded: the genuine no-row case is
+  // self-limiting, because get_run_responses resolves its own run the same way and returns nothing,
+  // which blocks every area at the gate and produces a friendly error before any save.
+  //
+  // SINGLE-RUN INVARIANT: this lookup is status-agnostic while get_run_responses resolves
+  // `status = 'in_progress' order by created_at asc limit 1`. They agree only because v1 seeds
+  // exactly one run per church (create_church; multi-run deferred by ADR 0001). Under multi-run
+  // they could resolve DIFFERENT rows and a run's responses would be scored against another run's
+  // edition — and, unlike the prose-cache mismatch this pre-dated, that edition is now baked into
+  // a persisted diagnosis. Any multi-run work must thread one resolved run id through both.
+  const { data: run, error: runError } = await supabase
+    .from('assessment_runs')
+    .select('id, methodology_version')
+    .eq('church_id', churchId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (runError) return { ok: false, error: runError.message }
+
   // normalize → diagnosis gate → attendance-band guard → assemble, the SAME sequence the three
   // report surfaces re-derive with at render (deriveDiagnosisForRun, lib/report/derive.ts). Sharing
   // it here is what guarantees generateDiagnosis and the render path can never disagree about what
   // "complete" means or which bands are known. HARD GATE (spec §4.6): never diagnose a run where
   // some area has zero fully-covered respondents (a phantom constraint), and never assemble() with
   // an unknown band (benchmarkFor() throws) — both surface as friendly errors here, not a 500.
-  const derived = deriveDiagnosisForRun(responses, methodology, {
-    attendance_band: church?.attendance_band ?? '',
-  })
+  const derived = deriveDiagnosisForRun(
+    responses,
+    methodology,
+    { attendance_band: church?.attendance_band ?? '' },
+    run?.methodology_version ?? null,
+  )
   if (!derived.ok) {
     if (derived.reason === 'incomplete_areas') {
       const names = derived.blockedAreas
@@ -90,22 +121,16 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
       // Regenerate only when no 'ai' row exists for this hash; the hash changes iff the
       // answer set changes, so resubmitting identical answers is a no-op.
       //
-      // Scoped to THIS church's run. responseHash carries no church identifier
-      // (lib/report/response-hash.ts) and `diagnoses` has no church_id column — the church
-      // link is run_id → assessment_runs.church_id. Unscoped, an identically-answered sibling
-      // church's 'ai' row is visible under RLS to a shared admin and would suppress generation
-      // here permanently. The lookup is byte-identical to diagnosis/page.tsx's, so it resolves
-      // the run the report actually renders. (save_prose narrows server-side too, by
-      // church_id + response_hash; the two coincide while v1 keeps one run per church.)
-      // No status filter: save_diagnosis above just flipped this run to 'complete', so
-      // filtering on 'in_progress' would find nothing.
-      const { data: run } = await supabase
-        .from('assessment_runs')
-        .select('id')
-        .eq('church_id', churchId)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle()
+      // Scoped to THIS church's run — `run`, resolved above the derive because its
+      // methodology_version selects the scoring edition. responseHash carries no church
+      // identifier (lib/report/response-hash.ts) and `diagnoses` has no church_id column — the
+      // church link is run_id → assessment_runs.church_id. Unscoped, an identically-answered
+      // sibling church's 'ai' row is visible under RLS to a shared admin and would suppress
+      // generation here permanently. The lookup resolves the same run the report actually
+      // renders. (save_prose narrows server-side too, by church_id + response_hash; the two
+      // coincide while v1 keeps one run per church.) No status filter, so hoisting the read to
+      // before save_diagnosis flips the run to 'complete' selects the same row either way.
+      //
       // An unresolvable run degrades to a cache MISS (generate), never a skip: generateDiagnosis
       // is one-shot per church — save_diagnosis completes the run, so get_run_responses' own
       // in_progress filter then returns nothing, normalize() sees zero responses, diagnosisGate
@@ -122,7 +147,9 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
         alreadyAi = (rows ?? []).some((r) => r.prose_source === 'ai')
       }
       if (!alreadyAi) {
-        const blocks = await generateProse(diagnosis, methodology) // never throws → ReportBlocks | null
+        // The run's OWN edition, not the current one: `diagnosis` is stamped with it, so prose
+        // written against the current question set would describe items this run never asked.
+        const blocks = await generateProse(diagnosis, derived.effectiveMethodology) // never throws → ReportBlocks | null
         if (blocks) {
           await supabase.rpc('save_prose', {
             p_church_id: churchId,

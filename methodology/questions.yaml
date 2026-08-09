@@ -1,4 +1,4 @@
-version: "0.2.0"
+version: "0.3.0"
 categories:
   - id: guest
     name: "Guest Experience"
@@ -40,6 +40,24 @@ categories:
           lo: "No one. It's nobody's job."
           mid: "It's shared across a few people or a team, so it falls through the cracks."
           hi: "One person owns the 30-day guest journey and is accountable for it."
+      - id: G6
+        text: "When your church meets people out in the community — a serve day, an event — does anything connect them to a Sunday?"
+        signal: evidence
+        since: "0.3.0"
+        anchors:
+          lo: "No. Community moments stay out there; we hope people show up on their own."
+          mid: "We invite people personally, but there's no consistent bridge from an encounter to a visit."
+          hi: "There's a deliberate bridge — invitations, info we capture, follow-up — and we can name guests who came through it."
+        reflection: "Tell about one person who first met your church outside its walls. What happened next?"
+      - id: G7
+        text: "When did you last hear of someone showing up because one of your people invited them?"
+        signal: evidence
+        since: "0.3.0"
+        anchors:
+          lo: "I can't remember one. Inviting isn't part of our culture."
+          mid: "It happens now and then; a few natural inviters carry it."
+          hi: "Regularly — invitation stories are normal here, and we hear new ones monthly."
+        reflection: "Tell the most recent invitation story you know — who invited whom, and what happened?"
   - id: conn
     name: "Community / Connection"
     kind: stage
@@ -80,6 +98,15 @@ categories:
           lo: "Everything runs through the same 20 people who've been here for years."
           mid: "There's a core and a slowly growing second ring, but it's still concentrated."
           hi: "Relationship and ownership are spread widely; new people become insiders regularly."
+      - id: C6
+        text: "Could someone far from church find real belonging here before they believe?"
+        signal: belief
+        since: "0.3.0"
+        anchors:
+          lo: "Honestly, no. Our community life assumes you're already one of us."
+          mid: "They'd be welcomed warmly, but our groups and rhythms aren't built with outsiders in mind."
+          hi: "Yes — neighbors and skeptics are inside our community life right now, belonging on the way to believing."
+        reflection: "Where does your church currently make room for people who don't yet believe? Name a place or group."
   - id: disc
     name: "Discipleship / Leadership"
     kind: stage
@@ -120,6 +147,15 @@ categories:
           lo: "No. It depends on specific gifted individuals."
           mid: "Partly — some of it is systematized, much of it isn't."
           hi: "Yes. Formation runs on a reproducible model, not on heroes."
+      - id: D6
+        text: "Does your discipleship send people outward — into neighborhoods, schools, and workplaces — or mainly deeper into church life?"
+        signal: belief
+        since: "0.3.0"
+        anchors:
+          lo: "Inward. Growth here mostly means more involvement at church."
+          mid: "We talk about being sent, but we don't equip people for it or ask about it."
+          hi: "Being formed here means being sent — our people carry faith into their week, and we equip them for it."
+        reflection: "Describe one way someone discipled here carried it into their neighborhood, school, or workplace."
   - id: vol
     name: "Volunteer"
     kind: stage
@@ -160,6 +196,15 @@ categories:
           lo: "Staff do it themselves; it's faster than training someone."
           mid: "Mixed — some equip, some are the bottleneck."
           hi: "Staff multiply ministry through volunteers as their main job."
+      - id: V6
+        text: "How much of the serving here happens beyond Sunday — out in the community?"
+        signal: evidence
+        since: "0.3.0"
+        anchors:
+          lo: "Almost none. Serving means running our own services and programs."
+          mid: "A few serve projects a year, driven by bursts of enthusiasm."
+          hi: "Serving the community is a standing part of our volunteer culture, with teams that exist for it."
+        reflection: "What's one way your volunteers served the community recently? Who showed up?"
   - id: gen
     name: "Generosity"
     kind: stage
@@ -200,6 +245,15 @@ categories:
           lo: "We're in survival mode; giving barely covers operations."
           mid: "We're stable but have little margin for new mission."
           hi: "Generosity funds vision and mission beyond our own walls."
+      - id: GEN6
+        text: "Does your church's money visibly reach your community — benevolence, local partners, real needs met?"
+        signal: evidence
+        since: "0.3.0"
+        anchors:
+          lo: "Rarely. Nearly everything we collect stays inside our own operations."
+          mid: "We give some, reactively, when needs find us."
+          hi: "A deliberate share of our budget serves the community, and we could name the partners and needs it funds."
+        reflection: "Name one need in your community your church's generosity met this year."
   - id: gov
     name: "Governance / Accountability"
     kind: enabler
@@ -240,6 +294,15 @@ categories:
           lo: "It's a rubber stamp, or a source of dysfunction."
           mid: "It functions, but leans passive or overly deferential."
           hi: "It provides genuine accountability, wisdom, and support."
+      - id: GOV6
+        text: "Is your community's good anyone's actual responsibility at the leadership level?"
+        signal: evidence
+        since: "0.3.0"
+        anchors:
+          lo: "No. Outreach happens if someone's passionate; leadership doesn't own it."
+          mid: "Leadership values it and blesses efforts, but no one owns it and it's rarely on the agenda."
+          hi: "Someone owns community engagement, and it shows up in our planning and decisions."
+        reflection: "Who, if anyone, owns your church's presence in the community? How did that come to be?"
   - id: comm
     name: "Communication"
     kind: enabler
@@ -280,6 +343,24 @@ categories:
           lo: "Broadcast only. We don't really know what they're hearing."
           mid: "Some feedback channels, lightly used."
           hi: "Real two-way communication; we know what's landing."
+      - id: COM6
+        text: "If you asked ten neighbors near your building what your church contributes to the community, what would they say?"
+        signal: belief
+        since: "0.3.0"
+        anchors:
+          lo: "Most wouldn't know we exist, or would just say 'it's a church.'"
+          mid: "Some would recognize us and mention an event or two."
+          hi: "Most could name something specific we do for this community — our reputation runs ahead of us."
+        reflection: "What do you think your community would say your church is known for? Be honest."
+      - id: COM7
+        text: "Do you actually know your community's current needs, or assume them?"
+        signal: evidence
+        since: "0.3.0"
+        anchors:
+          lo: "We assume. Our outreach reflects what we like to do."
+          mid: "We know some needs through relationships, but we've never really asked."
+          hi: "We've listened deliberately — asked neighbors, schools, or partners — and it shapes what we do."
+        reflection: "How did your church last learn something new about what your community needs?"
   - id: sys
     name: "Org Structure / Systems"
     kind: enabler
@@ -320,3 +401,12 @@ categories:
           lo: "No. We'd break. We're already strained."
           mid: "We'd struggle and have to rebuild on the fly."
           hi: "Our systems would scale with us."
+      - id: SYS6
+        text: "Do your community efforts run on systems — owned partnerships, follow-up, a rhythm — or on bursts of enthusiasm?"
+        signal: evidence
+        since: "0.3.0"
+        anchors:
+          lo: "Enthusiasm. Outreach is one-off events that depend on whoever's excited."
+          mid: "Some recurring efforts, but partnerships and follow-up live in people's heads."
+          hi: "Outreach runs on a rhythm — named partners, owned relationships, and follow-up that doesn't depend on any one person."
+        reflection: "List the community partnerships your church has right now. Who owns each one?"

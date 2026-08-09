@@ -7,6 +7,11 @@ export type RunStatus = 'in_progress' | 'complete'
 export interface Run {
   id: string
   status: RunStatus
+  /** assessment_runs.methodology_version — null for any run created before the column was
+   *  stamped. Feeds effectiveMethodologyForRun / isExemptMember at call sites; never defaulted
+   *  here (each call site does its own `?? null`, never a non-null fallback — see
+   *  lib/methodology/effective.ts's predatesOutreach(null) === true contract). */
+  methodology_version: string | null
 }
 
 /**
@@ -32,7 +37,7 @@ export async function currentRun(
 ): Promise<Run | null> {
   const { data, error } = await supabase
     .from('assessment_runs')
-    .select('id, status')
+    .select('id, status, methodology_version')
     .eq('church_id', churchId)
     .order('created_at', { ascending: true })
     .limit(1)

@@ -10,10 +10,12 @@ import {
 import { earliestInviteAt } from '@/lib/data/invitations'
 import { DeadlineBanner } from '@/components/deadline-banner'
 import { loadMethodology } from '@/lib/methodology/load'
+import { effectiveMethodologyForRun } from '@/lib/methodology/effective'
 import { resolveBrand } from '@/lib/brand/resolve'
 import { coverage, type CoverageRow, type CoverageStatus } from '@/lib/coverage/coverage'
 import { assessmentCta } from '@/lib/coverage/assessment-cta'
 import { diagnosisGateFromMatrix } from '@/lib/coverage/diagnosis-gate'
+import { isExemptMember } from '@/lib/coverage/exemption'
 import { ChainGlyph } from './chain-glyph'
 import { GenerateButton } from './generate-button'
 import { RefreshOnFocus } from './refresh-on-focus'
@@ -68,6 +70,18 @@ export default async function DashboardPage({
   }
   const inviteText = inviteWindow ? inviteBannerText(inviteWindow) : null
 
+  // Run fetch, hoisted above the coverage RPC: RLS runs_select lets any church member (admin or
+  // viewer) read it, so this is legitimate for both roles. methodology_version feeds the exemption
+  // check below; `id` is reused by the admin hasDiagnosis probe further down instead of a second,
+  // duplicate select.
+  const { data: run } = await supabase
+    .from('assessment_runs')
+    .select('id, methodology_version')
+    .eq('church_id', churchId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
   // Admins read the church-wide aggregate (needed to gate diagnosis generation on all-8-covered)
   // for the header, status dots, and gate below; viewers read their OWN coverage, which drives
   // everything for them. Admins additionally fetch their own coverage further down for the CTA.
@@ -83,7 +97,28 @@ export default async function DashboardPage({
   const categories = methodology.questions.categories
   const enablers = methodology.rules.enablers
 
-  const result = coverage(rows, categories)
+  // Task 2's pre-0.3.0 item list for THIS run: a property of the shared church run
+  // (assessment_runs is one row per church — 20260727000100), not of whichever user is viewing
+  // the page. Safe to reuse unconditionally for every roster member in the matrix below — every
+  // member's OWN exemption (opts.isExempt there) now resolves to this SAME run-level fact.
+  // effectiveMethodologyForRun no-ops (returns the SAME categories reference) when the run
+  // doesn't predate 0.3.0.
+  const runEffectiveCategories = effectiveMethodologyForRun(methodology, run?.methodology_version ?? null).questions.categories
+
+  // "Old edition, old test" (lib/coverage/exemption.ts): exemption is a fact about the shared
+  // church run, not about the CURRENT user's own deadline (owner ruling, 2026-08-08) — the answer
+  // page never serves the outreach items to any member of a pre-0.3.0 run, open window or closed,
+  // so there is no longer a "still has time to answer them" case a deadline could distinguish.
+  // Gates the viewer's own progress views (header count, whole-assessment CTA, per-card counters)
+  // ONLY. The admin church-wide header/dots/gate below deliberately stay on the full `categories`
+  // — an accepted conservative mismatch — and the matrix below applies this SAME run-level fact to
+  // every roster member via opts.isExempt, never gated by whichever admin/viewer is looking.
+  const exempt = isExemptMember(run?.methodology_version ?? null)
+  const exemptAwareCats = exempt ? runEffectiveCategories : categories
+
+  // Admin: church-wide result, never exempted (drives the header, status dots, and diagnosis
+  // gate below). Viewer: own result, exempt-aware — this IS their own progress.
+  const result = isAdmin ? coverage(rows, runEffectiveCategories) : coverage(rows, exemptAwareCats)
 
   // The whole-assessment CTA always reflects the CURRENT user's own progress, so an admin
   // resumes where THEY left off. Church-wide coverage still drives the header, the status
@@ -95,7 +130,7 @@ export default async function DashboardPage({
       { p_church_id: churchId },
     )
     if (memberCoverageError) throw memberCoverageError
-    ctaResult = coverage((memberCoverageData ?? []) as CoverageRow[], categories)
+    ctaResult = coverage((memberCoverageData ?? []) as CoverageRow[], exemptAwareCats)
   }
   const cta = assessmentCta(ctaResult, categories)
   const statusById = new Map(result.categories.map((c) => [c.category_id, c.status]))
@@ -110,6 +145,10 @@ export default async function DashboardPage({
   // stays church-wide for admins (see status dot below), by design.
   const ownCoverage = isAdmin ? ctaResult : result
   const ownAnsweredById = new Map(ownCoverage.categories.map((c) => [c.category_id, c.answeredCount]))
+  // Per-card denominator, exempt-aware: the CURRENT user's own total, not always the full item
+  // count (Task 20's totals.get(cat.id) ?? cat.items.length fallback landmine — deriving this
+  // from exemptAwareCats rather than hand-assembling it is what keeps that fallback dead here).
+  const ownTotalById = new Map(exemptAwareCats.map((c) => [c.id, c.items.length]))
 
   // Admin-only Member × Category matrix (RPC is admin-gated).
   let memberMatrix: MemberMatrixRow[] = []
@@ -120,6 +159,10 @@ export default async function DashboardPage({
       rosterRows,
       (matrixRows ?? []) as MemberCategoryCoverageRow[],
       categories,
+      {
+        isExempt: () => isExemptMember(run?.methodology_version ?? null),
+        effectiveCategories: runEffectiveCategories,
+      },
     )
   }
 
@@ -141,22 +184,13 @@ export default async function DashboardPage({
   }))
 
   let hasDiagnosis = false
-  if (isAdmin) {
-    const { data: run } = await supabase
-      .from('assessment_runs')
+  if (isAdmin && run) {
+    const { data: diagRows } = await supabase
+      .from('diagnoses')
       .select('id')
-      .eq('church_id', churchId)
-      .order('created_at', { ascending: true })
+      .eq('run_id', run.id)
       .limit(1)
-      .maybeSingle()
-    if (run) {
-      const { data: diagRows } = await supabase
-        .from('diagnoses')
-        .select('id')
-        .eq('run_id', run.id)
-        .limit(1)
-      hasDiagnosis = (diagRows?.length ?? 0) > 0
-    }
+    hasDiagnosis = (diagRows?.length ?? 0) > 0
   }
 
   return (
@@ -225,7 +259,7 @@ export default async function DashboardPage({
                 {STATUS_LABEL[status]}
               </p>
               <p className="mt-2 text-right font-body text-xs text-ink-soft">
-                {ownAnsweredById.get(cat.id) ?? 0} out of {cat.items.length} Questions
+                {ownAnsweredById.get(cat.id) ?? 0} out of {ownTotalById.get(cat.id) ?? cat.items.length} Questions
               </p>
             </article>
           )

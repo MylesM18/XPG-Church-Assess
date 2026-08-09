@@ -7,13 +7,13 @@ import { QuestionsSchema } from '../../lib/methodology/schema';
 const raw = readFileSync(fileURLToPath(new URL('../../methodology/questions.yaml', import.meta.url)), 'utf8');
 const q = QuestionsSchema.parse(yaml.load(raw));
 
-const EVIDENCE = new Set(['G1','G2','G4','G5','C2','C3','C5','D3','V1','V2','GEN1']);
+const EVIDENCE = new Set(['G1','G2','G4','G5','C2','C3','C5','D3','V1','V2','GEN1','G6','G7','V6','GEN6','GOV6','COM7','SYS6']);
 const byId = Object.fromEntries(q.categories.map(c => [c.id, c])) as Record<string, any>;
 
 describe('questions.yaml', () => {
-  it('has 8 categories and 40 items', () => {
+  it('has 8 categories and 50 items', () => {
     expect(q.categories).toHaveLength(8);
-    expect(q.categories.flatMap(c => c.items)).toHaveLength(40);
+    expect(q.categories.flatMap(c => c.items)).toHaveLength(50);
   });
 
   it('has the exact stage/enabler shape', () => {

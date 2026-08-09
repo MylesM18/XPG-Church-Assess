@@ -2,7 +2,9 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { requireChurchMembership } from '@/lib/auth/require-church-membership'
+import { currentRun } from '@/lib/runs/current-run'
 import { loadMethodology } from '@/lib/methodology/load'
+import { effectiveMethodologyForRun } from '@/lib/methodology/effective'
 import { coverage, type CoverageRow } from '@/lib/coverage/coverage'
 import { sectionCompleteNav } from '@/lib/coverage/section-complete'
 
@@ -20,8 +22,16 @@ export default async function SectionCompletePage({
     signInNext: `/app/${churchId}/answer/${categoryId}/complete`,
   })
 
-  // Guard 3 — categoryId must be a real methodology category.
-  const categories = loadMethodology().questions.categories
+  // Guard 3 — categoryId must be a real methodology category. `categories` is the run's EFFECTIVE
+  // list (owner ruling, 2026-08-08): the answer page never serves a pre-0.3.0 run's members the 10
+  // outreach items, so "complete" must be judged against that SAME filtered list — otherwise a
+  // member who finished every item they were ever shown would be measured against a bigger
+  // denominator they can structurally never reach, and get bounced right back into the section they
+  // just completed. Categories themselves are invariant across editions
+  // (effectiveMethodologyForRun only ever drops items, never categories), so this is also safe for
+  // the existence check below.
+  const run = await currentRun(supabase, churchId)
+  const categories = effectiveMethodologyForRun(loadMethodology(), run?.methodology_version ?? null).questions.categories
   if (!categories.some((c) => c.id === categoryId)) notFound()
 
   // Guard 4 — caller's OWN coverage (security-definer RPC; responses stays default-deny).

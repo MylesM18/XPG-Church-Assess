@@ -59,6 +59,20 @@ const area = {
   watchFor: 'Belief runs 22 points ahead of the countable evidence.',
 };
 
+// area carries no `outreachVoices` key at all (Task 14's absent-key contract for "nothing to
+// show"), so it doubles as the "no voices" fixture below without any modification.
+//
+// entries are in genuine lexicographic order — 'H' < 'S', matching buildOutreachVoices's plain
+// `(a, b) => (a < b ? -1 : a > b ? 1 : 0)` sort in lib/report/view.ts — so this fixture models
+// what Task 14 actually hands the component, not an arbitrary order a reader might mistake for
+// the thing under test.
+const areaWithVoices = {
+  ...area,
+  outreachVoices: [
+    { itemId: 'G6', reflectionPrompt: 'Tell us about one person.', entries: ['He stayed.', 'She came back.'] },
+  ],
+};
+
 describe('AreaDossier', () => {
   it('renders the score and all six fields inline', () => {
     const tree = AreaDossier({ area });
@@ -98,6 +112,77 @@ describe('AreaDossier', () => {
     expect(text).toContain('Discipleship is holding but not compounding.'); // reading — untouched
     expect(text).toContain('p62 of the benchmark prior'); // position — untouched
     expect(text).toContain('Systems (74) gates this · feeds Volunteers (48)'); // dependsOn — untouched
+  });
+
+  // --- Outreach voices (Task 15, spec: unattributed "voices on outreach") -------------------
+  //
+  // Task 14 groups reflections into OutreachVoicesGroup[] — itemId, reflectionPrompt, and a
+  // trimmed, lexicographically-sorted entries[] — and omits the outreachVoices key entirely
+  // (never an empty array) when an area has nothing to show. These four cases pin: a real
+  // rendered group (heading + prompt + every entry, each as its own semantic <blockquote>, so a
+  // mutation that drops the prompt, drops an entry, or collapses entries into one blockquote or
+  // plain text fails); the absent-key case rendering identically to every pre-Task-15 area (no
+  // heading text AND no stray <blockquote>/container — a mutation that always renders the
+  // wrapper div, even empty, adds no visible text and would slip past a text-only assertion, so
+  // the structural check is load-bearing); and that no respondent identifier, label, or ordinal
+  // ever accompanies a voice, which is the entire premise of the feature.
+  it('renders outreach voices when the area carries them', () => {
+    const tree = AreaDossier({ area: areaWithVoices });
+    const text = textOf(tree);
+    expect(text).toContain('Voices on outreach');
+    expect(text).toContain('Tell us about one person.');
+    expect(text).toContain('He stayed.');
+    expect(text).toContain('She came back.');
+    // Each entry renders as its OWN quote element, in the EXACT order Task 14 handed it in
+    // (lexicographic on text — never insertion order, never respondent order: that sort is an
+    // anonymity property, not a display detail, since it's what keeps the order from carrying
+    // any information about who said what). A mutation that joins entries into one blockquote,
+    // or that reverses/re-sorts `entries` before mapping, would still pass every toContain()
+    // above but fail this exact-order equality.
+    expect(walk(tree).filter((n) => n.type === 'blockquote').map(textOf)).toEqual([
+      'He stayed.',
+      'She came back.',
+    ]);
+  });
+
+  it('renders no voices heading when the area has none', () => {
+    const text = textOf(AreaDossier({ area }));
+    expect(text).not.toContain('Voices on outreach');
+  });
+
+  it('leaves no stray container or quote element when the area has no voices', () => {
+    // Text-only assertions can't catch an implementation that swaps the ternary's `null` false
+    // branch for an always-rendered-but-empty <div> (a real leftover container, no visible
+    // text) — confirmed by hand: that exact mutation slips past every toContain()/not.toContain()
+    // assertion in this file. Asserting the <section>'s LAST rendered child is still the <dl> —
+    // i.e. nothing at all follows it, not even an empty node — is what actually catches it: any
+    // extra sibling, empty or not, changes what's last. Filtering falsy children first means a
+    // `null`/`false` false-branch (the correct implementation) is invisible here, exactly as it
+    // is to React itself.
+    const tree = AreaDossier({ area });
+    const children = (tree.props as { children: unknown[] }).children.filter(Boolean) as ReactElement[];
+    expect(children[children.length - 1]?.type).toBe('dl');
+    // Belt-and-suspenders: no quote element anywhere when there's nothing to quote.
+    expect(walk(tree).some((n) => n.type === 'blockquote')).toBe(false);
+  });
+
+  it('never attributes a voice to a respondent — no name, label, index, or identifier', () => {
+    // OutreachVoicesGroup carries no per-person field, so this mostly documents the contract —
+    // but it fails hard against a regression that adds a per-entry label like "Member 1" or
+    // "Respondent A" alongside a quote, which is the exact failure mode the feature must avoid.
+    const tree = AreaDossier({ area: areaWithVoices });
+    expect(textOf(tree)).not.toMatch(/member\s*\d|respondent\s*[a-z\d]/i);
+    // Keyword-anchored regexes miss a bare ordinal prefix like "1. " or "#2 " — defense-in-depth
+    // against that too. Checked per rendered entry, not the page's flattened text: `^` only
+    // anchors to the start of a string a mutation would actually prepend to, so testing the
+    // whole concatenated page text would never match regardless of what any implementation did
+    // (real content always precedes the quotes) — that would make the check vacuous.
+    const entryTexts = walk(tree)
+      .filter((n) => n.type === 'blockquote')
+      .map(textOf);
+    for (const entryText of entryTexts) {
+      expect(entryText).not.toMatch(/^\s*[#(]?\d+[.):]?\s/);
+    }
   });
 });
 

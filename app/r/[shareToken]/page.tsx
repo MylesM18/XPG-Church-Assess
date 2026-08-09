@@ -30,8 +30,15 @@ import { NextStep, BookingCta, Appendix, SharedStaleMethodologyNotice } from '@/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // Raw shape of one get_shared_run_responses row. respondent_label is redacted to '' by the RPC;
-// respondent_user_id is the real (opaque) identity; attendance_band is denormalized onto every
-// row because the anon page cannot query churches.
+// respondent_user_id is the real (opaque) identity; attendance_band and methodology_version are
+// denormalized onto every row because the anon page cannot query churches or assessment_runs.
+//
+// There is DELIBERATELY no `reflection` field here. Free-text reflections are excluded from the
+// public share surface at four independent layers, and this row type is one of them: the RPC
+// (get_shared_run_responses) never selects the column, this shape does not name it, this page
+// never passes a `reflections` array down, and buildReportView's own audience check
+// (lib/report/view.ts) drops them again even if a caller somehow did. Adding it here would
+// quietly undo one of the four.
 interface SharedRunResponseRow {
   category_id: string
   item_id: string
@@ -39,6 +46,7 @@ interface SharedRunResponseRow {
   respondent_label: string
   respondent_user_id: string | null
   attendance_band: string | null
+  methodology_version: string | null
 }
 
 export default async function SharedReportPage({
@@ -81,9 +89,22 @@ export default async function SharedReportPage({
     respondent_label: r.respondent_label,
     respondent_id: r.respondent_user_id ?? r.respondent_label,
   }))
-  const derived = deriveDiagnosisForRun(responses, methodology, {
-    attendance_band: responseRows[0]?.attendance_band ?? '',
-  })
+  const derived = deriveDiagnosisForRun(
+    responses,
+    methodology,
+    { attendance_band: responseRows[0]?.attendance_band ?? '' },
+    responseRows[0]?.methodology_version ?? null,
+  )
+
+  // The edition the scoring actually used: a forwarded link to a legacy run must render the
+  // question set that run was actually scored against, never the current one. Reverting this to
+  // `methodology` is wrong, and the revert is caught, not silent — the view path reads
+  // `questions.categories[].items` via buildOutreachVoices (lib/report/view.ts), so a legacy run
+  // would surface outreach voices for questions it was never asked, and
+  // tests/report/route-methodology-wiring.test.ts source-reads this exact call site and fails the
+  // revert immediately. See lib/report/derive.ts's DeriveResult doc for the full rationale. Never
+  // read on the not-ok arm — that path returns the notice below without building a view.
+  const reportMethodology = derived.ok ? derived.effectiveMethodology : methodology
 
   // Deliberately NOT gated on PROSE_MODE — this public path never reads AI prose (which could
   // carry names past both defenses); it renders deterministic, provably name-free fallbackProse.
@@ -91,8 +112,8 @@ export default async function SharedReportPage({
   // call shape tests/report/route-call-ordering.test.ts pins across all three surfaces.
   const resolution = resolveReportView(
     derived,
-    methodology,
-    (d) => fallbackProse(d, methodology),
+    reportMethodology,
+    (d) => fallbackProse(d, reportMethodology),
     { audience: 'shared' },
   )
 
