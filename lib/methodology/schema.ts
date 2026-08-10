@@ -9,6 +9,12 @@ export const AnchorsSchema = z.object({
   hi: z.string().min(1),
 });
 
+// Spec P2: report-layer annotation, not scoring semantics — adding/changing a tag bumps NO
+// methodology version and never stales a run. The canonical item→theme map is folded into the
+// report inputsHash instead (plan 3, lib/report/report-hash.ts).
+export const ThemeSchema = z.enum(['systems', 'culture', 'theology', 'relational']);
+export type Theme = z.infer<typeof ThemeSchema>;
+
 export const ItemSchema = z.object({
   id: z.string().min(1),
   text: z.string().min(1),
@@ -16,6 +22,7 @@ export const ItemSchema = z.object({
   since: z.string().min(1).optional(),
   anchors: AnchorsSchema,
   reflection: z.string().min(1).optional(),
+  theme: ThemeSchema,
 });
 
 export const CategorySchema = z.object({
@@ -156,6 +163,7 @@ export type Signal = z.infer<typeof SignalSchema>;
 export type CategoryKind = z.infer<typeof CategoryKindSchema>;
 export type Anchors = z.infer<typeof AnchorsSchema>;
 export type Item = z.infer<typeof ItemSchema>;
+// Theme type already defined above via z.infer
 export type Category = z.infer<typeof CategorySchema>;
 export type Questions = z.infer<typeof QuestionsSchema>;
 export type Rules = z.infer<typeof RulesSchema>;
