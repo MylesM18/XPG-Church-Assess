@@ -31,7 +31,7 @@ M1 is DONE and pushed (`origin/master @ 1641b4f`; local `master @ d62c3ac`, 1 ah
 
 - `npx vitest run` → **75/75 (24 files)** — unchanged.
 - `npm run typecheck` → **exit 0** — unchanged (M2 adds no TS).
-- Engine purity grep clean: `! grep -rnE "from '(next|@supabase|@anthropic-ai|node:fs|node:net|node:http)" lib/engine` → no matches (exit 1).
+- Engine purity grep clean: `! grep -rnE "from '(next|@supabase|@anthropic-ai|openai|node:fs|node:net|node:http)" lib/engine` → no matches (exit 1).
 
 ## Sign-off / review flags (STOP and surface to the user; do not silently bury)
 
@@ -955,7 +955,7 @@ Expected: `Test Files 24 passed (24)`, `Tests 75 passed (75)`; typecheck exit 0.
 
 - [ ] **Step 3: Engine purity still clean**
 
-Run: `! grep -rnE "from '(next|@supabase|@anthropic-ai|node:fs|node:net|node:http)" lib/engine && echo PURE`
+Run: `! grep -rnE "from '(next|@supabase|@anthropic-ai|openai|node:fs|node:net|node:http)" lib/engine && echo PURE`
 Expected: `PURE` (no matches under `lib/engine`; the entire M2 surface is SQL under `supabase/`).
 
 - [ ] **Step 4: Confirm the git state and stop**

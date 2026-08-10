@@ -211,7 +211,7 @@ export default function TermsPage() {
             <p>
               The Service runs on third-party infrastructure: Supabase (database and
               authentication), Resend (email delivery), Vercel (hosting), Google (optional sign-in),
-              and, when enabled, Anthropic (AI phrasing of report prose). Availability and
+              and, when enabled, OpenAI (AI phrasing of report prose). Availability and
               performance depend in part on those providers, and we aren&rsquo;t responsible for
               their outages.
             </p>
