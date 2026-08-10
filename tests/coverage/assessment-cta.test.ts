@@ -6,7 +6,7 @@ import type { Category } from '@/lib/methodology/schema'
 // Minimal 3-category stand-in; order matters for target selection.
 const cats: Category[] = ['a', 'b', 'c'].map((id, i) => ({
   id, name: id.toUpperCase(), kind: 'stage', position: i + 1,
-  items: [{ id: `${id}1`, text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' } }],
+  items: [{ id: `${id}1`, text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, theme: 'systems' }],
 }))
 
 function result(statuses: Array<'not_started' | 'partial' | 'covered'>): CoverageResult {

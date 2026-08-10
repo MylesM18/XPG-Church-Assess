@@ -385,7 +385,7 @@ function withReflectionItem(m: Methodology): Methodology {
   const aug = structuredClone(m);
   aug.questions.categories[0]!.items.push({
     id: 'X9', text: 'q', signal: 'evidence', since: '0.3.0',
-    anchors: { lo: 'l', mid: 'm', hi: 'h' }, reflection: 'Tell us.',
+    anchors: { lo: 'l', mid: 'm', hi: 'h' }, reflection: 'Tell us.', theme: 'systems',
   });
   return aug;
 }

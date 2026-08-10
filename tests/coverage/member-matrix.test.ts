@@ -6,7 +6,7 @@ import type { Category } from '@/lib/methodology/schema'
 function cat(id: string, itemIds: string[]): Category {
   return {
     id, name: id.toUpperCase(), kind: 'stage', position: 1,
-    items: itemIds.map((iid) => ({ id: iid, text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' } })),
+    items: itemIds.map((iid) => ({ id: iid, text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, theme: 'systems' })),
   }
 }
 const CATS: Category[] = [cat('guest', ['G1', 'G2', 'G3', 'G4', 'G5']), cat('conn', ['C1', 'C2', 'C3', 'C4', 'C5'])]
@@ -23,9 +23,9 @@ const OPEN_MEMBER = { user_id: 'u2', full_name: 'B', email: 'b@x.com', assessmen
 const categories: Category[] = [{
   id: 'guest', name: 'GUEST', kind: 'stage', position: 1,
   items: [
-    { id: 'G1', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' } },
-    { id: 'G2', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' } },
-    { id: 'G3', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, since: '0.3.0' },
+    { id: 'G1', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, theme: 'systems' },
+    { id: 'G2', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, theme: 'systems' },
+    { id: 'G3', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, since: '0.3.0', theme: 'systems' },
   ],
 }]
 const effectiveCategories: Category[] = [cat('guest', ['G1', 'G2'])]

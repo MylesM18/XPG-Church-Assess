@@ -11,8 +11,8 @@ const guest: Category = {
   kind: 'stage',
   position: 1,
   items: [
-    { id: 'G1', text: 'q1', signal: 'evidence', anchors: { lo: 'l', mid: 'm', hi: 'h' } },
-    { id: 'G6', text: 'q6', signal: 'evidence', since: '0.3.0', anchors: { lo: 'l', mid: 'm', hi: 'h' }, reflection: 'Tell us.' },
+    { id: 'G1', text: 'q1', signal: 'evidence', anchors: { lo: 'l', mid: 'm', hi: 'h' }, theme: 'systems' },
+    { id: 'G6', text: 'q6', signal: 'evidence', since: '0.3.0', anchors: { lo: 'l', mid: 'm', hi: 'h' }, reflection: 'Tell us.', theme: 'systems' },
   ],
 }
 const CATS = [guest]

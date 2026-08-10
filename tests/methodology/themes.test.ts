@@ -29,7 +29,7 @@ describe('item theme tags (spec P2)', () => {
   });
   it('tally matches the draft table: systems 31 · culture 10 · relational 6 · theology 3', () => {
     const tally: Record<string, number> = { systems: 0, culture: 0, theology: 0, relational: 0 };
-    for (const item of items) tally[item.theme] += 1;
+    for (const item of items) tally[item.theme]! += 1;
     expect(tally).toEqual({ systems: 31, culture: 10, relational: 6, theology: 3 });
   });
   it('ThemeSchema is the closed four-value vocabulary', () => {
