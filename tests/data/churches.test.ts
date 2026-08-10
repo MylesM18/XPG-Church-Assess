@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { churchName, loadChurchForMember, createChurchWithAdmin } from '@/lib/data/churches'
+import { churchName, loadChurchForMember, createChurchWithAdmin, loadChurchProfile, updateChurchProfile, type ChurchProfile } from '@/lib/data/churches'
 
 type ClientType = Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>
 
@@ -96,5 +96,70 @@ describe('createChurchWithAdmin()', () => {
       churchId: null,
       error: null,
     })
+  })
+})
+
+const PROFILE: ChurchProfile = {
+  id: 'c1',
+  name: 'Grace',
+  denomination: null,
+  context: 'urban',
+  attendance_band: '100_249',
+  adults_band: null,
+  staff_fte_band: null,
+  budget_band: null,
+  church_age_band: null,
+  growth_trajectory: null,
+  campuses_band: '2_3',
+  facility_status: 'owned',
+  leadership_history: null,
+  consultant_notes: null,
+}
+
+describe('loadChurchProfile()', () => {
+  it('returns the full profile row when visible', async () => {
+    expect(await loadChurchProfile(fakeClient(PROFILE), 'c1')).toEqual(PROFILE)
+  })
+  it('returns null when the church is not visible to the caller', async () => {
+    expect(await loadChurchProfile(fakeClient(null), 'c1')).toBeNull()
+  })
+  it('scopes the lookup to the church id', async () => {
+    const eqCols: string[] = []
+    await loadChurchProfile(fakeClient(PROFILE, eqCols), 'c1')
+    expect(eqCols).toEqual(['id'])
+  })
+})
+
+function updateClient(opts: {
+  error?: { message: string } | null
+  calls?: Array<{ fields: unknown; eq: [string, unknown] }>
+}) {
+  return {
+    from: () => ({
+      update: (fields: unknown) => ({
+        eq: async (col: string, val: unknown) => {
+          opts.calls?.push({ fields, eq: [col, val] })
+          return { error: opts.error ?? null }
+        },
+      }),
+    }),
+  } as unknown as ClientType
+}
+
+describe('updateChurchProfile()', () => {
+  it('updates the given fields scoped to the church id', async () => {
+    const calls: Array<{ fields: unknown; eq: [string, unknown] }> = []
+    const res = await updateChurchProfile(updateClient({ calls }), 'c1', {
+      denomination: 'Baptist',
+      consultant_notes: null,
+    })
+    expect(res).toEqual({ error: null })
+    expect(calls).toEqual([
+      { fields: { denomination: 'Baptist', consultant_notes: null }, eq: ['id', 'c1'] },
+    ])
+  })
+  it('surfaces the RLS/DB error message', async () => {
+    const res = await updateChurchProfile(updateClient({ error: { message: 'denied' } }), 'c1', {})
+    expect(res).toEqual({ error: 'denied' })
   })
 })
