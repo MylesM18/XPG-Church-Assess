@@ -14,7 +14,7 @@
 
 - **Exact pinned versions** (do not float): `next@16.2.10`, `react@19.2.7`, `react-dom@19.2.7`, `@supabase/supabase-js@2.110.6`, `@supabase/ssr@0.12.3`, `tailwindcss@4.3.2`, `@tailwindcss/postcss@4.3.2`. Types: `@types/react@^19.2.0`, `@types/react-dom@^19.2.0`. Keep existing pins (`typescript@5.5.4`, `vitest@2.0.5`, `supabase@2.104.0`, `zod@3.23.8`, `js-yaml@4.1.0`).
 - **Next 16 async request APIs (breaking change):** `cookies()`, `headers()`, `params`, and `searchParams` are **async** — always `await` them. `cookies()` is imported from `next/headers`.
-- **M3 touches NO engine code.** `lib/engine/**` and `lib/methodology/**` are not modified. Engine-purity grep MUST stay empty: `grep -rE "from '(next\|@supabase\|@anthropic-ai\|node:fs\|node:net\|node:http)'" lib/engine` → no output.
+- **M3 touches NO engine code.** `lib/engine/**` and `lib/methodology/**` are not modified. Engine-purity grep MUST stay empty: `grep -rE "from '(next\|@supabase\|@anthropic-ai\|openai(/[^']+)?\|node:fs\|node:net\|node:http)'" lib/engine` → no output.
 - **No service-role client in M3.** Do not create `lib/supabase/service.ts`. Do not add `SUPABASE_SERVICE_ROLE_KEY` to any env template. All Supabase reads/writes use the **anon key** (RLS-enforced).
 - **M3 adds NO SQL.** No new migration, no new pgTAP test. `npm run test:db` must stay **6 migration files + 6 test files (72 assertions)** unchanged.
 - **Methodology is data, never hard-coded.** The 8 categories, their order, chain positions, and enabler gates come from `loadMethodology()`. `p_methodology_version` passed to the RPC = `methodology.questions.version`.
@@ -252,7 +252,7 @@ Expected: `✓ Compiled successfully`, route `/` listed, exit 0. (First run writ
 
 Run:
 ```bash
-npm run lint && npm run typecheck && grep -rE "from '(next|@supabase|@anthropic-ai|node:fs|node:net|node:http)'" lib/engine; echo "purity-exit=$?"
+npm run lint && npm run typecheck && grep -rE "from '(next|@supabase|@anthropic-ai|openai(/[^']+)?|node:fs|node:net|node:http)'" lib/engine; echo "purity-exit=$?"
 ```
 Expected: lint reports no errors; `tsc --noEmit` prints nothing (0 errors); grep prints no matching lines and `purity-exit=1` (grep found nothing). If `next lint` reports it is deprecated in this Next version, switch the `lint` script to `"eslint ."` and re-run — the flat config already supports it.
 
@@ -1233,7 +1233,7 @@ npx vitest run
 npm run typecheck
 npm run build
 npm run lint
-grep -rE "from '(next|@supabase|@anthropic-ai|node:fs|node:net|node:http)'" lib/engine; echo "purity-exit=$?"
+grep -rE "from '(next|@supabase|@anthropic-ai|openai(/[^']+)?|node:fs|node:net|node:http)'" lib/engine; echo "purity-exit=$?"
 ```
 Expected: vitest = 75 pre-M3 + new brand tests all pass; typecheck = 0; `next build` succeeds; lint = 0 errors; grep prints nothing with `purity-exit=1`.
 

@@ -12,7 +12,7 @@
 
 Every task's requirements implicitly include this section. Values copied verbatim from `docs/XPG-Engineering-Spec.md` and `docs/Cairn-Eight-Category-Frameworks.md`.
 
-- **Prime directive 1 — deterministic engine, additive AI.** `diagnose()` is a pure function. No `import` from `next`, `@supabase/*`, `@anthropic-ai/*`, `fs` (except the loader), or any network client anywhere under `/lib/engine`. No model call decides any number or verdict. The full report must render with `PROSE_MODE=fallback`.
+- **Prime directive 1 — deterministic engine, additive AI.** `diagnose()` is a pure function. No `import` from `next`, `@supabase/*`, `openai` (or the retired `@anthropic-ai/*`), `fs` (except the loader), or any network client anywhere under `/lib/engine`. No model call decides any number or verdict. The full report must render with `PROSE_MODE=fallback`.
 - **Prime directive 3 — methodology is data, not code.** Questions, anchors, thresholds, benchmarks, and offer copy live in `/methodology/*.yaml`. Every `Diagnosis` is stamped `methodology_version` (the `questions.yaml` version, `"0.1.0"`).
 - **Question text and anchors are verbatim** from `docs/Cairn-Eight-Category-Frameworks.md`. Invent no wording. (Anchors legitimately contain em-dashes and apostrophes — keep them exactly. The "no em-dashes" rule in Spec §8.2 governs *AI-generated report prose only*, never the source question anchors.)
 - **Categories & item IDs (fixed):** stages `guest`(G1–G5), `conn`(C1–C5), `disc`(D1–D5), `vol`(V1–V5), `gen`(GEN1–GEN5), positions 1–5; enablers `gov`(GOV1–5), `comm`(COM1–5), `sys`(SYS1–5), position `null`. 8 categories, 40 items.
@@ -2953,7 +2953,7 @@ Run after Task 24. This is the milestone gate, not a new task with its own commi
 - [ ] **Engine purity** — the engine imports nothing from framework/db/network:
 
 ```bash
-! grep -rnE "from '(next|@supabase/[^']+|@anthropic-ai/[^']+|node:fs|node:http|node:https|node:net|axios|node-fetch)'" lib/engine
+! grep -rnE "from '(next|@supabase/[^']+|@anthropic-ai/[^']+|openai(/[^']+)?|node:fs|node:http|node:https|node:net|axios|node-fetch)'" lib/engine
 ```
 
 Expected: no matches, exit 0 (the leading `!` inverts grep, so a clean engine passes). If anything prints, that import is a prime-directive-1 violation — move it out of `/lib/engine`.

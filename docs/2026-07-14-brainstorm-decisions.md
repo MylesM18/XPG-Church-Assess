@@ -47,7 +47,7 @@ Populate `/methodology` from the Frameworks doc and build the pure engine + 6 fi
 - `tests/engine/` — 6 fixtures with expected diagnoses: **Leaky Bucket, Faithful Remnant (breadth), Broad-but-Shallow (depth), Founder Bottleneck (gov gate), Disagreement (dispersion), Healthy Church (NO_STRUCTURAL_CONSTRAINT — must NOT manufacture a constraint).**
 - **M1 AC:** `npm test` green on all 6 fixtures; engine imports nothing framework/db/network; a fixture renders a full report with `PROSE_MODE=fallback`.
 
-Engine env/config to honor later: `ANTHROPIC_MODEL_PROSE=claude-sonnet-5`, `ANTHROPIC_MODEL_CLASSIFY=claude-haiku-4-5`, `PROSE_MODE=ai|fallback`, `MONOGRAM_LETTERS=1`. Verify model strings via Anthropic docs before deploy.
+Engine env/config to honor later: `OPENAI_MODEL_PROSE=gpt-5.1`, `OPENAI_MODEL_CLASSIFY` (deferred with the classify tier), `PROSE_MODE=ai|fallback`, `MONOGRAM_LETTERS=1`. Verify model strings via OpenAI docs before deploy.
 
 ## Working method
 Use superpowers: brainstorming (this pass) → writing-plans (M1 plan) → subagent-driven-development / TDD to build. Verify by running, not by reading. Small, reviewable commits per milestone. This project dir is not yet a git repo — `git init` at M0.

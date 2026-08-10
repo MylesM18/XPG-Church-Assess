@@ -6,11 +6,11 @@ import type { Response } from '../../lib/engine/types';
 
 // vi.hoisted so `mockParse` exists before the hoisted vi.mock factory runs.
 const { mockParse } = vi.hoisted(() => ({ mockParse: vi.fn() }));
-vi.mock('@anthropic-ai/sdk', () => ({
-  default: vi.fn(() => ({ messages: { parse: mockParse } })),
+vi.mock('openai', () => ({
+  default: vi.fn(() => ({ responses: { parse: mockParse } })),
 }));
-vi.mock('@anthropic-ai/sdk/helpers/zod', () => ({
-  zodOutputFormat: vi.fn(() => ({ type: 'json_schema' })),
+vi.mock('openai/helpers/zod', () => ({
+  zodTextFormat: vi.fn(() => ({ type: 'json_schema' })),
 }));
 
 // Imported AFTER the mocks are declared (vitest hoists vi.mock above imports regardless).
@@ -43,43 +43,93 @@ describe('generateProse', () => {
 
   it('returns ReportBlocks when the reword passes the fact-check', async () => {
     mockParse.mockResolvedValue({
-      parsed_output: asParsed({ ...draftFull, verdict: draftFull.verdict + ' Reworded.' }),
+      status: 'completed',
+      output_parsed: asParsed({ ...draftFull, verdict: draftFull.verdict + ' Reworded.' }),
     });
     const result = await generateProse(dBroken, m);
     expect(result).not.toBeNull();
     expect(result!.verdict).toContain('Guest Experience');
 
     // Pins the SDK call shape (binding Global Constraint): model from
-    // env-with-default, no temperature/top_p (both @deprecated on Sonnet-5),
-    // and the exact retry/timeout config. output_config asserts against this
-    // test's own zodOutputFormat stub, not the real helper's return value.
+    // env-with-default, no temperature/top_p (unsupported on gpt-5.x reasoning
+    // models), low reasoning effort (this is a reword, not a reasoning task),
+    // and the exact retry/timeout config. `text.format` asserts against this
+    // test's own zodTextFormat stub, not the real helper's return value.
     expect(mockParse).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: process.env.ANTHROPIC_MODEL_PROSE ?? 'claude-sonnet-5',
-        max_tokens: 1500,
-        output_config: { format: { type: 'json_schema' } },
+        model: process.env.OPENAI_MODEL_PROSE ?? 'gpt-5.1',
+        max_output_tokens: 4000,
+        reasoning: { effort: 'low' },
+        text: { format: { type: 'json_schema' } },
       }),
-      { timeout: 15000, maxRetries: 0 },
+      { timeout: 30000, maxRetries: 0 },
     );
     const callArgs = mockParse.mock.calls[0]![0];
     expect(callArgs).not.toHaveProperty('temperature');
     expect(callArgs).not.toHaveProperty('top_p');
   });
 
+  // The system prompt moves from a top-level `system:` param (Anthropic) to the first
+  // element of `input` (OpenAI Responses). Pin that it is still sent, and still first —
+  // dropping it silently would let the model invent facts the fact-check may not catch.
+  it('sends the system prompt as the first input element, user draft second', async () => {
+    mockParse.mockResolvedValue({
+      status: 'completed',
+      output_parsed: asParsed(draftFull),
+    });
+    await generateProse(dBroken, m);
+    const callArgs = mockParse.mock.calls[0]![0];
+    expect(callArgs).not.toHaveProperty('system');
+    expect(callArgs).not.toHaveProperty('messages');
+    expect(callArgs.input).toHaveLength(2);
+    expect(callArgs.input[0].role).toBe('system');
+    expect(callArgs.input[0].content).toContain('You are given a fixed set of facts');
+    expect(callArgs.input[1].role).toBe('user');
+  });
+
   it('returns null when the reword fails the fact-check (invented number)', async () => {
     mockParse.mockResolvedValue({
-      parsed_output: asParsed({ ...draftFull, verdict: draftFull.verdict + ' 987654 souls.' }),
+      status: 'completed',
+      output_parsed: asParsed({ ...draftFull, verdict: draftFull.verdict + ' 987654 souls.' }),
     });
     expect(await generateProse(dBroken, m)).toBeNull();
   });
 
-  it('returns null when messages.parse throws (never throws)', async () => {
+  it('returns null when responses.parse throws (never throws)', async () => {
     mockParse.mockRejectedValue(new Error('network down'));
     expect(await generateProse(dBroken, m)).toBeNull();
   });
 
-  it('returns null when parsed_output is null', async () => {
-    mockParse.mockResolvedValue({ parsed_output: null });
+  it('returns null when output_parsed is null', async () => {
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: null });
+    expect(await generateProse(dBroken, m)).toBeNull();
+  });
+
+  // gpt-5.x counts reasoning tokens against max_output_tokens, so a run can end with
+  // status 'incomplete' and output_parsed null. That is indistinguishable from a plain
+  // schema miss unless it logs its own reason — and this file's contract is that
+  // "AI is broken" always stays distinguishable from "AI is off" (the PROSE_MODE gate).
+  it('logs the truncation reason when the response is incomplete', async () => {
+    mockParse.mockResolvedValue({
+      status: 'incomplete',
+      incomplete_details: { reason: 'max_output_tokens' },
+      output_parsed: null,
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(await generateProse(dBroken, m)).toBeNull();
+      const messages = warn.mock.calls.map(c => c.join(' '));
+      expect(messages.some(msg => msg.includes('incomplete') && msg.includes('max_output_tokens'))).toBe(true);
+      // Reason strings only — never report content. `d` carries respondent labels.
+      for (const msg of messages) expect(msg).not.toContain('Guest Experience');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // `incomplete_details` is nullable on the Response type; a missing reason must not throw.
+  it('handles an incomplete response with no incomplete_details', async () => {
+    mockParse.mockResolvedValue({ status: 'incomplete', incomplete_details: null, output_parsed: null });
     expect(await generateProse(dBroken, m)).toBeNull();
   });
 });

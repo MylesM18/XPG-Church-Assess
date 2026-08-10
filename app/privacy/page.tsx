@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 // identity (profiles trigger writes id+email; full_name never written), admin/viewer roles
 // (schema.sql), respondent anonymity (lib/report/view.ts strips + lib/report/pdf/render.ts:28
 // fail-closed guard), Supabase session cookies only (no analytics — audited zero hits), Resend
-// invitation/reminder emails, Vercel cron, optional Anthropic prose (PROSE_MODE, default off),
+// invitation/reminder emails, Vercel cron, optional OpenAI prose (PROSE_MODE, default off),
 // no payments. If a feature changes any of these, this document must change in the same PR.
 function Section({ n, title, children }: { n: string; title: string; children: ReactNode }) {
   return (
@@ -219,9 +219,9 @@ export default function PrivacyPage() {
                 reminder scheduler; it keeps standard server logs.
               </li>
               <li>
-                <strong className="text-ink">Anthropic</strong>: when AI phrasing is enabled, the
-                already-computed report results are sent to Anthropic&rsquo;s Claude API to be
-                worded into readable prose. As our{' '}
+                <strong className="text-ink">OpenAI</strong>: when AI phrasing is enabled, the
+                already-computed report results are sent to OpenAI&rsquo;s API to be worded into
+                readable prose. As our{' '}
                 <Link href="/methodology" className="text-ink underline decoration-line underline-offset-4 hover:decoration-ink">
                   Methodology
                 </Link>{' '}

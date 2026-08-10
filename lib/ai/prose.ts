@@ -3,10 +3,10 @@ import { z } from 'zod/v4';
 /**
  * Mirrors the shipped 10-field ReportBlocks contract (lib/ai/fallback.ts).
  * Required: verdict, next_step, benchmark_note, dependency_note. The 6 optional fields are
- * `.nullable()` (present-but-null) rather than `.optional()`: Anthropic strict
- * structured outputs emit every property, so the model returns null for an
- * absent field. passesFactCheck (Task 2) treats null/undefined/'' identically,
- * so the field-parity invariant holds regardless.
+ * `.nullable()` (present-but-null) rather than `.optional()`: OpenAI strict
+ * structured outputs require every property in `required`, so the model returns
+ * null for an absent field. passesFactCheck (Task 2) treats null/undefined/''
+ * identically, so the field-parity invariant holds regardless.
  */
 export const ReportBlocksSchema = z.object({
   verdict: z.string(),
@@ -129,8 +129,8 @@ export function passesFactCheck(
   return true;
 }
 
-import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import OpenAI from 'openai';
+import { zodTextFormat } from 'openai/helpers/zod';
 import { fallbackProse } from './fallback';
 
 const SYSTEM_PROMPT =
@@ -179,14 +179,20 @@ export async function generateProse(
     // Inside the try: fallbackProse indexes d.categories, so a malformed Diagnosis would
     // throw past this function and escape unlogged if the draft were built outside it.
     const draft = fallbackProse(d, methodology);
-    const client = new Anthropic(); // reads ANTHROPIC_API_KEY from env (server-only)
-    const model = process.env.ANTHROPIC_MODEL_PROSE ?? 'claude-sonnet-5';
-    const message = await client.messages.parse(
+    const client = new OpenAI(); // reads OPENAI_API_KEY from env (server-only)
+    const model = process.env.OPENAI_MODEL_PROSE ?? 'gpt-5.1';
+    const response = await client.responses.parse(
       {
         model,
-        max_tokens: 1500,
-        system: SYSTEM_PROMPT,
-        messages: [
+        // Counts reasoning tokens as well as output, so this is not comparable to a
+        // pure-output budget. Sized well above the ~10-field JSON block the schema
+        // admits; see the `status === 'incomplete'` branch below for the failure mode
+        // when it is not enough.
+        max_output_tokens: 4000,
+        // This is a reword of a finished draft, not a reasoning task.
+        reasoning: { effort: 'low' },
+        input: [
+          { role: 'system', content: SYSTEM_PROMPT },
           {
             role: 'user',
             content:
@@ -196,12 +202,25 @@ export async function generateProse(
               JSON.stringify(d, null, 2),
           },
         ],
-        output_config: { format: zodOutputFormat(ReportBlocksSchema) },
+        text: { format: zodTextFormat(ReportBlocksSchema, 'report_blocks') },
       },
-      { timeout: 15000, maxRetries: 0 },
+      { timeout: 30000, maxRetries: 0 },
     );
 
-    const parsed = message.parsed_output;
+    // gpt-5.x bills reasoning tokens against max_output_tokens, so the budget can be
+    // exhausted before any JSON is emitted — status 'incomplete' with output_parsed null.
+    // Without its own reason string this lands in the generic "no parsed output" branch
+    // below and reads as a schema miss, or worse as "AI is off". Both values of
+    // `incomplete_details.reason` ('max_output_tokens' | 'content_filter') are fixed
+    // enum strings, never report content; the field itself is nullable.
+    if (response.status === 'incomplete') {
+      console.warn(
+        `[m5b] AI prose: response incomplete (${response.incomplete_details?.reason ?? 'reason unreported'}); falling back to deterministic prose`,
+      );
+      return null;
+    }
+
+    const parsed = response.output_parsed;
     if (!parsed) {
       console.warn('[m5b] AI prose: model returned no parsed output; falling back to deterministic prose');
       return null;

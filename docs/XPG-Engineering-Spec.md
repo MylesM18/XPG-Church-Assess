@@ -6,7 +6,7 @@
 - `Cairn-Eight-Category-Frameworks.md`, the eight categories, every question, every anchor, scoring, chain logic, blind-spot triggers, offers. **This file defines the methodology content. Do not invent question text; take it from here.**
 - `XPG-Church-Health-Assessment-Build-Spec.md`, the product rationale and the acceptance philosophy.
 
-**Stack:** Next.js (App Router) · Supabase (Postgres + Auth + RLS + Storage) · Anthropic API (server-side SDK) · Resend (email) · Vercel (host).
+**Stack:** Next.js (App Router) · Supabase (Postgres + Auth + RLS + Storage) · OpenAI API (server-side SDK) · Resend (email) · Vercel (host).
 
 ---
 
@@ -420,25 +420,25 @@ Port the six fixtures from the build spec, retuned for the eight categories. At 
 
 ## 8. The two AI calls (`/lib/ai`)
 
-Server-side, official `@anthropic-ai/sdk`. **API key server-only.** Both calls are additive; neither decides anything.
+Server-side, official `openai` SDK. **API key server-only.** Both calls are additive; neither decides anything.
 
 ### 8.1 `classify.ts`, free-text → signals — DEFERRED (no free-text collected yet)
 - Input: the two free-text answers (D1 "one thing you'd fix", D2 "what you already tried that didn't work").
 - Output (structured): `{ stated_priority: string, failed_interventions: string[], sentiment: 'urgent'|'steady'|'discouraged', themes: string[] }`.
-- Model: `ANTHROPIC_MODEL_CLASSIFY` (default `claude-haiku-4-5`). Use **structured outputs** (the API supports it) so the shape is guaranteed. It classifies; it never concludes.
+- Model: `OPENAI_MODEL_CLASSIFY` (model string picked when this tier is actually built). Use **structured outputs** (the Responses API supports them via `zodTextFormat`) so the shape is guaranteed. It classifies; it never concludes.
 - Used to enrich the report ("you told us you already tried a small-group relaunch, here's why the diagnosis accounts for that"). If it fails, the report simply omits that enrichment.
 
 ### 8.2 `prose.ts`, Diagnosis → report blocks
 - Input: the finished `Diagnosis` struct. (Classify signals deferred — see §8.1; M5b builds prose only.)
 - Output: the nine-field `ReportBlocks` shape `{ verdict, evidence?, blind_spot?, cost?, do_not_work_on?, next_step, gating?, dispersion?, benchmark_note }` (required: verdict, next_step, benchmark_note). The offer is templated from `offers.yaml`, not written by the model. As shipped in M5b, the model rewords a fixed `fallbackProse` draft and its output is gated by `passesFactCheck` (field parity + numeric containment + category fidelity).
-- Model: `ANTHROPIC_MODEL_PROSE` (default `claude-sonnet-5`).
+- Model: `OPENAI_MODEL_PROSE` (default `gpt-5.1`).
 - **System-prompt constraints (spec these into the prompt):**
   - You are given a fixed set of facts. You may not add, change, reorder, or invent any number, category, or verdict.
   - Write in this register: plain words, warm but precise. **No em-dashes. No churchy clichés.** Sentence case. Active voice. Name things the way a church leader would.
   - If a fact is absent from the struct, do not supply it.
   - Return only the JSON block shape requested.
 - **Determinism:** cache the result in `diagnoses.prose` keyed by `response_hash`, so the report does not reword itself on every view. Regenerate only when the response set changes.
-- Note the Sonnet 5 caveat: it rejects non-default sampling parameters, do not set custom `temperature`/`top_p`; call it plainly.
+- Note the reasoning-model caveat: `gpt-5.1` rejects non-default sampling parameters, do not set custom `temperature`/`top_p`; call it plainly with `reasoning: { effort: 'low' }`. `max_output_tokens` counts reasoning tokens, so budget it high enough (shipped: 4000) that a truncated `status: 'incomplete'` response stays the rare case, and log it distinctly when it happens.
 
 ### 8.3 The fallback (`fallback.ts`) and the toggle
 - `PROSE_MODE=ai|fallback` env switch. And on **any** AI error/timeout, auto-fall-back.
@@ -472,16 +472,16 @@ Server-side, official `@anthropic-ai/sdk`. **API key server-only.** Both calls a
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=        # server only; used ONLY in /api/respond/*
-ANTHROPIC_API_KEY=                # server only
-ANTHROPIC_MODEL_PROSE=claude-sonnet-5
-ANTHROPIC_MODEL_CLASSIFY=claude-haiku-4-5
+OPENAI_API_KEY=                   # server only
+OPENAI_MODEL_PROSE=gpt-5.1
+OPENAI_MODEL_CLASSIFY=            # deferred with §8.1; unset until that tier is built
 PROSE_MODE=ai                     # ai | fallback
 RESEND_API_KEY=
 EMAIL_FROM="Cairn <assess@yourdomain>"
 APP_URL=https://…
 MONOGRAM_LETTERS=1                # 1 | 2
 ```
-Verify current model strings against the Anthropic models docs before deploy, strings move with releases. Keep them in env so a change is a config edit, not a code change.
+Verify current model strings against the OpenAI models docs before deploy, strings move with releases. Keep them in env so a change is a config edit, not a code change.
 
 ---
 
@@ -530,7 +530,7 @@ Do not proceed to the next milestone until the current one meets its acceptance 
 
 - [ ] RLS enabled on every table; default-deny; member-gated selects; admin-gated member writes.
 - [ ] No `/lib/supabase/service.ts` exists and no service-role key is used anywhere; the two `/api/respond/*` handlers run on the anon-key client (RLS) via SECURITY DEFINER RPCs.
-- [ ] Service-role key and `ANTHROPIC_API_KEY` never referenced in any client component or `NEXT_PUBLIC_*` var.
+- [ ] Service-role key and `OPENAI_API_KEY` never referenced in any client component or `NEXT_PUBLIC_*` var.
 - [ ] Invitation tokens and share tokens are unguessable UUIDs; invitations expire; share links are opt-in, revocable, and can expire.
 - [ ] Respond handlers validate token status/expiry and validate every submitted value (int 1–10, item belongs to category).
 - [ ] Rate limiting on `/api/respond/*` and `/api/invitations`.
