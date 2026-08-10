@@ -3,9 +3,12 @@ import { churchName, loadChurchForMember, createChurchWithAdmin, loadChurchProfi
 
 type ClientType = Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>
 
-function fakeClient(data: unknown, eqCols: string[] = []) {
+function fakeClient(data: unknown, eqCols: string[] = [], selectArgs: string[] = []) {
   const chain = {
-    select: () => chain,
+    select: (cols?: string) => {
+      if (cols !== undefined) selectArgs.push(cols)
+      return chain
+    },
     eq: (col: string) => {
       eqCols.push(col)
       return chain
@@ -127,6 +130,14 @@ describe('loadChurchProfile()', () => {
     const eqCols: string[] = []
     await loadChurchProfile(fakeClient(PROFILE, eqCols), 'c1')
     expect(eqCols).toEqual(['id'])
+  })
+  it('selects every ChurchProfile column by name — not just whatever the fixture echoes back', async () => {
+    const selectArgs: string[] = []
+    await loadChurchProfile(fakeClient(PROFILE, [], selectArgs), 'c1')
+    const selected = selectArgs[0] ?? ''
+    for (const key of Object.keys(PROFILE) as Array<keyof ChurchProfile>) {
+      expect(selected, `PROFILE_COLUMNS must name the "${key}" column`).toContain(key)
+    }
   })
 })
 
