@@ -3,20 +3,47 @@ import { describe, expect, it } from 'vitest';
 
 const stripTs = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*$/gm, '');
 
+/**
+ * The clustering task (plan 2) and its gate are the ONLY files under lib/ai/** allowed to
+ * touch reflection text or verbatims. Everything else in the tree is still forbidden from
+ * both, and that half of the rule is what keeps this test non-vacuous: it constrains every
+ * file that exists today, and it fires the moment plan 3's lib/ai/sections.ts lands with a
+ * reference to either concept.
+ *
+ * `verbatim` is guarded alongside `reflection` on purpose. A section composer could pull
+ * theme verbatims out of the facts pack without ever writing the word "reflection" — spec
+ * line 72 routes verbatims facts -> S8 renderer exclusively, never into a composer input.
+ */
+const ALLOWED = ['themes.ts', 'theme-gates.ts'];
+
 const files = readdirSync('lib/ai', { recursive: true, encoding: 'utf8' })
   .filter((f) => f.endsWith('.ts') || f.endsWith('.tsx'));
 
-describe('AI prose never reads reflections', () => {
+const guarded = files.filter((f) => !ALLOWED.includes(f));
+
+describe('reflections and verbatims reach only the clustering task and its gate', () => {
   it('finds the ai module', () => {
     expect(files.length).toBeGreaterThan(0);
   });
 
-  it.each(files)('%s references neither reflection nor outreachVoices, case-insensitively', (file) => {
+  it('the allowlist names only the clustering task and its gate', () => {
+    // Pinned by value, not by length: widening the boundary must be a deliberate edit to
+    // this line, visible in review, rather than a quiet append somewhere else in the file.
+    expect(ALLOWED).toEqual(['themes.ts', 'theme-gates.ts']);
+  });
+
+  it('there is at least one guarded file left to check', () => {
+    // Without this, allowlisting every file would make the scan below vacuously pass.
+    expect(guarded.length).toBeGreaterThan(0);
+  });
+
+  it.each(guarded)('%s references neither reflection, verbatim nor outreachVoices', (file) => {
     // Lowercased so a PascalCase/camelCase identifier (OutreachVoicesGroup, initialReflections,
-    // rawReflection, ...) cannot dodge a case-sensitive substring check — those are exactly the
-    // casings this codebase actually uses for the concepts being excluded here.
+    // rawReflection, VerbatimCandidate, ...) cannot dodge a case-sensitive substring check —
+    // those are exactly the casings this codebase actually uses for the concepts excluded here.
     const src = stripTs(readFileSync(`lib/ai/${file}`, 'utf8')).toLowerCase();
     expect(src).not.toContain('reflection');
+    expect(src).not.toContain('verbatim');
     expect(src).not.toContain('outreachvoices');
   });
 });
