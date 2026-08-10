@@ -51,3 +51,12 @@ correlation:
   practical_floor: 0.5      # |r| below this is not reported however significant
   max_unexpected: 2
   alpha: 0.05
+
+# Tier bands over Diagnosis.capacity (spec P1). Half-open lower bounds: a capacity of 84.6
+# is healthy_stretched, 85.0 is healthy_ready. Dashboard/register label ONLY — the tier
+# never selects the report archetype (the ToC engine stays the diagnosis brain).
+tiers:
+  healthy_ready:     { min: 85, name: "Healthy & Ready" }
+  healthy_stretched: { min: 70, name: "Healthy but Stretched" }
+  strained:          { min: 55, name: "Strained" }
+  at_risk:           { min: 0,  name: "At Risk" }

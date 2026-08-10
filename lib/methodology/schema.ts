@@ -49,6 +49,8 @@ export const DependencySchema = z.object({
   statement: z.string().min(1),
 });
 
+export const TierBandSchema = z.object({ min: z.number(), name: z.string() });
+
 export const RulesSchema = z.object({
   version: z.string().min(1),
   chain: z.array(z.string()).length(5),
@@ -79,6 +81,12 @@ export const RulesSchema = z.object({
     practical_floor: z.number().min(0).max(1),
     max_unexpected: z.number().int().min(0),
     alpha: z.number().min(0).max(1),
+  }),
+  tiers: z.object({
+    healthy_ready: TierBandSchema,
+    healthy_stretched: TierBandSchema,
+    strained: TierBandSchema,
+    at_risk: TierBandSchema,
   }),
 });
 
