@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { createHash } from 'node:crypto';
 import { loadMethodology } from '@/lib/methodology/load';
 import { responseHash } from '@/lib/report/response-hash';
 import { reportInputsHash } from '@/lib/report/report-hash';
@@ -80,12 +79,11 @@ describe('the share path can never hash-match a persisted report', () => {
   });
 
   it('pins that respondent_label is what makes them differ', () => {
-    // If a future edit drops respondent_label from the response-hash serialization, the two
-    // hashes above collide and the share path starts matching persisted AI reports — a P5
-    // violation. This assertion is the tripwire for that edit.
-    const same = rows.map((r) => ({ ...r, respondent_label: 'X' }));
-    const alsoSame = rows.map((r) => ({ ...r, respondent_label: 'X' }));
-    expect(responseHash(same, '0.3.0')).toBe(responseHash(alsoSame, '0.3.0'));
-    expect(createHash('sha256').update('sentinel').digest('hex')).toHaveLength(64);
+    // Two row sets, identical in every field except respondent_label, must hash differently.
+    // If a future edit drops respondent_label from the response-hash serialization (or
+    // normalizes it away), this assertion fails first.
+    const labeledX = rows.map((r) => ({ ...r, respondent_label: 'X' }));
+    const labeledY = rows.map((r) => ({ ...r, respondent_label: 'Y' }));
+    expect(responseHash(labeledX, '0.3.0')).not.toBe(responseHash(labeledY, '0.3.0'));
   });
 });
