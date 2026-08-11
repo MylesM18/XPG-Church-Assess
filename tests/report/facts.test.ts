@@ -72,16 +72,23 @@ function resp(item_id: string, category_id: string, value: number, who: string):
   return { category_id, item_id, value, respondent_label: who, respondent_id: who };
 }
 
+// denomination + growth_trajectory deliberately avoid the letters a/b/c: RESPONSES below
+// labels its respondents 'a' / 'b' / 'c', and Task 3's profile anonymity guard treats any
+// of those as a substring match. 'Non-denominational' and 'plateaued' both contain 'a', so
+// once the guard is live it drops them from every profile fixture in this file for a reason
+// unrelated to what this describe block is testing (null-field omission). RESPONSES itself
+// can't change here — the new anonymity-guard tests below key their NAMES map off the exact
+// strings 'a'/'b'/'c'.
 const CHURCH: ChurchFacts = {
   name: 'Grace Chapel',
-  denomination: 'Non-denominational',
+  denomination: 'Independent',
   context: null,
   attendance_band: '250_499',
   adults_band: null,
   staff_fte_band: null,
   budget_band: null,
   church_age_band: null,
-  growth_trajectory: 'plateaued',
+  growth_trajectory: 'holding',
   campuses_band: null,
   facility_status: 'owned',
   leadership_history: null,
@@ -206,9 +213,9 @@ describe('buildFacts — dossier absorptions', () => {
 describe('buildFacts — profile subset (locked decision 6: omit gracefully)', () => {
   it('keeps only non-null fields, name excluded (it lives on cover)', () => {
     expect(facts.profile).toEqual({
-      denomination: 'Non-denominational',
+      denomination: 'Independent',
       attendance_band: '250_499',
-      growth_trajectory: 'plateaued',
+      growth_trajectory: 'holding',
       facility_status: 'owned',
     });
   });
@@ -248,5 +255,63 @@ describe('buildFacts — gating + themes defaults', () => {
     expect(json).not.toMatch(/respondent_label|respondent_id/);
     // The fixture labels are 'a'/'b'/'c' — none may survive as a JSON string value.
     for (const who of ['"a"', '"b"', '"c"']) expect(json).not.toContain(who);
+  });
+});
+
+describe('buildFacts — profile anonymity guard', () => {
+  // RESPONSES labels its respondents 'a' / 'b' / 'c'. A one-character label is a substring of
+  // almost any prose, so reusing it here would drop every profile field and the tests would
+  // pass for the wrong reason. Re-label with realistic names so these cases exercise the
+  // guard rather than the fixture. (The general point — that very short display labels
+  // over-match — is documented scope on the primitive, not a bug in it.)
+  const NAMES: Record<string, string> = { a: 'Priscilla Vandermeer', b: 'Dana Okafor', c: 'Marcus Reyes' };
+  const NAMED: Response[] = RESPONSES.map((r) => ({
+    ...r,
+    respondent_label: NAMES[r.respondent_label] ?? r.respondent_label,
+  }));
+  const UNLABELLED: Response[] = RESPONSES.map((r) => ({ ...r, respondent_label: '' }));
+
+  const profileOf = (church: Partial<ChurchFacts>, responses: Response[] = NAMED) =>
+    buildFacts({
+      diagnosis: makeDiagnosis(),
+      methodology,
+      responses,
+      church: { ...CHURCH, ...church },
+      completedAt: null,
+    }).profile;
+
+  it('keeps a profile field that names nobody', () => {
+    expect(profileOf({ consultant_notes: 'Two campuses merged last year.' }).consultant_notes)
+      .toBe('Two campuses merged last year.');
+  });
+
+  it('omits a profile field that reproduces a respondent name', () => {
+    // The back door the guard closes: churches.consultant_notes is admin free text copied
+    // verbatim into FactsPack.profile, and plan 3's composer will put the pack in a model
+    // prompt. Drop the field, not the report.
+    expect(profileOf({ consultant_notes: 'Priscilla Vandermeer coordinated the responses.' }).consultant_notes)
+      .toBeUndefined();
+  });
+
+  it('omits only the offending field, not the whole profile', () => {
+    const profile = profileOf({
+      leadership_history: 'Priscilla Vandermeer became lead pastor in 2019.',
+      consultant_notes: 'Budget is flat year over year.',
+    });
+    expect(profile.leadership_history).toBeUndefined();
+    expect(profile.consultant_notes).toBe('Budget is flat year over year.');
+  });
+
+  it('matches case-insensitively', () => {
+    expect(profileOf({ consultant_notes: 'notes from PRISCILLA VANDERMEER' }).consultant_notes)
+      .toBeUndefined();
+  });
+
+  it('keeps every field when no respondent has a usable label', () => {
+    // The blank-label trap, at the integration level: a run whose labels are all empty must
+    // not cause every profile field to vanish.
+    expect(
+      profileOf({ consultant_notes: 'Two campuses merged last year.' }, UNLABELLED).consultant_notes,
+    ).toBe('Two campuses merged last year.');
   });
 });
