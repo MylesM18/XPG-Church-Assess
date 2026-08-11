@@ -53,3 +53,27 @@ export function containsRespondentLabel(text: string, labels: readonly string[])
   }
   return false;
 }
+
+/**
+ * Where a caller's respondent labels came from, as a value the compiler can check.
+ *
+ * `{kind:'known'}` — the caller read real labels (get_run_responses). An EMPTY list here is a
+ * deliberate statement that this run genuinely has no labels, not an accident.
+ * `{kind:'redacted'}` — the caller's rows came from a surface that redacts labels, i.e. the
+ * share RPC (supabase/migrations/20260728000400_rpc_get_shared_run_responses.sql:48 emits
+ * ''::text). No label list exists, so no label-based guard can be enforced, so consumers must
+ * fail closed rather than run a guard that can never fire.
+ *
+ * This union exists because the old contract — a bare `string[]` — made those two cases
+ * indistinguishable: the share path yielded `[]` and every guard downstream became a silent
+ * no-op. Removing an arm to reintroduce that is now a compile error.
+ */
+export type LabelSource = { kind: 'known'; labels: string[] } | { kind: 'redacted' };
+
+/**
+ * The constructor callers reach for. respondentLabels() survives as the primitive behind it
+ * (and keeps its caller-precondition comment at :26-31), but is no longer the entry point.
+ */
+export function knownLabels(rows: ReadonlyArray<{ respondent_label: string }>): LabelSource {
+  return { kind: 'known', labels: respondentLabels(rows) };
+}

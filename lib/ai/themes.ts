@@ -106,6 +106,7 @@ import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import type { Methodology } from '../methodology/schema';
 import type { ThemeClusterFact } from '../report/facts';
+import type { LabelSource } from '../report/anonymity';
 import { gateThemes, methodologyItemIds } from './theme-gates';
 
 const SYSTEM_PROMPT =
@@ -139,11 +140,20 @@ const SYSTEM_PROMPT =
 export async function clusterThemes(
   rows: readonly ReflectionRow[],
   methodology: Methodology,
-  labels: readonly string[],
+  labelSource: LabelSource,
 ): Promise<ThemeClusterFact[] | null> {
   // Nothing to cluster is not a failure: no API call, no log, and the caller gets a
   // determinate empty answer it can cache like any other.
   if (rows.length === 0) return [];
+
+  // Fail closed. A redacted source has no label list, so the theme anonymity gate could not
+  // fire — and clustering runs over raw reflection text, the highest-risk payload in the
+  // system. `[]` rather than `null`: this is a determinate verdict, not a transient failure,
+  // so the caller persists it instead of burning its one re-attempt on the same outcome.
+  if (labelSource.kind === 'redacted') {
+    console.warn('[report] themes: label source redacted; refusing to cluster without an anonymity gate');
+    return [];
+  }
 
   try {
     const { rows: indexed, owners } = indexReflections(rows);
@@ -165,8 +175,9 @@ export async function clusterThemes(
             // `indexed`, NEVER `rows`. This single line is the whole anonymity design:
             // ReflectionRow carries respondent_key and IndexedReflection cannot, so identity
             // cannot reach the model without an edit right here. tests/outreach/
-            // ai-exclusion.test.ts pins it in Task 7. `labels` is a gate input only — it is
-            // deliberately never sent, because naming the people to avoid would name them.
+            // ai-exclusion.test.ts pins it in Task 7. `labelSource.labels` is a gate input
+            // only — it is deliberately never sent, because naming the people to avoid would
+            // name them.
             content: 'Reflections to cluster:\n' + JSON.stringify(indexed, null, 2),
           },
         ],
@@ -198,7 +209,7 @@ export async function clusterThemes(
     const gated = gateThemes(parsed, {
       owners,
       sourceTexts: rows.map((r) => r.text),
-      labels,
+      labels: labelSource.labels,
       validItemIds: methodologyItemIds(methodology),
       writerCount: reflectionWriterCount(rows),
     });
