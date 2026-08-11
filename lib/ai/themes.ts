@@ -69,7 +69,7 @@ export function indexReflections(rows: readonly ReflectionRow[]): IndexedReflect
 
 /**
  * P3's verbatim pool: distinct reflection-WRITING respondents, which is deliberately stricter
- * than the run's respondent count (lib/report/facts.ts:175). If only two people wrote
+ * than the run's respondent count (lib/report/facts.ts:182). If only two people wrote
  * reflections, a verbatim identifies among two even when thirty answered numerically.
  */
 export function reflectionWriterCount(rows: readonly ReflectionRow[]): number {
