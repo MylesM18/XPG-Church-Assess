@@ -104,7 +104,7 @@ type ReadingBand = 'severe' | 'broken' | 'watch' | 'holding';
  * that single state into the finer severe/broken bands the copy needs. 'watch'
  * and 'ok' pass straight through to 'watch'/'holding'.
  */
-function readingBand(state: DiagnosisCategory['state'], score: number, severeThreshold: number): ReadingBand {
+export function readingBand(state: DiagnosisCategory['state'], score: number, severeThreshold: number): ReadingBand {
   if (state === 'broken' || state === 'gate') return score < severeThreshold ? 'severe' : 'broken';
   if (state === 'watch') return 'watch';
   return 'holding';
@@ -241,7 +241,7 @@ function buildCover(d: Diagnosis, methodology: Methodology): CoverView {
  * with a PLAIN lexicographic compare — never localeCompare, which is locale- and
  * ICU-version-dependent and would make report output non-deterministic across machines.
  */
-function buildOutreachVoices(
+export function buildOutreachVoices(
   methodology: Methodology,
   reflections: Array<{ item_id: string; reflection: string | null }>,
 ): Map<string, OutreachVoicesGroup[]> {
