@@ -18,6 +18,11 @@ describe('offers.yaml', () => {
   it('keeps the guest hook verbatim', () => {
     expect(offers.stages.guest!.hook).toBe("You may be paying for guests you aren't keeping.");
   });
+  it('keeps the foundation hook verbatim', () => {
+    expect(offers.foundation.hook).toBe(
+      "Nothing in your pipeline is broken — but something underneath it is holding you back. Let's fix the foundation before you build on it.",
+    );
+  });
 });
 
 describe('copy.yaml', () => {
