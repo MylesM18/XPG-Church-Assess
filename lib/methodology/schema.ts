@@ -117,6 +117,12 @@ export const OffersSchema = z.object({
     both: OfferSchema,
   }),
   no_constraint: OfferSchema,
+  // Named-and-required, not optional and not folded into `stages` (z.record) — same rationale
+  // as the comment above DossierReadingBandSchema: a missing key must be a LOAD-time failure,
+  // not an `undefined` surfacing downstream in a rendered offer sentence. Added for Natalie's
+  // ruling 12 (task 5, fix round 1): foundation needs its own offer distinct from
+  // no_constraint, whose "nothing here is broken" hook contradicts a gating finding.
+  foundation: OfferSchema,
 });
 
 // A z.record(...) here would validate at load with any subset of the four keys present —

@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { loadMethodology } from '@/lib/methodology/load';
-import type { Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types';
+import type { CategoryState, Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types';
 import { buildFacts, type BuildFactsArgs, type ChurchFacts, type FactsPack } from '@/lib/report/facts';
 import { fallbackSection, fallbackSections } from '@/lib/report/fallback-sections';
+import { readingBand } from '@/lib/report/view';
 
 // No healthy-church/broken-conn/gates-only fixtures exist anywhere in the repo (recon
 // divergence #1 / controller ruling 1) — built inline here, following the local/unexported
@@ -131,6 +132,21 @@ const genConstraintFacts: FactsPack = buildFacts({
   }),
 });
 
+// constraint archetype whose primary is an enabler-shaped id (gov) that ALSO exists under
+// action_library.enablers with DIFFERENT text (ruling 7's trap) — proves the constraint path
+// reads action_library.categories.gov, not action_library.enablers.gov. Top-level (not
+// inline in the ruling-7 test) so the generic archetype-property suite below can cover it too
+// (fix round 1, item C).
+const govConstraintFacts: FactsPack = buildFacts({
+  ...baseArgs,
+  diagnosis: makeDiagnosis({
+    categories: CAT_IDS.map((id, i) =>
+      makeCategory(id, [72, 68, 66, 61, 58, 20, 55, 64][i]!, { state: id === 'gov' ? 'broken' : 'ok' }),
+    ),
+    primary_constraint: { category_id: 'gov' },
+  }),
+});
+
 // foundation archetype: TWO gated enablers (comm, sys) — Natalie's ruling 8: 2 gated enablers
 // must yield 6 S10 bullets (3 phases x 2 enablers), not 3.
 const foundationFacts: FactsPack = buildFacts({
@@ -151,11 +167,19 @@ const foundationFacts: FactsPack = buildFacts({
 
 const IDS = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11', 's12', 'appendix'] as const;
 
+// 3-tuple [label, archetypeKey, facts]: archetypeKey indexes banned_phrases/report templates
+// (only 'capacity'|'constraint'|'foundation' exist there), while label disambiguates the two
+// extra constraint-archetype fixtures (gen-primary, gov-primary) added for fix-round-1 item C —
+// both are archetype 'constraint' but exercise different lookups (ruling 4's gen fallthrough,
+// ruling 7's categories-vs-enablers trap) and deserve the same blanket property coverage as the
+// three base archetypes.
 describe.each([
-  ['capacity', capacityFacts],
-  ['constraint', constraintFacts],
-  ['foundation', foundationFacts],
-] as const)('%s archetype', (archetype, facts) => {
+  ['capacity', 'capacity', capacityFacts],
+  ['constraint', 'constraint', constraintFacts],
+  ['foundation', 'foundation', foundationFacts],
+  ['gen-primary constraint', 'constraint', genConstraintFacts],
+  ['gov-primary constraint', 'constraint', govConstraintFacts],
+] as const)('%s (%s archetype)', (_label, archetypeKey, facts) => {
   const all = fallbackSections({ facts, methodology, reflections: [] });
 
   it('produces every section with a non-empty title and body', () => {
@@ -175,7 +199,7 @@ describe.each([
 
   it('uses no other archetype banned phrase', () => {
     const text = IDS.map((id) => `${all[id].body} ${all[id].bullets.join(' ')}`).join(' ').toLowerCase();
-    for (const phrase of methodology.report.banned_phrases[archetype]) {
+    for (const phrase of methodology.report.banned_phrases[archetypeKey]) {
       expect(text, phrase).not.toContain(phrase.toLowerCase());
     }
   });
@@ -190,6 +214,41 @@ describe('S2 profile bullets', () => {
   it('lists each populated profile field', () => {
     const facts = { ...capacityFacts, profile: { context: 'suburban' } };
     expect(fallbackSection('s2', { facts, methodology, reflections: [] }).bullets).toHaveLength(1);
+  });
+});
+
+describe('S3 health dashboard', () => {
+  it('renders one line per category, strongest first, as `${name}: ${score} out of 100 — ${band}`', () => {
+    const s3 = fallbackSection('s3', { facts: capacityFacts, methodology, reflections: [] });
+    expect(s3.bullets).toHaveLength(capacityFacts.categories.length);
+    capacityFacts.categories.forEach((c, i) => {
+      // Same band-selection function view.ts uses (ruling 9's exported readingBand) — computed
+      // independently here, not copy-pasted from the implementation, so this test would catch a
+      // drift between fallback-sections.ts's bandRead() and view.ts's readingBand().
+      const band = readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds.severe);
+      const expected = `${c.name}: ${c.score} out of 100 — ${methodology.copy.dossier.reading[c.kind][band]}`;
+      expect(s3.bullets[i], c.id).toBe(expected);
+    });
+  });
+
+  it('reads a broken stage via the stage band text and a gated enabler via the enabler band text (ruling 9 narrowing)', () => {
+    // CategoryFact.state is plain `string` (facts.ts:22) but readingBand's parameter is
+    // DiagnosisCategory['state'] (the narrower CategoryState union) — this is the call site
+    // where fallback-sections.ts's bandRead() casts across that gap. Exercised here with a real
+    // 'broken' stage and a real 'gate' enabler, not just a happy-path 'ok' state.
+    const s3c = fallbackSection('s3', { facts: constraintFacts, methodology, reflections: [] });
+    const connIdx = constraintFacts.categories.findIndex((c) => c.id === 'conn');
+    const conn = constraintFacts.categories[connIdx]!;
+    expect(conn.kind).toBe('stage');
+    expect(conn.state).toBe('broken');
+    expect(s3c.bullets[connIdx]).toContain(methodology.copy.dossier.reading.stage.broken);
+
+    const s3f = fallbackSection('s3', { facts: foundationFacts, methodology, reflections: [] });
+    const commIdx = foundationFacts.categories.findIndex((c) => c.id === 'comm');
+    const comm = foundationFacts.categories[commIdx]!;
+    expect(comm.kind).toBe('enabler');
+    expect(comm.state).toBe('gate');
+    expect(s3f.bullets[commIdx]).toContain(methodology.copy.dossier.reading.enabler.broken);
   });
 });
 
@@ -242,26 +301,34 @@ describe('S10 roadmap', () => {
     expect(s10.bullets.filter((b) => /^(30|60|90) days — /.test(b))).toHaveLength(3);
   });
 
-  it('foundation with 2 gated enablers produces 3 x 2 = 6 phase bullets (Natalie ruling 8)', () => {
+  it('foundation with 2 gated enablers produces 3 x 2 = 6 phase bullets (Natalie ruling 8) — S10 is unchanged by ruling 11-REVISED', () => {
     const s10 = fallbackSection('s10', { facts: foundationFacts, methodology, reflections: [] });
     expect(s10.bullets.filter((b) => /^(30|60|90) days — /.test(b))).toHaveLength(6);
   });
 });
 
-describe('S11 mirrors S10', () => {
-  it('has one bullet per roadmap phase', () => {
+describe('S11 mirrors S10 (ruling 11-REVISED — supersedes the withdrawn per-bullet ruling 11)', () => {
+  it('has one bullet per distinct roadmap phase', () => {
     const s10 = fallbackSection('s10', { facts: constraintFacts, methodology, reflections: [] });
     const s11 = fallbackSection('s11', { facts: constraintFacts, methodology, reflections: [] });
+    // Under per-phase mirroring this still holds for the constraint archetype: it has exactly
+    // one roadmap entry per phase already, so 3 === 3.
     expect(s11.bullets).toHaveLength(s10.bullets.filter((b) => /^(30|60|90) days — /.test(b)).length);
   });
 
-  it('mirrors S10 per-bullet for the foundation archetype too (controller ruling 11): ' +
-    '3 x gatedEnablerCount on both sides', () => {
+  it('collapses a 2-gated-enabler foundation to exactly 3 S11 bullets, NOT 6 (the withdrawn ruling 11 produced 6 byte-identical duplicates here)', () => {
     const s10 = fallbackSection('s10', { facts: foundationFacts, methodology, reflections: [] });
     const s11 = fallbackSection('s11', { facts: foundationFacts, methodology, reflections: [] });
     const s10PhaseBullets = s10.bullets.filter((b) => /^(30|60|90) days — /.test(b));
-    expect(s10PhaseBullets).toHaveLength(3 * foundationFacts.gating.length);
-    expect(s11.bullets).toHaveLength(s10PhaseBullets.length);
+    expect(s10PhaseBullets).toHaveLength(3 * foundationFacts.gating.length); // S10: ruling 8 unchanged
+    expect(s11.bullets).toHaveLength(3); // S11: mirrors the 3 PHASES, not S10's 6 entries
+  });
+
+  it('every S11 bullet is distinct, for every archetype including multi-enabler foundation (the covering assertion the withdrawn ruling 11 defect slipped past)', () => {
+    for (const facts of [capacityFacts, constraintFacts, foundationFacts, genConstraintFacts, govConstraintFacts]) {
+      const s11 = fallbackSection('s11', { facts, methodology, reflections: [] });
+      expect(new Set(s11.bullets).size, JSON.stringify(s11.bullets)).toBe(s11.bullets.length);
+    }
   });
 
   it('never throws and never drops the bullet when generosity_mode is null (ruling 6, S11 side)', () => {
@@ -281,6 +348,15 @@ describe('S11 mirrors S10', () => {
     const s11 = fallbackSection('s11', { facts: capacityFacts, methodology, reflections: [] });
     expect(s11.bullets.every((b) => b.includes(methodology.offers.no_constraint.hook))).toBe(true);
   });
+
+  it('routes foundation (no primary constraint, gated instead) to its own offers.foundation, not offers.no_constraint (Natalie ruling 12)', () => {
+    const s11 = fallbackSection('s11', { facts: foundationFacts, methodology, reflections: [] });
+    const foundationHook = methodology.offers.foundation.hook;
+    const noConstraintHook = methodology.offers.no_constraint.hook;
+    expect(foundationHook).not.toBe(noConstraintHook); // sanity: report.yaml really does differ
+    expect(s11.bullets.every((b) => b.includes(foundationHook))).toBe(true);
+    expect(s11.bullets.some((b) => b.includes(noConstraintHook))).toBe(false);
+  });
 });
 
 // Ruling 7 — the highest-risk lookup in this task: report.yaml carries BOTH
@@ -289,17 +365,8 @@ describe('S11 mirrors S10', () => {
 // picking the wrong bucket fails on content, not just on count.
 describe('S10 action_library path (Natalie/controller ruling 7)', () => {
   it('constraint archetype reads action_library.categories[primary], not .enablers[primary]', () => {
-    // Use a constraint fixture whose primary is an enabler-shaped id that ALSO exists under
-    // .enablers, to prove the categories bucket (not the enablers bucket) is read.
-    const govConstraintFacts: FactsPack = buildFacts({
-      ...baseArgs,
-      diagnosis: makeDiagnosis({
-        categories: CAT_IDS.map((id, i) =>
-          makeCategory(id, [72, 68, 66, 61, 58, 20, 55, 64][i]!, { state: id === 'gov' ? 'broken' : 'ok' }),
-        ),
-        primary_constraint: { category_id: 'gov' },
-      }),
-    });
+    // govConstraintFacts (top-level fixture): primary is an enabler-shaped id (gov) that ALSO
+    // exists under .enablers, to prove the categories bucket (not the enablers bucket) is read.
     const s10 = fallbackSection('s10', { facts: govConstraintFacts, methodology, reflections: [] });
     const categoriesAlign = methodology.report.action_library.categories.gov!.align;
     const enablersAlign = methodology.report.action_library.enablers.gov!.align;

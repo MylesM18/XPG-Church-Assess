@@ -128,10 +128,12 @@ function s9Bullets(facts: FactsPack): string[] {
 }
 
 /**
- * S10/S11's shared roadmap skeleton: one { dayLabel, text } entry per phase (constraint,
- * capacity) or per (phase, gated enabler) pair (foundation — ruling 8: 2 gated enablers ⇒ 6
- * entries, 3 ⇒ 9). `text` is only used by S10; S11 mirrors this same list's cardinality
- * 1:1 (ruling 11) with a single, archetype-level offer substituted for every entry.
+ * S10's roadmap skeleton: one { dayLabel, text } entry per phase (constraint, capacity) or per
+ * (phase, gated enabler) pair (foundation — Natalie's ruling 8: 2 gated enablers ⇒ 6 entries, 3
+ * ⇒ 9). `text` is used by S10 only — S11 does NOT mirror this list's raw cardinality; see
+ * s11Bullets's own doc comment below for ruling 11-REVISED (the withdrawn per-bullet ruling 11
+ * mirrored every entry here 1:1, which produced byte-identical duplicate S11 bullets whenever an
+ * archetype had more than one roadmap entry per phase — e.g. a 2-gated-enabler foundation).
  *
  * RULING 7 — the highest-risk lookup in this file: report.yaml carries BOTH
  * `action_library.categories.{gov,comm,sys}` and `action_library.enablers.{gov,comm,sys}`
@@ -191,20 +193,19 @@ function s10Bullets(facts: FactsPack, methodology: Methodology): string[] {
 }
 
 /**
- * S11's single, archetype-level offer (reused for every mirrored bullet — ruling 11's "1:1"
- * mirrors S10's roadmap-entry COUNT, not a per-entry offer, since offers.yaml has no
- * enabler-keyed entries at all).
+ * S11's single, archetype-level offer (reused for every mirrored bullet — see s11Bullets below).
  *
  * - primary === 'gen' → offers.generosity[mode] (Natalie's ruling 4 — offers.stages has no
  *   'gen' key), mode falling back to 'both' when null (ruling 6, applies here too).
  * - primary is any other chain stage → offers.stages[primary] (always resolves: guest/conn/
  *   disc/vol are exactly offers.stages' four keys).
- * - no primary constraint (capacity — Natalie's ruling 5 — AND, by the same "no primary
- *   constraint" criterion, foundation, which has no enabler-keyed offer to fall back to
- *   either) → offers.no_constraint. This foundation extension is not explicitly named in any
- *   of the 11 rulings; it is the only non-throwing, non-generosity option available, so it is
- *   applied uniformly to both archetypes that carry no primary constraint. Flagged in the task
- *   report as an inferred decision, not a re-litigation of ruling 5.
+ * - foundation (no primary constraint, gated enablers instead) → offers.foundation
+ *   (Natalie's ruling 12 — a dedicated purpose-built offer, added specifically because
+ *   offers.no_constraint's hook, "Nothing here is broken...", contradicts the report's own
+ *   gating finding. This SUPERSEDES the earlier inferred decision to reuse offers.no_constraint
+ *   for foundation, which task-5-report.md flagged and Natalie ruled on).
+ * - capacity (no primary constraint, no gating either) → offers.no_constraint (ruling 5,
+ *   unchanged — this is the one archetype that entry was always meant for).
  */
 function offerFor(facts: FactsPack, methodology: Methodology): Offer {
   const primaryId = facts.primary_constraint?.category_id ?? null;
@@ -215,13 +216,34 @@ function offerFor(facts: FactsPack, methodology: Methodology): Offer {
   if (primaryId) {
     return methodology.offers.stages[primaryId] ?? methodology.offers.no_constraint;
   }
+  if (facts.archetype === 'foundation') {
+    return methodology.offers.foundation;
+  }
   return methodology.offers.no_constraint;
 }
 
+/**
+ * RULING 11-REVISED (binding, supersedes the withdrawn per-bullet ruling 11 — see
+ * task-5-report.md's fix-round-1 addendum for the full reasoning): the brief's S11 row reads
+ * "One bullet per S10 phase, mirroring it 1:1" — its primary clause is PER PHASE, and there are
+ * always exactly three phases (align/build/scale → 30/60/90 days). "Mirrors 1:1" means 1:1 with
+ * S10's distinct PHASES, never with S10's raw entry count (which varies with gated-enabler
+ * count under Natalie's ruling 8 — S10 itself is unchanged).
+ *
+ * So: one bullet per DISTINCT dayLabel present in roadmapEntries (deduplicated, phase order
+ * preserved via Set's insertion-order semantics), each paired with the single archetype-level
+ * offer from offerFor() above. Concretely: constraint and capacity already produce exactly one
+ * roadmap entry per phase, so S11 has 3 bullets, all distinct (different day label, same offer
+ * text is fine — the day label makes each bullet unique). Foundation collapses N gated
+ * enablers' worth of same-phase entries down to that phase's single distinct day label, so a
+ * 2-gated-enabler foundation still yields 3 S11 bullets, not 6 — never a byte-identical
+ * duplicate pair, which is exactly the defect the withdrawn ruling 11 produced.
+ */
 function s11Bullets(facts: FactsPack, methodology: Methodology): string[] {
   const offer = offerFor(facts, methodology);
   const offerText = `${offer.call_type} — ${offer.hook}`;
-  return roadmapEntries(facts, methodology).map((e) => `${e.dayLabel}: ${offerText}`);
+  const dayLabels = [...new Set(roadmapEntries(facts, methodology).map((e) => e.dayLabel))];
+  return dayLabels.map((dayLabel) => `${dayLabel}: ${offerText}`);
 }
 
 function appendixBullets(facts: FactsPack, methodology: Methodology): string[] {
