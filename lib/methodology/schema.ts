@@ -167,6 +167,68 @@ export const CopySchema = z.object({
   dependency_reads: DependencyReadsSchema,
 });
 
+const ReportArchetypeSchema = z.enum(['capacity', 'constraint', 'foundation']);
+
+// Named keys, not z.record — the same rationale as DossierReadingBandSchema above. The three
+// archetypes are a closed set and lib/report/fallback-sections.ts indexes them directly, so a
+// z.record would load with any subset and let a missing archetype surface as `undefined`
+// interpolated into a rendered sentence, far from the copy file.
+const ArchetypeTemplatesSchema = z.object({
+  capacity: z.string().min(1),
+  constraint: z.string().min(1),
+  foundation: z.string().min(1),
+});
+
+// A closed enum, so a typo in report.yaml ('tier-name') is a LOAD failure rather than a gate
+// that silently never requires anything. lib/ai/section-gates.ts resolves each of these to a
+// concrete string from the facts pack.
+export const RequiredMentionSchema = z.enum(['tier_name', 'primary_name', 'overall_percent']);
+
+export const ReportSectionSchema = z.object({
+  title: z.string().min(1),
+  templates: ArchetypeTemplatesSchema,
+  length_ceiling: z.number().int().positive(),
+  required_mentions: z.array(RequiredMentionSchema),
+});
+
+// All thirteen named. fallback-sections.ts iterates the full skeleton, so a missing id is a
+// hole in a rendered report; naming them makes it a load-time failure instead.
+const ReportSectionsSchema = z.object({
+  s1: ReportSectionSchema, s2: ReportSectionSchema, s3: ReportSectionSchema,
+  s4: ReportSectionSchema, s5: ReportSectionSchema, s6: ReportSectionSchema,
+  s7: ReportSectionSchema, s8: ReportSectionSchema, s9: ReportSectionSchema,
+  s10: ReportSectionSchema, s11: ReportSectionSchema, s12: ReportSectionSchema,
+  appendix: ReportSectionSchema,
+});
+
+const ActionSetSchema = z.object({
+  align: z.string().min(1),
+  build: z.string().min(1),
+  scale: z.string().min(1),
+});
+
+// z.record for categories/enablers on purpose: their ids live in questions.yaml and rules.yaml,
+// and duplicating them here would be two lists to keep in sync. Completeness is enforced
+// instead by tests/methodology/report-yaml.test.ts, which checks coverage against the real
+// methodology — stronger than named keys, because it cannot go stale when an area is added.
+export const ReportSchema = z.object({
+  version: z.string().min(1),
+  style_spine: z.string().min(1),
+  sections: ReportSectionsSchema,
+  banned_phrases: z.object({
+    capacity: z.array(z.string().min(1)),
+    constraint: z.array(z.string().min(1)),
+    foundation: z.array(z.string().min(1)),
+  }),
+  action_library: z.object({
+    categories: z.record(ActionSetSchema),
+    enablers: z.record(ActionSetSchema),
+    generosity: z.object({
+      breadth: ActionSetSchema, depth: ActionSetSchema, both: ActionSetSchema,
+    }),
+  }),
+});
+
 export type Signal = z.infer<typeof SignalSchema>;
 export type CategoryKind = z.infer<typeof CategoryKindSchema>;
 export type Anchors = z.infer<typeof AnchorsSchema>;
@@ -183,6 +245,11 @@ export type Offers = z.infer<typeof OffersSchema>;
 export type DossierReadingBand = z.infer<typeof DossierReadingBandSchema>;
 export type DependencyReads = z.infer<typeof DependencyReadsSchema>;
 export type Copy = z.infer<typeof CopySchema>;
+export type RequiredMention = z.infer<typeof RequiredMentionSchema>;
+export type ReportSection = z.infer<typeof ReportSectionSchema>;
+export type ActionSet = z.infer<typeof ActionSetSchema>;
+export type Report = z.infer<typeof ReportSchema>;
+export type SectionId = keyof Report['sections'];
 
 export interface Methodology {
   questions: Questions;
@@ -190,4 +257,5 @@ export interface Methodology {
   benchmarks: Benchmarks;
   offers: Offers;
   copy: Copy;
+  report: Report;
 }
