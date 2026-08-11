@@ -133,7 +133,7 @@ describe('the section registry', () => {
     // AiSectionId member is also a SectionId member. A rename in the schema that drops one
     // of these seven literals from SectionId breaks this line at tsc time, not just here:
     // it also breaks the SECTION_REGISTRY object literal in lib/ai/sections.ts (excess
-        // property / missing property errors), since AiSectionId is Extract<SectionId, ...>.
+    // property / missing property errors), since AiSectionId is Extract<SectionId, ...>.
     const _check: SectionId = AI_SECTION_IDS[0] as AiSectionId;
     void _check;
     expect(AI_SECTION_IDS.length).toBe(7);
@@ -163,18 +163,30 @@ describe('composeSection', () => {
   beforeEach(() => { mockParse.mockReset(); });
 
   it('returns null and logs a reason when the response is incomplete', async () => {
+    // Fix round 1: a prefix-only assertion (`[report] section s2:`) cannot distinguish this
+    // branch from the null-parsed branch below, since both share that prefix — the reviewer
+    // proved this by disabling the `status === 'incomplete'` check entirely (it fell through
+    // to the null-parsed branch, which logs the same prefix) and all tests still passed. The
+    // `<reason>` half of the `[report] section <id>: <reason>` contract is what distinguishes
+    // "the budget ran out" from "no parsed output" — assert the reason text this
+    // implementation actually emits (lib/ai/sections.ts's `response incomplete (...)` string),
+    // not just the shared prefix.
     mockParse.mockResolvedValue({ status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output_parsed: null });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(await composeSection('s2', capacityFacts, methodology)).toBeNull();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('[report] section s2:'));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('[report] section s2: response incomplete (max_output_tokens)'));
     warn.mockRestore();
   });
 
   it('returns null and logs a reason when there is no parsed output', async () => {
+    // Fix round 1: asserts its own distinct reason text ("model returned no parsed output"),
+    // never "response incomplete" — so this test and the one above cannot both pass on the
+    // same code path (e.g. the incomplete branch deleted and everything falling through here).
     mockParse.mockResolvedValue({ status: 'completed', output_parsed: null });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(await composeSection('s4', capacityFacts, methodology)).toBeNull();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('[report] section s4:'));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('[report] section s4: model returned no parsed output'));
+    expect(warn.mock.calls.flat().join(' ')).not.toContain('response incomplete');
     warn.mockRestore();
   });
 
