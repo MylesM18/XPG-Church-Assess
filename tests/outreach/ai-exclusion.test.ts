@@ -20,9 +20,12 @@ const stripTs = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[
 // sections.ts and section-gates.ts join the list per the plan-3 addendum §3. Their inputs are
 // the facts pack only, and the facts-slice selectors PICK {label, gloss, support_count,
 // item_ids} rather than omitting verbatims — so neither file names the guarded concepts today.
-// The exemption therefore removes a guard without either file using it, which is why the
-// positive assertions at the foot of this file are its replacement: they pin that the slice is
-// built by picking, and that nothing but themes.ts talks to the model.
+// The exemption therefore removes a guard without either file using it, and it does not gain a
+// replacement guard of its own yet — that arrives with sections.ts and section-gates.ts in
+// Task 6/7. What the positive assertions at the foot of this file already pin, narrower than
+// that, is that themes.ts serializes the indexed projection rather than the raw rows, that its
+// model-input block names no respondent field, and that theme-gates.ts itself never talks to
+// the model.
 const ALLOWED = ['themes.ts', 'theme-gates.ts', 'sections.ts', 'section-gates.ts'];
 
 const files = readdirSync('lib/ai', { recursive: true, encoding: 'utf8' })
