@@ -2,6 +2,7 @@ import type { Diagnosis, GenerosityMode, Response } from '../engine/types';
 import type { Methodology, Theme } from '../methodology/schema';
 import { archetypeFor, tierFor, type Archetype, type Tier } from './tier';
 import { interp } from './view';
+import { containsRespondentLabel, respondentLabels } from './anonymity';
 
 /**
  * The facts pack: the single deterministic source of every number, name, and theme any
@@ -31,12 +32,21 @@ export interface BottomItemFact {
   theme: Theme;
 }
 
-/** Shape plan 2's gated clustering output lands in. Empty until then. */
+/** Shape plan 2's gated clustering output lands in. Empty until plan 3 wires the caller. */
 export interface ThemeClusterFact {
   label: string;
   gloss: string;
+  /** Distinct supporting respondents, computed server-side. Never the model's own count. */
   support_count: number;
   item_ids: string[];
+  /**
+   * Substring-verified, label-free quotes, at most 200 chars each. Empty when the P3 writer
+   * pool (<8 distinct reflection writers) forbids verbatims, or when no candidate survived
+   * the gate. Required rather than optional so a renderer can never mistake "not gated yet"
+   * for "gated and empty". These are structured fields on purpose: they flow facts -> the S8
+   * renderer, which strips them by audience, and are never embedded in composed prose.
+   */
+  verbatims: string[];
 }
 
 /** Church profile inputs — the 12 nullable `churches` profile columns plus name. */
@@ -141,10 +151,26 @@ export function buildFacts(args: BuildFactsArgs): FactsPack {
 
   const scores = new Map(d.categories.map((c) => [c.category_id, c.score]));
 
+  // Fail-closed anonymity guard applied to EVERY key in PROFILE_KEYS, not only the free-text
+  // ones. `leadership_history` and `consultant_notes` are admin-authored prose copied verbatim
+  // into the pack, and plan 3's composer puts the pack into a model prompt and onto the
+  // rendered report — so a name typed here is a back door around every other anonymity
+  // control in the system. Drop the offending FIELD rather than throwing: one over-shared
+  // note must not cost the report.
+  //
+  // Known cost of the wider scope: `context`, `attendance_band`, `growth_trajectory` and
+  // `facility_status` are closed-vocabulary selects that can never hold admin prose, so a
+  // label that happens to be a substring of an option value drops that line as a pure false
+  // positive — a respondent named 'Li' silently costs `growth_trajectory: 'declining'`.
+  // Narrowing the guard to the free-text keys is a plan-3 decision, not a change to make here.
+  // Prevention lives alongside this in the settings hint copy (settings-form.tsx).
+  const labels = respondentLabels(responses);
   const profile: Record<string, string> = {};
   for (const key of PROFILE_KEYS) {
     const value = church[key];
-    if (value !== null && value.length > 0) profile[key] = value;
+    if (value === null || value.length === 0) continue;
+    if (containsRespondentLabel(value, labels)) continue;
+    profile[key] = value;
   }
 
   const primaryId = d.primary_constraint?.category_id ?? null;

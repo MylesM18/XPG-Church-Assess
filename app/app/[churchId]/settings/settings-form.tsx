@@ -45,8 +45,8 @@ const BAND_TEXT_FIELDS = [
 ] as const
 
 const TEXTAREA_FIELDS = [
-  ['leadership_history', 'Leadership history', 'Tenure changes, transitions, or anything about the leadership story that context helps a reader understand.'],
-  ['consultant_notes', 'Consultant notes', 'Anything else the report should know — e.g. who took the assessment (roles), current initiatives, or context the questions don’t capture.'],
+  ['leadership_history', 'Leadership history', 'Tenure changes, transitions, or anything about the leadership story that context helps a reader understand. Please don’t name individuals — the report is anonymous, and anything naming a participant is left out of it.'],
+  ['consultant_notes', 'Consultant notes', 'Anything else the report should know — e.g. current initiatives, recent changes, or context the questions don’t capture. Please don’t name individuals — the report is anonymous, and anything naming a participant is left out of it.'],
 ] as const
 
 const inputClass =

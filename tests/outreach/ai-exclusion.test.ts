@@ -3,20 +3,47 @@ import { describe, expect, it } from 'vitest';
 
 const stripTs = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*$/gm, '');
 
+/**
+ * The clustering task (plan 2) and its gate are the ONLY files under lib/ai/** allowed to
+ * touch reflection text or verbatims. Everything else in the tree is still forbidden from
+ * both, and that half of the rule is what keeps this test non-vacuous: it constrains every
+ * file that exists today, and it fires the moment plan 3's lib/ai/sections.ts lands with a
+ * reference to either concept.
+ *
+ * `verbatim` is guarded alongside `reflection` on purpose. A section composer could pull
+ * theme verbatims out of the facts pack without ever writing the word "reflection" — spec
+ * line 72 routes verbatims facts -> S8 renderer exclusively, never into a composer input.
+ */
+const ALLOWED = ['themes.ts', 'theme-gates.ts'];
+
 const files = readdirSync('lib/ai', { recursive: true, encoding: 'utf8' })
   .filter((f) => f.endsWith('.ts') || f.endsWith('.tsx'));
 
-describe('AI prose never reads reflections', () => {
+const guarded = files.filter((f) => !ALLOWED.includes(f));
+
+describe('reflections and verbatims reach only the clustering task and its gate', () => {
   it('finds the ai module', () => {
     expect(files.length).toBeGreaterThan(0);
   });
 
-  it.each(files)('%s references neither reflection nor outreachVoices, case-insensitively', (file) => {
+  it('the allowlist names only the clustering task and its gate', () => {
+    // Pinned by value, not by length: widening the boundary must be a deliberate edit to
+    // this line, visible in review, rather than a quiet append somewhere else in the file.
+    expect(ALLOWED).toEqual(['themes.ts', 'theme-gates.ts']);
+  });
+
+  it('there is at least one guarded file left to check', () => {
+    // Without this, allowlisting every file would make the scan below vacuously pass.
+    expect(guarded.length).toBeGreaterThan(0);
+  });
+
+  it.each(guarded)('%s references neither reflection, verbatim nor outreachVoices', (file) => {
     // Lowercased so a PascalCase/camelCase identifier (OutreachVoicesGroup, initialReflections,
-    // rawReflection, ...) cannot dodge a case-sensitive substring check — those are exactly the
-    // casings this codebase actually uses for the concepts being excluded here.
+    // rawReflection, VerbatimCandidate, ...) cannot dodge a case-sensitive substring check —
+    // those are exactly the casings this codebase actually uses for the concepts excluded here.
     const src = stripTs(readFileSync(`lib/ai/${file}`, 'utf8')).toLowerCase();
     expect(src).not.toContain('reflection');
+    expect(src).not.toContain('verbatim');
     expect(src).not.toContain('outreachvoices');
   });
 });
@@ -74,5 +101,48 @@ describe('the generateProse call site passes the clean diagnosis, not an enriche
     // spread, an extra argument, a different variable — breaks the match. Strict-equal on the
     // two argument expressions, whitespace-tolerant so a pure reformat doesn't false-fail.
     expect(actionsSource).toMatch(/generateProse\(\s*diagnosis\s*,\s*derived\.effectiveMethodology\s*,?\s*\)/);
+  });
+});
+
+/**
+ * The positive half of the rewritten contract (plan 2, Task 7). Task 2's allowlist is the
+ * negative half: reflections and verbatims reach no file but these two. This block checks how
+ * those two files use them — spec lines 104-110, the anonymity model.
+ *
+ * Source-text assertions rather than behavioural ones on purpose: the behaviour is already
+ * covered by tests/ai/themes-generate.test.ts, but a *reviewer* reading a diff needs a
+ * tripwire that fires on the shape of the edit, not only on its runtime effect.
+ */
+describe('the clustering task transmits the projection, not the rows', () => {
+  const themesSrc = stripTs(readFileSync('lib/ai/themes.ts', 'utf8'));
+  const gatesSrc = stripTs(readFileSync('lib/ai/theme-gates.ts', 'utf8'));
+
+  it('serializes the indexed projection and never the raw rows', () => {
+    // ReflectionRow carries respondent_key; IndexedReflection structurally cannot. Swapping
+    // which one is serialized is the single edit that would put identity in a model payload.
+    expect(themesSrc).toContain('JSON.stringify(indexed');
+    expect(themesSrc).not.toContain('JSON.stringify(rows');
+  });
+
+  it('names no respondent field anywhere in the model input construction', () => {
+    // Scoped to the `input:` array, not the whole file: ReflectionRow's own declaration
+    // legitimately names respondent_key, and a file-wide ban would forbid the type itself.
+    const start = themesSrc.indexOf('input: [');
+    expect(start).toBeGreaterThan(-1);
+    const end = themesSrc.indexOf('text: {', start);
+    expect(end).toBeGreaterThan(start);
+    const inputBlock = themesSrc.slice(start, end);
+    expect(inputBlock).not.toContain('respondent_key');
+    expect(inputBlock).not.toContain('respondent_label');
+    // The label list is a GATE input. Sending it — even as "avoid these names" — would put
+    // every respondent's name in the prompt to protect them from being named.
+    expect(inputBlock).not.toContain('labels');
+  });
+
+  it('keeps the gate off the wire — only themes.ts talks to the model', () => {
+    // theme-gates.ts legitimately holds raw reflection text (sourceTexts) to substring-verify
+    // verbatims. It must never transmit it: exactly one file in this tree calls the API.
+    expect(gatesSrc.toLowerCase()).not.toContain('openai');
+    expect(gatesSrc).not.toContain('responses.parse');
   });
 });
