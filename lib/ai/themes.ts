@@ -48,7 +48,7 @@ export interface IndexedReflections {
  * produces the same payload and the same indices — the report cache key (plan 3's
  * report-hash.ts) depends on that being reproducible.
  *
- * Tie-break idiom matches lib/report/facts.ts:140.
+ * Tie-break idiom matches lib/report/facts.ts:134.
  */
 export function indexReflections(rows: readonly ReflectionRow[]): IndexedReflections {
   const sorted = [...rows].sort(
@@ -69,7 +69,7 @@ export function indexReflections(rows: readonly ReflectionRow[]): IndexedReflect
 
 /**
  * P3's verbatim pool: distinct reflection-WRITING respondents, which is deliberately stricter
- * than the run's respondent count (lib/report/facts.ts:156). If only two people wrote
+ * than the run's respondent count (lib/report/facts.ts:175). If only two people wrote
  * reflections, a verbatim identifies among two even when thirty answered numerically.
  */
 export function reflectionWriterCount(rows: readonly ReflectionRow[]): number {

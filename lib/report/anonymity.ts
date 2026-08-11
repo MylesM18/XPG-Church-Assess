@@ -23,6 +23,12 @@
  * every profile field omitted, with no error anywhere. Fail-closed must not degenerate
  * into fail-everything.
  *
+ * ⚠️ Caller precondition — the rows must carry UNREDACTED labels. The share RPC
+ * (supabase/migrations/20260728000400_rpc_get_shared_run_responses.sql:48) returns
+ * respondent_label as ''::text, and blanks are dropped above, so share-path rows yield []
+ * here and every guard keyed off this list becomes a silent no-op. A caller building a facts
+ * pack on the share path must source labels from a non-redacted query instead.
+ *
  * Takes the minimal structural shape rather than Response so callers holding a narrower
  * row type (or a test fixture) need no cast.
  */

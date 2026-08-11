@@ -151,11 +151,18 @@ export function buildFacts(args: BuildFactsArgs): FactsPack {
 
   const scores = new Map(d.categories.map((c) => [c.category_id, c.score]));
 
-  // Fail-closed anonymity guard on the free-text profile fields. `leadership_history` and
-  // `consultant_notes` are admin-authored prose copied verbatim into the pack, and plan 3's
-  // composer puts the pack into a model prompt and onto the rendered report — so a name
-  // typed here is a back door around every other anonymity control in the system. Drop the
-  // offending FIELD rather than throwing: one over-shared note must not cost the report.
+  // Fail-closed anonymity guard applied to EVERY key in PROFILE_KEYS, not only the free-text
+  // ones. `leadership_history` and `consultant_notes` are admin-authored prose copied verbatim
+  // into the pack, and plan 3's composer puts the pack into a model prompt and onto the
+  // rendered report — so a name typed here is a back door around every other anonymity
+  // control in the system. Drop the offending FIELD rather than throwing: one over-shared
+  // note must not cost the report.
+  //
+  // Known cost of the wider scope: `context`, `attendance_band`, `growth_trajectory` and
+  // `facility_status` are closed-vocabulary selects that can never hold admin prose, so a
+  // label that happens to be a substring of an option value drops that line as a pure false
+  // positive — a respondent named 'Li' silently costs `growth_trajectory: 'declining'`.
+  // Narrowing the guard to the free-text keys is a plan-3 decision, not a change to make here.
   // Prevention lives alongside this in the settings hint copy (settings-form.tsx).
   const labels = respondentLabels(responses);
   const profile: Record<string, string> = {};

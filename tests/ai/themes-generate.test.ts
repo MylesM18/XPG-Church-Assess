@@ -141,4 +141,82 @@ describe('clusterThemes', () => {
       warn.mockRestore();
     }
   });
+
+  it('gates verbatims on the real writer pool, not the row count', async () => {
+    // Kills `writerCount: reflectionWriterCount(rows)` -> `rows.length` at themes.ts:203.
+    // Eight rows but only three people wrote them, so the P3 pool (MIN_WRITERS_FOR_VERBATIM
+    // = 8) is NOT open and the quote must be withheld even though it verifies exactly.
+    const eight: ReflectionRow[] = [
+      { item_id: itemId, respondent_key: 'W1', text: 'nobody explains the plan' },
+      { item_id: itemId, respondent_key: 'W1', text: 'communication is thin' },
+      { item_id: itemId, respondent_key: 'W1', text: 'meetings end without decisions' },
+      { item_id: itemId, respondent_key: 'W2', text: 'we never hear why decisions get made' },
+      { item_id: itemId, respondent_key: 'W2', text: 'the vision is unclear' },
+      { item_id: itemId, respondent_key: 'W2', text: 'i learn things secondhand' },
+      { item_id: itemId, respondent_key: 'W3', text: 'updates arrive too late' },
+      { item_id: itemId, respondent_key: 'W3', text: 'nobody owns the follow-up' },
+    ];
+    mockParse.mockResolvedValue({
+      status: 'completed',
+      output_parsed: {
+        themes: [
+          {
+            ...theme(),
+            support_indices: ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8'],
+            verbatim_candidates: ['nobody explains the plan'],
+          },
+        ],
+        affection_theme: null,
+      },
+    });
+    expect(await clusterThemes(eight, m, [])).toEqual([
+      {
+        label: 'Communication gaps',
+        gloss: 'People say decisions are not explained.',
+        support_count: 3,
+        item_ids: [itemId],
+        verbatims: [],
+      },
+    ]);
+  });
+
+  it('passes the run labels and the server-side source texts into the gates', async () => {
+    // Kills `labels` -> `[]` and `sourceTexts` -> `[]` at themes.ts:200-202. BOTH candidates
+    // verify as exact substrings of real reflection text, so only the label ban separates
+    // them: a severed label list prints a respondent's name as a quote, and a severed
+    // source-text list drops the legitimate quote instead.
+    const label = 'Marguerite Oyelaran';
+    const eight: ReflectionRow[] = [
+      { item_id: itemId, respondent_key: 'W1', text: 'nobody explains the plan' },
+      { item_id: itemId, respondent_key: 'W2', text: `${label} never returns my calls` },
+      { item_id: itemId, respondent_key: 'W3', text: 'communication is thin' },
+      { item_id: itemId, respondent_key: 'W4', text: 'we never hear why decisions get made' },
+      { item_id: itemId, respondent_key: 'W5', text: 'the vision is unclear' },
+      { item_id: itemId, respondent_key: 'W6', text: 'i learn things secondhand' },
+      { item_id: itemId, respondent_key: 'W7', text: 'updates arrive too late' },
+      { item_id: itemId, respondent_key: 'W8', text: 'nobody owns the follow-up' },
+    ];
+    mockParse.mockResolvedValue({
+      status: 'completed',
+      output_parsed: {
+        themes: [
+          {
+            ...theme(),
+            support_indices: ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8'],
+            verbatim_candidates: ['nobody explains the plan', `${label} never returns my calls`],
+          },
+        ],
+        affection_theme: null,
+      },
+    });
+    expect(await clusterThemes(eight, m, [label])).toEqual([
+      {
+        label: 'Communication gaps',
+        gloss: 'People say decisions are not explained.',
+        support_count: 8,
+        item_ids: [itemId],
+        verbatims: ['nobody explains the plan'],
+      },
+    ]);
+  });
 });
