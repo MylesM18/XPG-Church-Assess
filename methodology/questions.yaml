@@ -6,6 +6,7 @@ categories:
     position: 1
     items:
       - id: G1
+        theme: systems
         text: "When a first-time guest visits, what actually happens to their information?"
         signal: evidence
         anchors:
@@ -13,6 +14,7 @@ categories:
           mid: "We capture some guests (a connection card, a table) but it's inconsistent and no one owns the follow-up."
           hi: "Nearly every first-time guest is captured, and their information reaches a specific person the same week."
       - id: G2
+        theme: systems
         text: "After a guest visits, how fast and how reliably are they contacted?"
         signal: evidence
         anchors:
@@ -20,6 +22,7 @@ categories:
           mid: "Sometimes, eventually, by whoever remembers — usually more than a week later."
           hi: "Every captured guest is personally contacted within 48 hours, and one role owns that this happens."
       - id: G3
+        theme: systems
         text: "Could a guest who wanted to go deeper figure out how, without asking a staff member?"
         signal: belief
         anchors:
@@ -27,6 +30,7 @@ categories:
           mid: "There's a next step (a class, a lunch, an app) but it's easy to miss and we don't point to it clearly."
           hi: "Every guest leaves knowing exactly what to do next, and it's obvious without asking anyone."
       - id: G4
+        theme: systems
         text: "Do you know what share of first-time guests come back a second time?"
         signal: evidence
         anchors:
@@ -34,6 +38,7 @@ categories:
           mid: "We have a rough sense but no real number."
           hi: "We know our return rate and can see whether it's moving."
       - id: G5
+        theme: systems
         text: "Who is responsible for what happens to a guest in their first 30 days?"
         signal: evidence
         anchors:
@@ -41,6 +46,7 @@ categories:
           mid: "It's shared across a few people or a team, so it falls through the cracks."
           hi: "One person owns the 30-day guest journey and is accountable for it."
       - id: G6
+        theme: systems
         text: "When your church meets people out in the community — a serve day, an event — does anything connect them to a Sunday?"
         signal: evidence
         since: "0.3.0"
@@ -50,6 +56,7 @@ categories:
           hi: "There's a deliberate bridge — invitations, info we capture, follow-up — and we can name guests who came through it."
         reflection: "Tell about one person who first met your church outside its walls. What happened next?"
       - id: G7
+        theme: culture
         text: "When did you last hear of someone showing up because one of your people invited them?"
         signal: evidence
         since: "0.3.0"
@@ -64,6 +71,7 @@ categories:
     position: 2
     items:
       - id: C1
+        theme: relational
         text: "What share of your regular attenders are personally known by someone who is not on paid staff?"
         signal: belief
         anchors:
@@ -71,6 +79,7 @@ categories:
           mid: "Maybe half. There's a committed core, and a large edge of people no one would notice leaving."
           hi: "Nearly everyone is known and cared for by a non-staff person."
       - id: C2
+        theme: relational
         text: "What share of adults are in a group, class, or consistent relational community?"
         signal: evidence
         anchors:
@@ -78,6 +87,7 @@ categories:
           mid: "Around a third. We have groups but most people aren't in one."
           hi: "More than half of adults are in a real group."
       - id: C3
+        theme: relational
         text: "If a regular attender stopped coming for a month, what would happen?"
         signal: evidence
         anchors:
@@ -85,6 +95,7 @@ categories:
           mid: "Someone might notice eventually, but no one owns reaching out."
           hi: "Someone would notice within a week or two and personally reach out."
       - id: C4
+        theme: systems
         text: "How does a new person actually get connected into relationship here?"
         signal: belief
         anchors:
@@ -92,6 +103,7 @@ categories:
           mid: "We have a path (groups launch, a class) but it's seasonal or easy to miss."
           hi: "There's a clear, always-available on-ramp and we actively walk people onto it."
       - id: C5
+        theme: culture
         text: "Is relational life concentrated in a small core, or spread across the body?"
         signal: evidence
         anchors:
@@ -99,6 +111,7 @@ categories:
           mid: "There's a core and a slowly growing second ring, but it's still concentrated."
           hi: "Relationship and ownership are spread widely; new people become insiders regularly."
       - id: C6
+        theme: culture
         text: "Could someone far from church find real belonging here before they believe?"
         signal: belief
         since: "0.3.0"
@@ -113,6 +126,7 @@ categories:
     position: 3
     items:
       - id: D1
+        theme: systems
         text: "Could your staff describe the path a new believer walks here — and would they describe it the same way?"
         signal: belief
         anchors:
@@ -120,6 +134,7 @@ categories:
           mid: "There's an implicit path a few leaders could sketch, but it's not written or shared."
           hi: "There's a clear, named path, and our leaders would all describe it consistently."
       - id: D2
+        theme: culture
         text: "Are people visibly maturing — moving from new to grounded to serving to leading?"
         signal: belief
         anchors:
@@ -127,6 +142,7 @@ categories:
           mid: "Some are, but it's accidental — the self-motivated ones."
           hi: "We can point to people at every stage and name who's moving."
       - id: D3
+        theme: systems
         text: "In the last year, how many people moved from being served to leading others?"
         signal: evidence
         anchors:
@@ -134,6 +150,7 @@ categories:
           mid: "A handful, but it wasn't intentional."
           hi: "Many, through a deliberate pipeline we run."
       - id: D4
+        theme: theology
         text: "Do your people understand the reasons behind the Christian life, or mostly the behaviors?"
         signal: belief
         anchors:
@@ -141,6 +158,7 @@ categories:
           mid: "We teach solid content on Sundays, but it doesn't consistently translate into formed conviction."
           hi: "Our people can articulate why, not just what, and it shows in how they live."
       - id: D5
+        theme: systems
         text: "If your best disciple-maker left, would formation continue?"
         signal: belief
         anchors:
@@ -148,6 +166,7 @@ categories:
           mid: "Partly — some of it is systematized, much of it isn't."
           hi: "Yes. Formation runs on a reproducible model, not on heroes."
       - id: D6
+        theme: theology
         text: "Does your discipleship send people outward — into neighborhoods, schools, and workplaces — or mainly deeper into church life?"
         signal: belief
         since: "0.3.0"
@@ -162,6 +181,7 @@ categories:
     position: 4
     items:
       - id: V1
+        theme: culture
         text: "What share of your regular adults serve at least once a month?"
         signal: evidence
         anchors:
@@ -169,6 +189,7 @@ categories:
           mid: "Around 20%. A committed group serves; most attend and leave."
           hi: "Over a third serve regularly."
       - id: V2
+        theme: systems
         text: "Are the same people carrying multiple roles because no one else will step up?"
         signal: evidence
         anchors:
@@ -176,6 +197,7 @@ categories:
           mid: "Somewhat — key people are stretched, but it's not yet a crisis."
           hi: "No. Load is spread; no one is carrying three jobs."
       - id: V3
+        theme: systems
         text: "How easy is it for someone who wants to serve to actually start?"
         signal: belief
         anchors:
@@ -183,6 +205,7 @@ categories:
           mid: "Possible, but clunky — an interested person can slip through the cracks."
           hi: "Easy and obvious. A willing person is serving within two weeks."
       - id: V4
+        theme: systems
         text: "Once someone serves, do they grow — or just fill a slot?"
         signal: belief
         anchors:
@@ -190,6 +213,7 @@ categories:
           mid: "Some team leaders invest; most don't."
           hi: "Serving is a development path; volunteers grow into leaders."
       - id: V5
+        theme: culture
         text: "Do your staff primarily do the ministry, or equip others to?"
         signal: belief
         anchors:
@@ -197,6 +221,7 @@ categories:
           mid: "Mixed — some equip, some are the bottleneck."
           hi: "Staff multiply ministry through volunteers as their main job."
       - id: V6
+        theme: culture
         text: "How much of the serving here happens beyond Sunday — out in the community?"
         signal: evidence
         since: "0.3.0"
@@ -211,6 +236,7 @@ categories:
     position: 5
     items:
       - id: GEN1
+        theme: culture
         text: "What share of your regular households give anything at all in a year?"
         signal: evidence
         anchors:
@@ -218,6 +244,7 @@ categories:
           mid: "Around 40%. A committed minority gives; most don't."
           hi: "More than half of households give."
       - id: GEN2
+        theme: theology
         text: "Do your people understand why they give, or mostly where to give?"
         signal: belief
         anchors:
@@ -225,6 +252,7 @@ categories:
           mid: "We teach on it periodically, usually around budget needs."
           hi: "Generosity is discipled as worship; our people know why, not just where."
       - id: GEN3
+        theme: culture
         text: "Is generosity of time modeled and celebrated, not just money?"
         signal: belief
         anchors:
@@ -232,6 +260,7 @@ categories:
           mid: "We value both but emphasize financial giving."
           hi: "Time and money are both discipled as generosity; we celebrate both."
       - id: GEN4
+        theme: systems
         text: "Does a person have a clear next step to grow in generosity from wherever they are?"
         signal: belief
         anchors:
@@ -239,6 +268,7 @@ categories:
           mid: "There's teaching but no personal next step for different starting points."
           hi: "Everyone has a clear next step, whether they've never given or already tithe."
       - id: GEN5
+        theme: systems
         text: "Is your generosity funding vision, or just keeping the lights on?"
         signal: belief
         anchors:
@@ -246,6 +276,7 @@ categories:
           mid: "We're stable but have little margin for new mission."
           hi: "Generosity funds vision and mission beyond our own walls."
       - id: GEN6
+        theme: systems
         text: "Does your church's money visibly reach your community — benevolence, local partners, real needs met?"
         signal: evidence
         since: "0.3.0"
@@ -260,6 +291,7 @@ categories:
     position: null
     items:
       - id: GOV1
+        theme: systems
         text: "When a real decision needs to be made, is it clear who makes it?"
         signal: belief
         anchors:
@@ -267,6 +299,7 @@ categories:
           mid: "Mostly clear for routine things, murky for anything hard or new."
           hi: "Clear, understood, and followed at every level."
       - id: GOV2
+        theme: systems
         text: "Do staff and key leaders know what they own and what they don't?"
         signal: belief
         anchors:
@@ -274,6 +307,7 @@ categories:
           mid: "Roughly — there are titles, but real ownership is fuzzy."
           hi: "Yes. Everyone knows their lane and their authority."
       - id: GOV3
+        theme: culture
         text: "When someone (including a leader) underperforms, is it addressed?"
         signal: belief
         anchors:
@@ -281,6 +315,7 @@ categories:
           mid: "Sometimes, inconsistently, depending on who it is."
           hi: "Yes, directly and fairly, at every level."
       - id: GOV4
+        theme: systems
         text: "Can the church function and decide when the senior leader is away?"
         signal: belief
         anchors:
@@ -288,6 +323,7 @@ categories:
           mid: "Partly — routine things move, big things wait."
           hi: "Yes. Authority is genuinely distributed."
       - id: GOV5
+        theme: systems
         text: "Does your governing body provide real accountability and wisdom, or rubber-stamp?"
         signal: belief
         anchors:
@@ -295,6 +331,7 @@ categories:
           mid: "It functions, but leans passive or overly deferential."
           hi: "It provides genuine accountability, wisdom, and support."
       - id: GOV6
+        theme: systems
         text: "Is your community's good anyone's actual responsibility at the leadership level?"
         signal: evidence
         since: "0.3.0"
@@ -309,6 +346,7 @@ categories:
     position: null
     items:
       - id: COM1
+        theme: systems
         text: "Could every staff member state this season's top priorities the same way, without checking?"
         signal: belief
         anchors:
@@ -316,6 +354,7 @@ categories:
           mid: "Roughly aligned, but it drifts and needs re-stating constantly."
           hi: "Yes. Priorities are clear, shared, and current across the team."
       - id: COM2
+        theme: systems
         text: "Can a newcomer find service times, location, and how to take a next step in under a minute online?"
         signal: belief
         anchors:
@@ -323,6 +362,7 @@ categories:
           mid: "The basics are findable; next steps and depth are not."
           hi: "Yes. Everything a newcomer needs is obvious and current."
       - id: COM3
+        theme: systems
         text: "Do your people know what matters most, or is everything announced with equal weight?"
         signal: belief
         anchors:
@@ -330,6 +370,7 @@ categories:
           mid: "We prioritize somewhat, but over-communicate and dilute the important things."
           hi: "People clearly know what matters most; we protect the main things."
       - id: COM4
+        theme: systems
         text: "Do you have to say something five times for it to stick?"
         signal: belief
         anchors:
@@ -337,6 +378,7 @@ categories:
           mid: "Important things need heavy repetition to land."
           hi: "Clear communication lands the first or second time."
       - id: COM5
+        theme: relational
         text: "Do you actually hear back from your congregation, or only talk at them?"
         signal: belief
         anchors:
@@ -344,6 +386,7 @@ categories:
           mid: "Some feedback channels, lightly used."
           hi: "Real two-way communication; we know what's landing."
       - id: COM6
+        theme: relational
         text: "If you asked ten neighbors near your building what your church contributes to the community, what would they say?"
         signal: belief
         since: "0.3.0"
@@ -353,6 +396,7 @@ categories:
           hi: "Most could name something specific we do for this community — our reputation runs ahead of us."
         reflection: "What do you think your community would say your church is known for? Be honest."
       - id: COM7
+        theme: relational
         text: "Do you actually know your community's current needs, or assume them?"
         signal: evidence
         since: "0.3.0"
@@ -367,6 +411,7 @@ categories:
     position: null
     items:
       - id: SYS1
+        theme: systems
         text: "Do your core processes live in systems, or in specific people's heads?"
         signal: belief
         anchors:
@@ -374,6 +419,7 @@ categories:
           mid: "Some documented, much of it tribal knowledge."
           hi: "Core processes are documented and repeatable, independent of any individual."
       - id: SYS2
+        theme: systems
         text: "Do your systems (ChMS, giving, communication, scheduling) work together, or is it duct tape?"
         signal: belief
         anchors:
@@ -381,6 +427,7 @@ categories:
           mid: "We have tools, but they're siloed and clunky."
           hi: "Our systems are integrated and reduce manual work."
       - id: SYS3
+        theme: systems
         text: "When someone new joins (staff or volunteer), is there a repeatable way to bring them in?"
         signal: belief
         anchors:
@@ -388,6 +435,7 @@ categories:
           mid: "There's a rough process, inconsistently followed."
           hi: "Yes. Onboarding is defined and consistent."
       - id: SYS4
+        theme: systems
         text: "Can leadership see what's actually happening (attendance, giving, serving, groups) without a fire drill?"
         signal: belief
         anchors:
@@ -395,6 +443,7 @@ categories:
           mid: "We can get some data, with effort."
           hi: "Leadership has current, trustworthy data at hand."
       - id: SYS5
+        theme: systems
         text: "If you doubled in size, would your systems hold?"
         signal: belief
         anchors:
@@ -402,6 +451,7 @@ categories:
           mid: "We'd struggle and have to rebuild on the fly."
           hi: "Our systems would scale with us."
       - id: SYS6
+        theme: systems
         text: "Do your community efforts run on systems — owned partnerships, follow-up, a rhythm — or on bursts of enthusiasm?"
         signal: evidence
         since: "0.3.0"

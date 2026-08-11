@@ -90,7 +90,7 @@ export interface ReportView {
  * the AI-prose draft/reword pipeline, and the dossier layer reading from it would
  * couple two things that change for different reasons.
  */
-function interp(template: string, vars: Record<string, string>): string {
+export function interp(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => (k in vars ? vars[k]! : `{${k}}`));
 }
 

@@ -16,6 +16,8 @@ const dashboard = read('app', 'app', '[churchId]', 'page.tsx')
 const access = read('app', 'app', '[churchId]', 'access', 'page.tsx')
 const diagnosis = read('app', 'app', '[churchId]', 'diagnosis', 'page.tsx')
 const getStarted = read('app', 'get-started', 'actions.ts')
+const settingsPage = read('app', 'app', '[churchId]', 'settings', 'page.tsx')
+const settingsAction = read('app', 'app', '[churchId]', 'settings', 'actions.ts')
 
 const pages = [
   ['dashboard', dashboard],
@@ -51,5 +53,19 @@ describe('roster + church creation go through the seam', () => {
   it('get-started creates the church via createChurchWithAdmin, not the raw RPC', () => {
     expect(getStarted).toContain('createChurchWithAdmin(')
     expect(getStarted).not.toContain("rpc('create_church_with_admin'")
+  })
+})
+
+describe('settings surface goes through the churches seam', () => {
+  it('page resolves church + role + profile via the seam', () => {
+    expect(settingsPage).toContain("from '@/lib/data/churches'")
+    expect(settingsPage).toContain('loadChurchForMember(')
+    expect(settingsPage).toContain('loadChurchProfile(')
+  })
+  it('action writes via updateChurchProfile, never the raw table', () => {
+    expect(settingsAction).toContain('updateChurchProfile(')
+    for (const [name, src] of [['settings page', settingsPage], ['settings action', settingsAction]] as const) {
+      expect(src, `${name} must not touch churches directly`).not.toContain(".from('churches')")
+    }
   })
 })

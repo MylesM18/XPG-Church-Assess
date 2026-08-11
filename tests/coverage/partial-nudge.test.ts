@@ -6,7 +6,7 @@ import type { Category } from '@/lib/methodology/schema'
 function cat(id: string, itemIds: string[]): Category {
   return {
     id, name: id.toUpperCase(), kind: 'stage', position: 1,
-    items: itemIds.map((iid) => ({ id: iid, text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' } })),
+    items: itemIds.map((iid) => ({ id: iid, text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, theme: 'systems' })),
   }
 }
 const CATS: Category[] = [cat('guest', ['G1', 'G2', 'G3', 'G4', 'G5']), cat('conn', ['C1', 'C2', 'C3', 'C4', 'C5'])]

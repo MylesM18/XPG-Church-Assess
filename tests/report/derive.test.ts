@@ -74,6 +74,7 @@ function withOutreachItem(m: Methodology): Methodology {
     since: '0.3.0',
     anchors: { lo: 'l', mid: 'm', hi: 'h' },
     reflection: 'Tell us.',
+    theme: 'systems',
   });
   return aug;
 }

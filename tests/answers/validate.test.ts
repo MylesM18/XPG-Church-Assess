@@ -8,7 +8,7 @@ const guest: Category = {
   kind: 'stage',
   position: 1,
   items: ['G1', 'G2', 'G3', 'G4', 'G5'].map((id) => ({
-    id, text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' },
+    id, text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, theme: 'systems',
   })),
 }
 const CATS = [guest]

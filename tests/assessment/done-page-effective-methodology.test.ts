@@ -58,15 +58,15 @@ describe('/done behaviour: a member who finished every OLD item across every cat
     {
       id: 'guest', name: 'Guest Experience', kind: 'stage', position: 1,
       items: [
-        { id: 'G1', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' } },
-        { id: 'G2', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, since: '0.3.0' },
+        { id: 'G1', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, theme: 'systems' },
+        { id: 'G2', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, since: '0.3.0', theme: 'systems' },
       ],
     },
     {
       id: 'conn', name: 'Connection', kind: 'stage', position: 2,
       items: [
-        { id: 'C1', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' } },
-        { id: 'C2', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, since: '0.3.0' },
+        { id: 'C1', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, theme: 'systems' },
+        { id: 'C2', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, since: '0.3.0', theme: 'systems' },
       ],
     },
   ]

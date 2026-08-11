@@ -66,9 +66,9 @@ describe('section-complete behaviour: a member who finished every OLD item reads
   const currentCategories: Category[] = [{
     id: 'guest', name: 'Guest Experience', kind: 'stage', position: 1,
     items: [
-      { id: 'G1', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' } },
-      { id: 'G2', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' } },
-      { id: 'G3', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, since: '0.3.0' },
+      { id: 'G1', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, theme: 'systems' },
+      { id: 'G2', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, theme: 'systems' },
+      { id: 'G3', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, since: '0.3.0', theme: 'systems' },
     ],
   }]
   const rowsAllOldItemsAnswered: CoverageRow[] = [

@@ -14,6 +14,7 @@ function cat(id: string, itemIds: string[]): Category {
       text: 't',
       signal: 'belief',
       anchors: { lo: 'l', mid: 'm', hi: 'h' },
+      theme: 'systems',
     })),
   }
 }

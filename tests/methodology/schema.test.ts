@@ -8,23 +8,24 @@ const cat = (
   position: number | null,
   itemId: string,
   signal: 'belief' | 'evidence',
+  theme: 'systems' | 'culture' | 'theology' | 'relational',
 ) => ({
   id,
   name,
   kind,
   position,
-  items: [{ id: itemId, text: 't', signal, anchors: { lo: 'a', mid: 'b', hi: 'c' } }],
+  items: [{ id: itemId, text: 't', signal, theme, anchors: { lo: 'a', mid: 'b', hi: 'c' } }],
 });
 
 const eightCategories = [
-  cat('guest', 'Guest Experience', 'stage', 1, 'G1', 'evidence'),
-  cat('conn', 'Connection', 'stage', 2, 'C1', 'belief'),
-  cat('disc', 'Discipleship', 'stage', 3, 'D1', 'belief'),
-  cat('vol', 'Volunteering', 'stage', 4, 'V1', 'belief'),
-  cat('gen', 'Generosity', 'stage', 5, 'GEN1', 'evidence'),
-  cat('gov', 'Governance', 'enabler', null, 'GOV1', 'belief'),
-  cat('comm', 'Communication', 'enabler', null, 'COM1', 'belief'),
-  cat('sys', 'Systems', 'enabler', null, 'SYS1', 'belief'),
+  cat('guest', 'Guest Experience', 'stage', 1, 'G1', 'evidence', 'systems'),
+  cat('conn', 'Connection', 'stage', 2, 'C1', 'belief', 'relational'),
+  cat('disc', 'Discipleship', 'stage', 3, 'D1', 'belief', 'systems'),
+  cat('vol', 'Volunteering', 'stage', 4, 'V1', 'belief', 'culture'),
+  cat('gen', 'Generosity', 'stage', 5, 'GEN1', 'evidence', 'culture'),
+  cat('gov', 'Governance', 'enabler', null, 'GOV1', 'belief', 'systems'),
+  cat('comm', 'Communication', 'enabler', null, 'COM1', 'belief', 'systems'),
+  cat('sys', 'Systems', 'enabler', null, 'SYS1', 'belief', 'systems'),
 ];
 
 describe('QuestionsSchema', () => {

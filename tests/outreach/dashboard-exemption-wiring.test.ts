@@ -92,8 +92,8 @@ describe('guard 1 — the matrix predicate is run-scoped, never a per-member dea
     const categories: Category[] = [{
       id: 'guest', name: 'Guest', kind: 'stage', position: 1,
       items: [
-        { id: 'G1', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' } },
-        { id: 'G2', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, since: '0.3.0' },
+        { id: 'G1', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, theme: 'systems' },
+        { id: 'G2', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, since: '0.3.0', theme: 'systems' },
       ],
     }];
     const effectiveCategories = effectiveMethodologyForRun(
@@ -177,8 +177,8 @@ describe("the matrix's effectiveCategories is run-scoped, never gated by the CUR
     const categories: Category[] = [{
       id: 'guest', name: 'Guest', kind: 'stage', position: 1,
       items: [
-        { id: 'G1', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' } },
-        { id: 'G2', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, since: '0.3.0' },
+        { id: 'G1', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, theme: 'systems' },
+        { id: 'G2', text: 't', signal: 'belief', anchors: { lo: 'l', mid: 'm', hi: 'h' }, since: '0.3.0', theme: 'systems' },
       ],
     }];
     // page.tsx derives this the same way: effectiveMethodologyForRun keyed on the run version alone.
