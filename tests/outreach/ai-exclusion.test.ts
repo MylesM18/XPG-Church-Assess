@@ -158,3 +158,35 @@ describe('the clustering task transmits the projection, not the rows', () => {
     expect(gatesSrc).not.toContain('responses.parse');
   });
 });
+
+/**
+ * Task 6's positive half: what the ALLOWED exemption for sections.ts (already granted at Task
+ * 4, before this file existed) is traded for. Source-text assertions rather than behavioural
+ * ones, same rationale as the clustering block above — a reviewer reading a diff needs a
+ * tripwire on the SHAPE of an edit (a `...facts` spread, a raw `JSON.stringify(facts` call),
+ * not only on its runtime effect, which tests/ai/sections.test.ts already covers.
+ *
+ * lib/ai/section-gates.ts does not exist yet (Task 7 creates it) — its own positive block
+ * (`describe('the gates never talk to the model', ...)`) is deferred there on purpose: a
+ * describe-scope readFileSync on a missing file would crash this whole suite.
+ */
+describe('the section composer sees the facts pack and nothing quoted', () => {
+  const src = stripTs(readFileSync('lib/ai/sections.ts', 'utf8'));
+
+  it('builds every slice by picking fields, never by omitting them', () => {
+    // An omit-list silently widens the moment a field is added to FactsPack — and one of those
+    // fields is the theme structure that carries quoted text. Picking cannot leak forward.
+    expect(src).not.toMatch(/\.\.\.\s*facts\b/);
+    expect(src).not.toMatch(/\.\.\.\s*f\b/);
+  });
+
+  it('reduces themes to label, gloss, support count and item ids', () => {
+    expect(src).toContain('function themeDigest');
+    expect(src).toMatch(/themeDigest[\s\S]{0,400}support_count/);
+  });
+
+  it('serializes only a slice into the model payload', () => {
+    expect(src).toContain('entry.slice(facts)');
+    expect(src).not.toContain('JSON.stringify(facts');
+  });
+});
