@@ -4,17 +4,26 @@ import { describe, expect, it } from 'vitest';
 const stripTs = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*$/gm, '');
 
 /**
- * The clustering task (plan 2) and its gate are the ONLY files under lib/ai/** allowed to
- * touch reflection text or verbatims. Everything else in the tree is still forbidden from
- * both, and that half of the rule is what keeps this test non-vacuous: it constrains every
- * file that exists today, and it fires the moment plan 3's lib/ai/sections.ts lands with a
- * reference to either concept.
+ * The clustering task (plan 2) and its gate, plus the section composer (plan 3) and its gate,
+ * are the ONLY files under lib/ai/** allowed to touch reflection text or verbatims. Everything
+ * else in the tree is still forbidden from both, and that half of the rule is what keeps this
+ * test non-vacuous: it constrains every file that exists today.
  *
  * `verbatim` is guarded alongside `reflection` on purpose. A section composer could pull
  * theme verbatims out of the facts pack without ever writing the word "reflection" — spec
  * line 72 routes verbatims facts -> S8 renderer exclusively, never into a composer input.
  */
-const ALLOWED = ['themes.ts', 'theme-gates.ts'];
+// Basenames, NOT lib/ai-prefixed paths: readdirSync('lib/ai', {recursive:true}) yields entries
+// relative to lib/ai. That relativity is the point — a nested `sub/sections.ts` yields
+// 'sub/sections.ts' and cannot inherit the exemption from a bare 'sections.ts'.
+//
+// sections.ts and section-gates.ts join the list per the plan-3 addendum §3. Their inputs are
+// the facts pack only, and the facts-slice selectors PICK {label, gloss, support_count,
+// item_ids} rather than omitting verbatims — so neither file names the guarded concepts today.
+// The exemption therefore removes a guard without either file using it, which is why the
+// positive assertions at the foot of this file are its replacement: they pin that the slice is
+// built by picking, and that nothing but themes.ts talks to the model.
+const ALLOWED = ['themes.ts', 'theme-gates.ts', 'sections.ts', 'section-gates.ts'];
 
 const files = readdirSync('lib/ai', { recursive: true, encoding: 'utf8' })
   .filter((f) => f.endsWith('.ts') || f.endsWith('.tsx'));
@@ -29,7 +38,7 @@ describe('reflections and verbatims reach only the clustering task and its gate'
   it('the allowlist names only the clustering task and its gate', () => {
     // Pinned by value, not by length: widening the boundary must be a deliberate edit to
     // this line, visible in review, rather than a quiet append somewhere else in the file.
-    expect(ALLOWED).toEqual(['themes.ts', 'theme-gates.ts']);
+    expect(ALLOWED).toEqual(['themes.ts', 'theme-gates.ts', 'sections.ts', 'section-gates.ts']);
   });
 
   it('there is at least one guarded file left to check', () => {
