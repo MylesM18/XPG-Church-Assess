@@ -188,9 +188,19 @@ describe('AreaDossier', () => {
 
 // --- AreaTable: the Layer 1 cover table columns (Change #1: respondent N removed) ------------
 //
-// AreaTable is shared by the screen cover, the PDF, and the public /r/[shareToken] surface (all
-// import it from cover.tsx). The respondent count is an internal statistic that no longer belongs
-// on any report surface, so the table must show Area / Score / Band only — no N column.
+// AreaTable (this component, imported from cover.tsx) is currently rendered by exactly one live
+// surface: the authenticated diagnosis page, via shared.tsx's ReportBody. The PDF route never
+// imported this component at all — react-pdf cannot render DOM components, so
+// lib/report/pdf/document.tsx hand-duplicates an equivalent table's styling instead (the same
+// reason its confidenceBand() is hand-duplicated too; see tests/report/audience-parity.test.ts).
+//
+// As of the plan-4 web swap (Task 7), the public /r/[shareToken] surface no longer imports
+// AreaTable either — that page now renders the 13-section ReportSections/fallback pipeline
+// instead. AreaTable is UNSHIPPED from the share page specifically, not from the app: it remains
+// fully live for the authenticated diagnosis page (and this test keeps covering it) until Task 8
+// swaps that page too, and Task 9 removes cover.tsx altogether. The respondent count is an
+// internal statistic that no longer belongs on any report surface, so the table must show
+// Area / Score / Band only — no N column.
 describe('AreaTable', () => {
   it('shows Area, Score, and Band columns but not respondent N', () => {
     const tree = AreaTable({ areas: [area] });

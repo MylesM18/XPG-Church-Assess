@@ -49,3 +49,38 @@ describe('the shared report surface never carries reflections', () => {
     expect(sharedPage).toContain('methodology_version');
   });
 });
+
+describe('the shared report surface passes the literal redacted label source (D-P4-4)', () => {
+  it('never calls knownLabels(...) — the literal { kind: \'redacted\' } is required, not derived', () => {
+    // D-P4-4 (locked decision): the shared page must pass `labelSource: { kind: 'redacted' }`
+    // as a LITERAL, never `knownLabels(responses)`. That call would type-check and look like
+    // a reasonable "use the real thing" refactor — `responses` here genuinely does carry a
+    // `respondent_label` field (redacted to '' by get_shared_run_responses, but present).
+    //
+    // The observable difference TODAY is ZERO: churchFactsFrom(null, …) returns every profile
+    // column as null, and buildFacts's free-text loop is gated on `labelSource.kind === 'known'`
+    // AND short-circuits per-field on a null column before it ever reaches
+    // containsRespondentLabel — so facts.profile is `{}` either way. No test can observe a
+    // behavioural regression from this swap right now, which is exactly why nothing else in
+    // the suite catches it.
+    //
+    // The reason this still matters is fail-closed PERMANENCE for plan 5: `knownLabels(responses)`
+    // here yields `{ kind: 'known', labels: [] }` (every label is redacted to ''), which looks
+    // IDENTICAL to "this run genuinely has no nameable respondents" and passes every current
+    // test. The moment plan 5 gives this page a real profile, that literal would silently
+    // unguard every free-text field — the redacted variant is the only spelling that fails
+    // closed by construction, because FREE_TEXT_PROFILE_KEYS are only ever considered under
+    // `kind === 'known'`.
+    expect(
+      /kind:\s*'redacted'/.test(sharedPage),
+      "the shared page must pass the literal `labelSource: { kind: 'redacted' }` (D-P4-4)",
+    ).toBe(true);
+    expect(
+      sharedPage.includes('knownLabels('),
+      'the shared page must never call knownLabels(...) for its labelSource — even though ' +
+        '`responses` carries a respondent_label field and knownLabels(responses) would ' +
+        'type-check, it silently trades a permanent fail-closed guard for a data-shaped one ' +
+        'that is accidentally safe today and unsafe the moment this page gains a real profile.',
+    ).toBe(false);
+  });
+});
