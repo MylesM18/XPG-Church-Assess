@@ -190,3 +190,20 @@ describe('the section composer sees the facts pack and nothing quoted', () => {
     expect(src).not.toContain('JSON.stringify(facts');
   });
 });
+
+/**
+ * Task 7's own positive block, deferred here on purpose (see the comment above): a
+ * describe-scope readFileSync on a missing file would have crashed this whole suite before
+ * lib/ai/section-gates.ts existed. It exists now.
+ *
+ * The `it` label below is corrected per controller ruling R5: "only sections.ts and themes.ts
+ * call the API" is false — three files call the OpenAI SDK (prose.ts, themes.ts, sections.ts).
+ * The assertions are byte-identical to the Task 6 brief; only the label changed.
+ */
+describe('the gates never talk to the model', () => {
+  it('the section gates never touch the SDK', () => {
+    const gates = stripTs(readFileSync('lib/ai/section-gates.ts', 'utf8')).toLowerCase();
+    expect(gates).not.toContain('openai');
+    expect(gates).not.toContain('responses.parse');
+  });
+});
