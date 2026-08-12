@@ -52,6 +52,32 @@ describe('the diagnosis surface wires the keyed array to the hash and nothing el
     expect(diagnosisPage).not.toContain('churchFactsFrom(null')
   })
 
+  it('passes knownLabels(responses) as the label source at both facts call sites', () => {
+    // labelSource IS a hash input, by the same indirect route as church: buildFacts admits the
+    // eight FREE_TEXT_PROFILE_KEYS into facts.profile only when labelSource.kind === 'known'
+    // (lib/report/facts.ts:182), and facts.profile is component 5 of the inputs hash. Generation
+    // passes knownLabels(responses) (actions.ts:200), so render must too — a redacted source here
+    // type-checks fine, silently drops eight keys from the hashed profile, and stales the
+    // persisted report forever with every gate green.
+    //
+    // Occurrence-count equality, NOT presence — sibling of the churchFactsFrom pin above and the
+    // same two call sites (reportInputs, and buildFacts on the themes-rebuild path).
+    expect(countOf(diagnosisPage, /labelSource:/g)).toBe(2)
+    expect(countOf(diagnosisPage, /labelSource: knownLabels\(responses\)/g)).toBe(2)
+  })
+
+  it('reads the response hash off the diagnosis edition, not the run row', () => {
+    // The other half of §4.3 parity: generation is responseHash(responses, diagnosis
+    // .methodology_version) (actions.ts:119), so render must read .methodology_version off the
+    // re-derived diagnosis too — never run.methodology_version and never a methodology edition's
+    // own .questions.version. Both counts pinned so a second call site forces a decision rather
+    // than silently satisfying a presence check.
+    expect(countOf(diagnosisPage, /responseHash\(/g)).toBe(1)
+    expect(
+      countOf(diagnosisPage, /responseHash\(responses, resolution\.diagnosis\.methodology_version\)/g),
+    ).toBe(1)
+  })
+
   it('keeps loadChurchForMember for chrome and the role check', () => {
     expect(diagnosisPage).toContain('loadChurchForMember(')
   })
