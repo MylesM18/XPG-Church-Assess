@@ -125,7 +125,29 @@ function fakeDb(tables: Record<string, Row[]>) {
 function setupSupabase(opts: { runRow: Row | null; reportsRows?: Row[]; rpcThrows?: Set<string> }) {
   const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
   const from = fakeDb({
-    churches: [{ id: CHURCH_A, attendance_band: '500_999' }],
+    // Task 2 (plan 4): generateDiagnosis now reads this row via loadChurchProfile's named-column
+    // select (lib/data/churches.ts), then maps it through churchFactsFrom (lib/report/inputs-hash.ts),
+    // which rest-spreads the row as-is rather than independently defaulting each column to null the
+    // way the old inline mapping did. A real Postgres/PostgREST response to a named-column select
+    // always returns every requested column (null, never omitted) — so this fixture must mirror that
+    // shape (full row, explicit nulls) to stay realistic. All fields null except attendance_band,
+    // matching CHURCH_FACTS above field-for-field.
+    churches: [{
+      id: CHURCH_A,
+      name: null,
+      denomination: null,
+      context: null,
+      attendance_band: '500_999',
+      adults_band: null,
+      staff_fte_band: null,
+      budget_band: null,
+      church_age_band: null,
+      growth_trajectory: null,
+      campuses_band: null,
+      facility_status: null,
+      leadership_history: null,
+      consultant_notes: null,
+    }],
     assessment_runs: opts.runRow ? [opts.runRow] : [],
     diagnoses: [],
     reports: opts.reportsRows ?? [],

@@ -34,23 +34,38 @@ describe('the report generation block', () => {
   });
 
   it('computes the inputs hash before the cache check', () => {
-    // R1c: anchored on the CALL SITE ('reportInputsHash({') rather than the bare identifier,
+    // R1c: anchored on the CALL SITE ('reportInputs({') rather than the bare identifier,
     // which would resolve to the top-of-file import and silently fail to catch the mutation
     // that moves the call below the cache check (recon G3(b): proven empirically to be a
     // false-negative tripwire against the bare-identifier version of this assertion).
-    expect(src.indexOf('reportInputsHash({')).toBeLessThan(src.indexOf("from('reports')"));
+    //
+    // FIX ROUND 1: re-anchored from 'reportInputsHash({' to 'reportInputs({' — Task 2 (plan 4)
+    // extracted the hash computation into lib/report/inputs-hash.ts's reportInputs(), so the old
+    // needle no longer occurs anywhere in this file. Left unguarded, indexOf('reportInputsHash({')
+    // returns -1, and -1 < <any positive index> passes unconditionally — a vacuous pass that
+    // reports coverage that does not exist (Lesson 6: -1 is a fail-open sentinel on this plan's
+    // explicit tripwire list). Both anchors are now guarded as their own assertions before the
+    // ordering comparison (Lesson 7: an ordering assertion must guard BOTH anchors), so a future
+    // disappearance of either needle fails loudly, naming which one vanished, instead of silently
+    // passing.
+    const inputsIdx = src.indexOf('reportInputs({');
+    const reportsIdx = src.indexOf("from('reports')");
+    expect(inputsIdx).toBeGreaterThan(-1);
+    expect(reportsIdx).toBeGreaterThan(-1);
+    expect(inputsIdx).toBeLessThan(reportsIdx);
   });
 
-  it('builds reflection rows keyed on respondent_id, never respondent_label', () => {
-    // respondent_label is display-only and can collide across two people; counting on it would
-    // undercount and weaken the k>=3 gate.
-    // R1b: slice end anchored on the CALL SITE ('await clusterThemes(') rather than the bare
-    // identifier 'clusterThemes', which resolves to the top-of-file import — BEFORE
-    // 'const reflectionRows' in source order, which makes slice(start > end) return '' and the
-    // `toContain` assertion fail unconditionally regardless of the code underneath.
+  it('builds reflection rows via the shared reflectionRowsFor extraction, from raw, not responses', () => {
+    // Task 2 (plan 4): the inline respondent_key mapping this assertion used to pin was extracted
+    // to lib/report/inputs-hash.ts's reflectionRowsFor (Task 1), so it no longer appears as source
+    // text in this file — the respondent_user_id ?? respondent_label precedence is now pinned
+    // directly at the module level by tests/report/inputs-hash-parity.test.ts ("keys on
+    // respondent_user_id ?? respondent_label"). What THIS file can still usefully pin is the call
+    // site: that generation feeds the extraction the raw RPC rows (`raw`), never the
+    // reflection-stripped `responses` (tests/outreach/ai-exclusion.test.ts separately pins that
+    // `responses` stays reflection-free).
     const block = src.slice(src.indexOf('const reflectionRows'), src.indexOf('await clusterThemes('));
-    expect(block).toContain('respondent_key: r.respondent_user_id ?? r.respondent_label');
-    expect(block).not.toMatch(/respondent_key:\s*r\.respondent_label\b/);
+    expect(block).toContain('reflectionRowsFor(raw ?? [])');
   });
 
   it('passes a knownLabels source, never a bare array', () => {

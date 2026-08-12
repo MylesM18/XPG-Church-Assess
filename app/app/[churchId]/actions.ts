@@ -8,11 +8,13 @@ import { deriveDiagnosisForRun } from '@/lib/report/derive'
 import type { Response } from '@/lib/engine/types'
 import { responseHash } from '@/lib/report/response-hash'
 import { generateProse } from '@/lib/ai/prose'
-import { buildFacts, type ChurchFacts } from '@/lib/report/facts'
+import { buildFacts } from '@/lib/report/facts'
 import { knownLabels } from '@/lib/report/anonymity'
 import { clusterThemes } from '@/lib/ai/themes'
-import { reportInputsHash } from '@/lib/report/report-hash'
 import { composeReport } from '@/lib/report/compose'
+import { loadChurchProfile } from '@/lib/data/churches'
+import type { ChurchProfile } from '@/lib/data/churches'
+import { churchFactsFrom, reflectionRowsFor, reportInputs } from '@/lib/report/inputs-hash'
 
 // Raw shape of one get_run_responses row (supabase.rpc returns it untyped). respondent_user_id
 // is null for a row predating the 20260728000100 migration or a submission the RPC never
@@ -47,27 +49,19 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
     respondent_id: r.respondent_user_id ?? r.respondent_label,
   }))
 
-  const { data: church } = await supabase
-    .from('churches')
-    .select('name, denomination, context, attendance_band, adults_band, staff_fte_band, budget_band, church_age_band, growth_trajectory, campuses_band, facility_status, leadership_history, consultant_notes')
-    .eq('id', churchId)
-    .maybeSingle()
-
-  const churchFacts: ChurchFacts = {
-    name: church?.name ?? '',
-    denomination: church?.denomination ?? null,
-    context: church?.context ?? null,
-    attendance_band: church?.attendance_band ?? null,
-    adults_band: church?.adults_band ?? null,
-    staff_fte_band: church?.staff_fte_band ?? null,
-    budget_band: church?.budget_band ?? null,
-    church_age_band: church?.church_age_band ?? null,
-    growth_trajectory: church?.growth_trajectory ?? null,
-    campuses_band: church?.campuses_band ?? null,
-    facility_status: church?.facility_status ?? null,
-    leadership_history: church?.leadership_history ?? null,
-    consultant_notes: church?.consultant_notes ?? null,
+  // D-P4-5: loadChurchProfile throws on an unexpected read error, where the inline select
+  // this replaces silently degraded to an all-null ChurchFacts. This line sits outside both
+  // try blocks, so an unguarded switch would turn a transient profile read failure into an
+  // unhandled server-action error. Catching to null keeps generation's old behaviour AND
+  // keeps it identical to the diagnosis page's, which is what preserves hash parity when
+  // the database is flaky — the one condition nobody smoke-tests.
+  let churchProfile: ChurchProfile | null = null
+  try {
+    churchProfile = await loadChurchProfile(supabase, churchId)
+  } catch {
+    churchProfile = null
   }
+  const churchFacts = churchFactsFrom(churchProfile, '')
 
   // The run row, read BEFORE scoring rather than inside the AI-prose block below, because its
   // `methodology_version` decides which edition of the questions this run is scored against
@@ -105,7 +99,7 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
   const derived = deriveDiagnosisForRun(
     responses,
     methodology,
-    { attendance_band: church?.attendance_band ?? '' },
+    { attendance_band: churchProfile?.attendance_band ?? '' },
     run?.methodology_version ?? null,
   )
   if (!derived.ok) {
@@ -201,33 +195,21 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
       // respondent_key is the STABLE identity (respondent_user_id ?? respondent_label), never
       // respondent_label alone, which is display-only and can collide across two people —
       // counting on labels would undercount and weaken the k>=3 gate.
-      const reflectionRows = (raw ?? [])
-        .filter((r: RunResponseRow) => r.reflection != null && r.reflection.trim().length > 0)
-        .map((r: RunResponseRow) => ({
-          item_id: r.item_id,
-          respondent_key: r.respondent_user_id ?? r.respondent_label,
-          text: (r.reflection as string).trim(),
-        }))
+      const reflectionRows = reflectionRowsFor(raw ?? [])
 
       const labelSource = knownLabels(responses)
 
       // INPUTS ONLY, and computed BEFORE the cache check: clustered themes are model output, so
       // they must never participate in the key that decides whether to call the model.
-      const baseFacts = buildFacts({
+      const { inputsHash, baseFacts } = reportInputs({
         diagnosis,
         methodology: derived.effectiveMethodology,
         responses,
         church: churchFacts,
         completedAt: new Date().toISOString(),
         labelSource,
-      })
-      const inputsHash = reportInputsHash({
-        methodologyVersion: diagnosis.methodology_version,
         responseHash: hash,
-        methodology: derived.effectiveMethodology,
         reflections: reflectionRows,
-        profile: baseFacts.profile,
-        reportVersion: derived.effectiveMethodology.report.version,
       })
 
       // Cache check scoped to THIS church's run, for the same reason the prose cache above is:
