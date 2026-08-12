@@ -377,7 +377,7 @@ describe('S11 offers.stages[primary] hook (fix round A / I2 — test gap)', () =
     ['conn', 'Your church may feel more connected than it is.'],
     ['disc', "Your ceiling isn't your building. It's the number of people who can lead."],
     ['vol', 'You may be one burnout away from three ministries stopping.'],
-  ])('routes primary=%s to offers.stages[%s], with the exact hook — NOT offers.no_constraint', (id, hook) => {
+  ])('routes primary=%s to its own offers.stages entry, with the exact hook — NOT offers.no_constraint', (id, hook) => {
     const facts: FactsPack = buildFacts({
       ...baseArgs,
       diagnosis: makeDiagnosis({ primary_constraint: { category_id: id } }),

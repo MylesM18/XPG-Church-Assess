@@ -146,9 +146,9 @@ describe('facts slices', () => {
   // Fix round A (I5): asserted against the REAL serialized `client.responses.parse` call
   // argument (house idiom: tests/ai/themes-generate.test.ts's `JSON.stringify(mockParse.mock
   // .calls[0]![0])` pattern), not against `sectionSlice` — that helper has no production caller
-  // (`composeSection` calls `entry.slice(facts)` directly, lib/ai/sections.ts:125) and so cannot
-  // observe what actually goes over the wire. Stringifying the whole first argument, not just
-  // `input[1].content`, also catches a leak smuggled into the system message.
+  // (`composeSection` calls `entry.slice(facts)` directly when it builds the `input[1]` user
+  // message) and so cannot observe what actually goes over the wire. Stringifying the whole first
+  // argument, not just `input[1].content`, also catches a leak smuggled into the system message.
 
   it('never sends a verbatim over the wire for any AI section', async () => {
     // Parent spec line 72: verbatims flow facts → the S8 renderer exclusively. S8 is not an AI
@@ -158,11 +158,14 @@ describe('facts slices', () => {
       mockParse.mockReset();
       mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
       await composeSection(id, facts, methodology);
-      const payload = JSON.stringify(mockParse.mock.calls[0]![0]);
+      const call = mockParse.mock.calls[0]![0];
+      const payload = JSON.stringify(call);
       expect(payload, id).not.toContain('SENTINEL QUOTE');
-      // Non-vacuity: `overall` is in every slice's head(), so this can't pass against a call
-      // that never happened or that sent an empty body.
-      expect(payload, id).toContain(String(facts.overall.capacity));
+      // Non-vacuity: `overall` is in every slice's head(), so a call that never happened or that
+      // sent an empty body cannot satisfy this. Scoped to the USER message and pinned to the
+      // rendered key — a bare `String(capacity)` against the whole stringified call is fail-open,
+      // since a two-digit capacity also matches inside `"max_output_tokens":4000`.
+      expect(String(call.input[1].content), id).toContain(`"capacity": ${facts.overall.capacity}`);
     }
   });
 
@@ -173,9 +176,11 @@ describe('facts slices', () => {
       mockParse.mockReset();
       mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
       await composeSection(id, facts, methodology);
-      const payload = JSON.stringify(mockParse.mock.calls[0]![0]);
+      const call = mockParse.mock.calls[0]![0];
+      const payload = JSON.stringify(call);
       expect(payload, id).not.toContain('SENTINEL NOTE');
-      expect(payload, id).toContain(String(facts.overall.capacity));
+      // Non-vacuity scoped to the USER message, for the reason given in the test above.
+      expect(String(call.input[1].content), id).toContain(`"capacity": ${facts.overall.capacity}`);
     }
   });
 });
