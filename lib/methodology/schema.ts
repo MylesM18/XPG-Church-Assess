@@ -173,8 +173,6 @@ export const CopySchema = z.object({
   dependency_reads: DependencyReadsSchema,
 });
 
-const ReportArchetypeSchema = z.enum(['capacity', 'constraint', 'foundation']);
-
 // Named keys, not z.record — the same rationale as DossierReadingBandSchema above. The three
 // archetypes are a closed set and lib/report/fallback-sections.ts indexes them directly, so a
 // z.record would load with any subset and let a missing archetype surface as `undefined`
