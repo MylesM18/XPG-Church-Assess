@@ -173,6 +173,17 @@ describe('resolveScoreability (D-P4-6)', () => {
   // resolveReportView after plan 4, so this helper is what produces the resolution they
   // render the stale-methodology notice from. It must agree with resolveReportView
   // exactly, or the two surfaces' notices silently diverge from the PDF route's.
+  //
+  // FIX ROUND 1 (controller's Step 6 mutation, proven by execution): resolveReportView's
+  // not-scoreable arm now DELEGATES to resolveScoreability (view.ts) — so for as long as
+  // that delegation stands, `direct` and `viaView` below are the SAME code path wearing two
+  // names. This assertion CANNOT fail on its own for any mutation of the shared gate logic —
+  // a controller mutation of resolveScoreability's `blockedAreas` line proved this
+  // concretely (5/5 green under the mutation, hand-reverted). It is kept anyway because it
+  // still catches real drift: if a future author ever un-delegates resolveReportView and
+  // re-inlines its own gate, this is the test that notices the two diverge again. The
+  // literal-value test directly below is what actually pins resolveScoreability's own output
+  // today, independent of resolveReportView.
   it('agrees with resolveReportView on every not-scoreable arm', () => {
     for (const derived of NOT_SCOREABLE_FIXTURES) {
       const viaView = resolveReportView(derived, FIXTURE_METHODOLOGY, () => FIXTURE_BLOCKS, {
@@ -183,17 +194,46 @@ describe('resolveScoreability (D-P4-6)', () => {
     }
   });
 
+  // The real value pin (fix round 1): literal expected values, not another function's output,
+  // so a mutation of resolveScoreability's own logic cannot hide behind the delegation above.
+  // Whole-object toEqual per fixture — not a loop with one assertion per iteration (Lesson 1:
+  // an assertion inside a loop reports only the FIRST failure) — so both arms are checked and
+  // a failure on either is reported directly. The unknown_band expectation matches what
+  // tests/report/stale-payload.test.ts:67 already pins for resolveReportView, so the two
+  // files cannot silently drift apart on that arm's shape.
+  it('pins each not-scoreable resolution against a literal expected value', () => {
+    expect(resolveScoreability(INCOMPLETE)).toEqual({
+      scoreable: false,
+      reason: 'incomplete_areas',
+      blockedAreas: ['disc', 'vol'],
+    });
+    expect(resolveScoreability(UNKNOWN_BAND)).toEqual({
+      scoreable: false,
+      reason: 'unknown_band',
+      blockedAreas: [],
+    });
+  });
+
   it('carries the diagnosis on the scoreable arm so callers can narrow', () => {
     const resolution = resolveScoreability(SCOREABLE_FIXTURE);
     expect(resolution.scoreable).toBe(true);
     if (resolution.scoreable) expect(resolution.diagnosis).toBe(SCOREABLE_FIXTURE.diagnosis);
   });
 
-  it('never invokes the blocks thunk — no view is built', () => {
-    let calls = 0;
-    resolveReportView(SCOREABLE_FIXTURE, FIXTURE_METHODOLOGY, () => { calls++; return FIXTURE_BLOCKS; }, { audience: 'screen' });
-    const before = calls;
-    resolveScoreability(SCOREABLE_FIXTURE);
-    expect(calls).toBe(before);
+  // FIX ROUND 1: the original version of this test spied on a `calls` counter incremented by
+  // a thunk that was only ever passed to resolveReportView, never to resolveScoreability —
+  // whose signature is `(derived: DeriveResult) => ScoreabilityResolution`, with no blocks
+  // parameter it could invoke at all. `expect(calls).toBe(before)` was therefore vacuous: it
+  // could not fail no matter what resolveScoreability's body did, because resolveScoreability
+  // structurally has no reference to that closure to call. "Never invokes a blocks thunk" is a
+  // type-level guarantee here (no parameter exists to invoke it through), not something a spy
+  // at this call site can observe. What IS runtime-observable, and is the actual behavioral
+  // difference this helper exists to provide (its own doc comment in view.ts: "calling
+  // resolveReportView purely to read a boolean would build an entire unused ReportView"), is
+  // that the returned resolution carries no `view` key at all — pinned here directly via
+  // whole-object equality instead of a spy that could never fire.
+  it('returns diagnosis only on the scoreable arm — no view key is ever present', () => {
+    const resolution = resolveScoreability(SCOREABLE_FIXTURE);
+    expect(resolution).toEqual({ scoreable: true, diagnosis: SCOREABLE_FIXTURE.diagnosis });
   });
 });
