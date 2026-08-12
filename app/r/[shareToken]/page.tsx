@@ -11,21 +11,20 @@
 // list at the view layer too. Two independent name defenses, same as before — just relocated
 // from the payload strip to the response-read redaction.
 //
-// This is a Server Component and stays one: it passes only the built ReportView to children.
+// This is a Server Component and stays one: it passes only the built facts/sections to children.
 // Handing raw RPC rows to a Client Component would ship data to the browser inside RSC flight.
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
-import { fallbackProse } from '@/lib/ai/fallback'
-import { resolveReportView } from '@/lib/report/view'
+import { resolveScoreability } from '@/lib/report/view'
 import { deriveDiagnosisForRun } from '@/lib/report/derive'
+import { buildFacts } from '@/lib/report/facts'
+import { churchFactsFrom } from '@/lib/report/inputs-hash'
+import { assembleFallbackOnly } from '@/lib/report/compose'
+import { ReportSections } from '@/app/app/[churchId]/diagnosis/report/sections'
 import type { Response } from '@/lib/engine/types'
-import { CoverCard, VerdictHeader, AreaTable } from '@/app/app/[churchId]/diagnosis/report/cover'
-import { ChainWalk, EvidenceReceipt, CostSection } from '@/app/app/[churchId]/diagnosis/report/chain'
-import { DependencyMap, Calibration, Disagreement, GatingFlags } from '@/app/app/[churchId]/diagnosis/report/system'
-import { AreaDossier } from '@/app/app/[churchId]/diagnosis/report/dossier'
-import { NextStep, BookingCta, Appendix, SharedStaleMethodologyNotice } from '@/app/app/[churchId]/diagnosis/report/shared'
+import { BookingCta, SharedStaleMethodologyNotice } from '@/app/app/[churchId]/diagnosis/report/shared'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -34,11 +33,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // denormalized onto every row because the anon page cannot query churches or assessment_runs.
 //
 // There is DELIBERATELY no `reflection` field here. Free-text reflections are excluded from the
-// public share surface at four independent layers, and this row type is one of them: the RPC
-// (get_shared_run_responses) never selects the column, this shape does not name it, this page
-// never passes a `reflections` array down, and buildReportView's own audience check
-// (lib/report/view.ts) drops them again even if a caller somehow did. Adding it here would
-// quietly undo one of the four.
+// public share surface at multiple independent layers, and this row type is one of them: the RPC
+// (get_shared_run_responses) never selects the column, this shape does not name it, and this
+// page's own assembleFallbackOnly call site passes only the mandated empty `reflections: []`
+// literal — never populated data. Adding a `reflection` field here would quietly undo one of
+// those layers.
 interface SharedRunResponseRow {
   category_id: string
   item_id: string
@@ -106,24 +105,15 @@ export default async function SharedReportPage({
   // read on the not-ok arm — that path returns the notice below without building a view.
   const reportMethodology = derived.ok ? derived.effectiveMethodology : methodology
 
-  // Deliberately NOT gated on PROSE_MODE — this public path never reads AI prose (which could
-  // carry names past both defenses); it renders deterministic, provably name-free fallbackProse.
-  // The thunk stays lazy (only evaluated on the scoreable path) purely to preserve the shared
-  // call shape tests/report/route-call-ordering.test.ts pins across all three surfaces.
-  const resolution = resolveReportView(
-    derived,
-    reportMethodology,
-    (d) => fallbackProse(d, reportMethodology),
-    { audience: 'shared' },
-  )
+  const resolution = resolveScoreability(derived)
 
   if (!resolution.scoreable) {
     // No admin action is offered here (unlike StaleMethodologyNotice on the authenticated
     // page): GenerateButton's regenerate action is admin-only, and a public visitor holding a
     // forwarded link cannot take it. SharedStaleMethodologyNotice (report/shared.tsx) supplies
-    // this branch's <h1> from ANOTHER file — exactly how <CoverCard> supplies the fresh branch's
-    // <h1> below — so this file's own literal <h1> count stays 0 either way, and
-    // tests/a11y/shared-report-heading.test.ts (which sums this file's <h1>s with cover.tsx's
+    // this branch's <h1> from ANOTHER file — exactly how <ReportSections> supplies the fresh
+    // branch's <h1> below — so this file's own literal <h1> count stays 0 either way, and
+    // tests/a11y/shared-report-heading.test.ts (which sums this file's <h1>s with sections.tsx's
     // and requires exactly one) holds regardless of which branch actually renders.
     return (
       <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
@@ -144,7 +134,36 @@ export default async function SharedReportPage({
     )
   }
 
-  const view = resolution.view
+  // The public surface carries NO profile columns: the anon client cannot read them and
+  // get_shared_report returns only valid/payload/church_name/brand_color. facts.profile is
+  // therefore {} — profile fields are ABSENT, not empty (locked decision 6), which the
+  // fallback templates already handle. Spec §9.2.
+  const facts = buildFacts({
+    diagnosis: resolution.diagnosis,
+    methodology: reportMethodology,
+    responses,
+    church: churchFactsFrom(null, row.church_name),
+    // Spec §9.1: no completion timestamp is reachable here without a migration, so S1 reads
+    // "assessed not yet completed" on the public surface. Fixing it is a plan-5 follow-up.
+    completedAt: null,
+    // D-P4-4: the literal redacted variant, never knownLabels(responses).
+    // get_shared_run_responses redacts respondent_label to the empty string, and
+    // containsRespondentLabel skips empty needles — so knownLabels() here would build a
+    // guard over [] that guards NOTHING. The observable difference today is ZERO
+    // (ChurchFacts is name-only, so facts.profile === {} either way). This is fail-closed
+    // permanence: the moment plan 5 gives this page a real profile, { kind: 'known',
+    // labels: [] } would silently unguard every free-text field.
+    labelSource: { kind: 'redacted' },
+  })
+
+  // Structural exclusion, visible at the call site: the public report never receives
+  // reflections. FallbackSectionArgs REQUIRES the field, so an empty literal is the
+  // exclusion — there is no conditional to get wrong, because the data never enters.
+  const sections = assembleFallbackOnly({
+    facts,
+    methodology: reportMethodology,
+    reflections: [],
+  })
 
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
@@ -155,58 +174,14 @@ export default async function SharedReportPage({
         >
           {brand.monogram}
         </div>
-        {/* Not an <h1>: CoverCard below renders the page's one true <h1> ("Overall church
-            health") — tests/a11y/shared-report-heading.test.ts pins exactly one <h1> on this
-            public, unauthenticated page. Same visual treatment as before, just a <p>. */}
+        {/* Not an <h1>: ReportSections below renders the page's one true <h1> (the first
+            section's title) — tests/a11y/shared-report-heading.test.ts pins exactly one <h1> on
+            this public, unauthenticated page. Same visual treatment as before, just a <p>. */}
         <p className="font-display text-lg text-ink">{row.church_name}</p>
       </div>
 
-      {/* Layer 1 — the verdict. Same order as ReportBody (app/app/[churchId]/diagnosis/report/
-          shared.tsx), minus the PDF/Share admin buttons — those belong to the authenticated
-          diagnosis page, not a public forwarded link. */}
-      <CoverCard cover={view.cover} />
-      <VerdictHeader verdict={view.verdict} confidence={view.confidence} />
-      <AreaTable areas={view.areas} />
-
-      {/* Layer 2 — how your system behaves */}
-      <ChainWalk stages={view.stages} />
-      {view.evidence && <EvidenceReceipt text={view.evidence.text} refs={view.evidence.refs} />}
-      {view.cost && <CostSection cost={view.cost.cost} doNotWorkOn={view.cost.doNotWorkOn} />}
-      <DependencyMap system={view.system} />
-      <Calibration spread={view.system.calibrationSpread} text={view.system.calibrationText} />
-      {view.system.disagreement && (
-        <Disagreement text={view.system.disagreement.text} respondents={view.system.disagreement.respondents} />
-      )}
-      {view.system.gating && <GatingFlags text={view.system.gating} />}
-
-      {/* Layer 3 — the eight areas, fixed chain-then-enabler order (view.areas' own order —
-          never re-sorted here). Rendered inline on every surface, PDF included (spec §7.8). */}
-      {view.areas.map((area) => (
-        <AreaDossier key={area.category_id} area={area} />
-      ))}
-
-      {/* Layer 4 — what to do. audience 'shared' always leaves view.nextStep undefined
-          (lib/report/view.ts) — the CTA is an admin action a board member reading a
-          forwarded link cannot take. Gated here anyway, deliberately, rather than relying on
-          that invariant holding forever: this page does not inherit the guard from
-          app/app/[churchId]/diagnosis/page.tsx, and nextStep being optional on ReportView means
-          tsc itself refuses an ungated `.callType` access. */}
-      {view.nextStep && (
-        <NextStep
-          callType={view.nextStep.callType}
-          hook={view.nextStep.hook}
-          nextStep={view.nextStep.text}
-        />
-      )}
-
+      <ReportSections sections={sections} />
       <BookingCta />
-
-      <Appendix
-        categories={view.appendix.categories}
-        stages={view.stages}
-        benchmarkNote={view.appendix.benchmarkNote}
-        dependencyNote={view.appendix.dependencyNote}
-      />
 
       <p className="font-body text-sm text-ink-soft">
         Shared read-only view. This link expires and can be revoked at any time.

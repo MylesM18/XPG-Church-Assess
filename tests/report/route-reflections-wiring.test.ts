@@ -70,16 +70,23 @@ describe('report routes wire reflections into resolveReportView only on the auth
     ).toBe(true)
   })
 
-  it('shared route (r/[shareToken]/page.tsx) never passes reflections', () => {
+  it('shared route (r/[shareToken]/page.tsx) never passes a populated reflections array', () => {
     const source = strip(read('app', 'r', '[shareToken]', 'page.tsx'))
-    const tail = optsTail(source, 'shared')
 
-    expect(tail, "expected a resolveReportView opts literal shaped { audience: 'shared', ... }").not.toBeNull()
+    // The exclusion is now STRUCTURAL, not an omitted optional: FallbackSectionArgs
+    // requires `reflections`, so the empty literal is visible at the call site. Assert
+    // the literal is there AND that it is the file's only reflections expression — a
+    // "helpful" symmetry edit that populated it would otherwise slip past.
+    const EXCLUSION_LITERAL = /reflections:\s*\[\s*\]/g
     expect(
-      /\breflections\b/.test(tail!),
-      'the shared surface must NEVER receive reflections — a "helpful" symmetry edit that adds ' +
-        'it here would put private free-text reflections behind nothing but the audience gate ' +
-        "inside buildReportView, undoing one of the feature's four independent exclusion layers.",
+      (source.match(EXCLUSION_LITERAL) ?? []).length,
+      'the shared surface must pass exactly one explicit `reflections: []`',
+    ).toBe(1)
+    expect(
+      /\breflections\b/.test(source.replace(EXCLUSION_LITERAL, '')),
+      'the shared surface must NEVER receive reflections — private free-text is excluded ' +
+        'from the public share page at four independent layers, and this call site is one ' +
+        'of them.',
     ).toBe(false)
   })
 })
