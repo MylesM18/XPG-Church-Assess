@@ -1,6 +1,6 @@
 import { composeSection, SECTION_REGISTRY, AI_SECTION_IDS, type AiSectionId } from '../ai/sections';
 import { gateSection } from '../ai/section-gates';
-import { fallbackSections, type SectionBody } from './fallback-sections';
+import { fallbackSections, type FallbackSectionArgs, type SectionBody } from './fallback-sections';
 import type { FactsPack } from './facts';
 import type { Methodology, SectionId } from '../methodology/schema';
 
@@ -87,6 +87,20 @@ export interface AssembledSection {
   source: SectionSource;
   ai: unknown | null;
   fallback: SectionBody;
+}
+
+/**
+ * The share page needs the same AssembledSection[] shape as assembleReport without touching
+ * the composer's AI path — no persisted row, no hash, no model output. Mapping over the same
+ * Object.keys(methodology.report.sections) order keeps section order owned by one place
+ * instead of two.
+ */
+export function assembleFallbackOnly(args: FallbackSectionArgs): AssembledSection[] {
+  const fallbacks = fallbackSections(args);
+  return (Object.keys(args.methodology.report.sections) as SectionId[]).map((id) => {
+    const fallback = fallbacks[id];
+    return { id, source: 'fallback' as const, ai: null, fallback };
+  });
 }
 
 export function assembleReport(args: {
