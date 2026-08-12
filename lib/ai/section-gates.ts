@@ -1,5 +1,5 @@
 import type { FactsPack } from '../report/facts';
-import type { Methodology } from '../methodology/schema';
+import type { Methodology, RequiredMention } from '../methodology/schema';
 import { SECTION_REGISTRY, type AiSectionId } from './sections';
 
 /**
@@ -61,26 +61,15 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
 
   // 3. Required and banned mentions.
   const required = ctx.methodology.report.sections[id].required_mentions;
-  const resolved: Record<string, string> = {
+  const resolved: Record<RequiredMention, string> = {
     tier_name: ctx.facts.overall.tier.name,
     primary_name: ctx.facts.primary_constraint?.name ?? '',
     overall_percent: String(ctx.facts.overall.capacity),
   };
   for (const key of required) {
     const needle = resolved[key];
-    // Not load-bearing at RUNTIME, but load-bearing for the COMPILER — both halves matter:
-    //  - Runtime: `required_mentions` is a closed enum (RequiredMentionSchema) of exactly the
-    //    three keys built above, so `needle` is always a string. Its only falsy value is the
-    //    `''` from `?? ''` when there is no primary constraint — and `x.includes('')` is true,
-    //    so the gate would pass anyway. Deleting this line would not change the verdict.
-    //  - Compile time: `resolved` is a Record<string, string> and `noUncheckedIndexedAccess`
-    //    is on, so `resolved[key]` is `string | undefined`. This skip is the narrowing that
-    //    lets `needle.toLowerCase()` compile; deleting it is a TS18048 error, not a silent
-    //    behaviour change.
-    // It also documents intent: a primary_name requirement is vacuous with no primary
-    // constraint. Note the runtime half depends on ReportSchema actually being enforced at
-    // load — see tests/methodology/report-yaml.test.ts, which pins exactly that.
-    if (!needle) continue;
+    // Keyed by RequiredMention, so the compiler requires a resolver entry per enum member. An
+    // absent primary constraint resolves to '', and includes('') is true — vacuously satisfied.
     if (!lower.includes(needle.toLowerCase())) return 'required mention';
   }
   if (ctx.facts.archetype === 'constraint' && ctx.facts.primary_constraint && (id === 's2' || id === 's4')) {
