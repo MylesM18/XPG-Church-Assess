@@ -13,9 +13,10 @@ create table public.reports (
   methodology_version text not null,
   archetype text not null check (archetype in ('capacity','constraint','foundation')),
   tier text not null check (tier in ('healthy_ready','healthy_stretched','strained','at_risk')),
-  -- Write-only provenance: the exact facts the gates judged against, so a report that reads
-  -- wrong is diagnosable after the fact. No renderer reads it — rendering from it would break
-  -- the invariant that every surface re-derives the diagnosis from responses per request.
+  -- `facts` is write-only provenance, NARROWED (plan 4, D-P4-1): no renderer reads derived
+  -- NUMBERS from it. Model output that cannot be re-derived from responses — today only
+  -- `facts.themes`, which feeds S8 — IS read back by the diagnosis page, schema-revalidated
+  -- first, and only when the row's inputs_hash matches the live one.
   facts jsonb not null,
   sections jsonb not null,
   section_sources jsonb not null,
