@@ -2,12 +2,16 @@
 // same approach as tests/report/route-rederive.test.ts / route-call-ordering.test.ts.
 //
 // `reflections` is an OPTIONAL argument on resolveReportView's opts (lib/report/view.ts), so tsc
-// cannot catch a silent drop at either authenticated call site. tests/report/view.test.ts and
+// cannot catch a silent drop at the PDF call site. tests/report/view.test.ts and
 // tests/report/audience-parity.test.ts both call buildReportView directly with hand-built opts —
 // they never read a route file's source, so they structurally cannot observe whether a route
 // actually wires reflections through (Task 16's own report flagged exactly this gap under
 // "Concerns" #1). This file closes that gap directly on the three route sources:
-//   - the screen route (app/app/[churchId]/diagnosis/page.tsx, Task 16) must pass reflections;
+//   - the screen route (app/app/[churchId]/diagnosis/page.tsx) must pass reflections to
+//     assembleReport( — `reflections` is a REQUIRED field there (lib/report/compose.ts) since
+//     plan 4's web swap, so a total omission is now tsc-caught too; this test still pins it
+//     directly on the source, and additionally pins that the KEYED sibling (hashReflections)
+//     never leaks past its one consumer, reportInputs;
 //   - the PDF route (app/api/report/[runId]/pdf/route.ts, Task 17) must pass reflections;
 //   - the public share route (app/r/[shareToken]/page.tsx) must NEVER pass reflections — private
 //     free-text is excluded from the public share surface at four independent layers (the RPC
@@ -45,17 +49,25 @@ function optsTail(source: string, audience: string): string | null {
 }
 
 describe('report routes wire reflections into resolveReportView only on the authenticated surfaces, never on the shared surface', () => {
-  it('screen route (diagnosis/page.tsx, Task 16) passes reflections', () => {
+  it('screen route (diagnosis/page.tsx) passes the KEYLESS reflections to assembleReport', () => {
     const source = strip(read('app', 'app', '[churchId]', 'diagnosis', 'page.tsx'))
-    const tail = optsTail(source, 'screen')
 
-    expect(tail, "expected a resolveReportView opts literal shaped { audience: 'screen', ... }").not.toBeNull()
+    expect(source, 'the screen route must call assembleReport(').toContain('assembleReport(')
     expect(
-      /\breflections\b/.test(tail!),
-      'the screen route must pass reflections into the opts, or outreach voices silently ' +
-        'disappear from the on-screen report while every current test stays green (reflections ' +
-        'is optional, so tsc cannot catch the drop).',
-    ).toBe(true)
+      source,
+      'the screen route must pass reflections, or outreach voices silently disappear from ' +
+        'the on-screen report while every current test stays green.',
+    ).toMatch(/assembleReport\(\{[\s\S]*?\breflections\b[\s\S]*?\}\)/)
+
+    // The keyed sibling carries respondent identity and must reach reportInputs and
+    // NOTHING else. Occurrence-count equality, not substring absence: the identifier is
+    // legitimately present in the file, so what matters is how many places consume it.
+    const uses = [...source.matchAll(/\bhashReflections\b/g)].length
+    expect(
+      uses,
+      'hashReflections must appear exactly twice — its declaration and its single ' +
+        'consumer, reportInputs. A third use is a respondent-identity leak into a renderer.',
+    ).toBe(2)
   })
 
   it('PDF route (pdf/route.ts, Task 17) passes reflections', () => {

@@ -51,7 +51,6 @@ function extractCallArgs(source: string, callName: string): string | null {
 }
 
 const ROUTES = [
-  { label: 'app/app/[churchId]/diagnosis/page.tsx', segs: ['app', 'app', '[churchId]', 'diagnosis', 'page.tsx'] },
   { label: 'app/api/report/[runId]/pdf/route.ts', segs: ['app', 'api', 'report', '[runId]', 'pdf', 'route.ts'] },
 ] as const
 
@@ -129,6 +128,42 @@ describe('report routes build the view and the prose thunk from reportMethodolog
     expect(
       shorthand.test(buildFactsArgs!) || shorthand.test(assembleArgs!),
       'the shared page must never pass the raw `methodology` via object shorthand',
+    ).toBe(false)
+
+    expect(
+      source,
+      'the reportMethodology assignment itself must survive',
+    ).toContain('derived.effectiveMethodology')
+  })
+
+  it('app/app/[churchId]/diagnosis/page.tsx: every methodology argument is reportMethodology', () => {
+    const source = strip(read('app', 'app', '[churchId]', 'diagnosis', 'page.tsx'))
+
+    // Plan 4's web swap: reportInputs and assembleReport (plus buildFacts, on the
+    // themes-revalidated branch) replace resolveReportView on this page, but the invariant did
+    // not change — a legacy run must be RENDERED against the edition it was scored under, never
+    // the current one.
+    const passed = [...source.matchAll(/methodology:\s*([A-Za-z_$][\w$]*)/g)].map((m) => m[1]!)
+    expect(
+      passed.length,
+      'expected at least two methodology: <arg> call sites (reportInputs and assembleReport)',
+    ).toBeGreaterThanOrEqual(2)
+    expect(new Set(passed)).toEqual(new Set(['reportMethodology']))
+
+    // Shorthand `{ methodology }` would pass the RAW methodology while matching no
+    // `methodology:` key at all — the fail-open hole the regex above cannot see. Scoped to
+    // reportInputs's and assembleReport's own argument text (not the whole file): a whole-file
+    // scan for `[{,]\s*methodology\s*[,}]` also matches deriveDiagnosisForRun's ordinary
+    // positional `(responses, methodology, {...})` argument above, which legitimately passes
+    // the CURRENT methodology and is not an object literal at all.
+    const reportInputsArgs = extractCallArgs(source, 'reportInputs')
+    const assembleReportArgs = extractCallArgs(source, 'assembleReport')
+    expect(reportInputsArgs, 'expected a reportInputs( call').not.toBeNull()
+    expect(assembleReportArgs, 'expected an assembleReport( call').not.toBeNull()
+    const shorthand = /[{,]\s*methodology\s*[,}]/
+    expect(
+      shorthand.test(reportInputsArgs!) || shorthand.test(assembleReportArgs!),
+      'the diagnosis page must never pass the raw `methodology` via object shorthand',
     ).toBe(false)
 
     expect(

@@ -1,15 +1,23 @@
 // app/app/[churchId]/diagnosis/page.tsx
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { loadChurchForMember } from '@/lib/data/churches'
+import { loadChurchForMember, loadChurchProfile } from '@/lib/data/churches'
+import type { ChurchProfile } from '@/lib/data/churches'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
-import { fallbackProse, type ReportBlocks } from '@/lib/ai/fallback'
-import { resolveReportView } from '@/lib/report/view'
+import { resolveScoreability } from '@/lib/report/view'
 import { deriveDiagnosisForRun } from '@/lib/report/derive'
 import { shareLink } from '@/lib/report/share-link'
 import type { Response } from '@/lib/engine/types'
-import { EmptyState, ReportBody, StaleMethodologyNotice } from './report/shared'
+import { buildFacts } from '@/lib/report/facts'
+import type { ThemeClusterFact } from '@/lib/report/facts'
+import { knownLabels } from '@/lib/report/anonymity'
+import { churchFactsFrom, reflectionRowsFor, reportInputs } from '@/lib/report/inputs-hash'
+import { assembleReport } from '@/lib/report/compose'
+import type { AssembledSection } from '@/lib/report/compose'
+import { responseHash } from '@/lib/report/response-hash'
+import { ReportSections } from './report/sections'
+import { EmptyState, StaleMethodologyNotice } from './report/shared'
 import { ShareControl } from './share-control'
 
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'
@@ -43,18 +51,29 @@ export default async function DiagnosisPage({
   const isAdmin = role === 'admin'
   if (!isAdmin) redirect(`/app/${churchId}`)
 
+  // D-P4-5: catch to null so this page degrades EXACTLY as generation does. An asymmetric
+  // degradation would make the two sides disagree about `profile` precisely when the
+  // database is flaky — permanent silent staleness under the one condition nobody smoke-tests.
+  // loadChurchForMember stays for church chrome and the admin role check.
+  let churchProfile: ChurchProfile | null = null
+  try {
+    churchProfile = await loadChurchProfile(supabase, churchId)
+  } catch {
+    churchProfile = null
+  }
+
   const { data: run } = await supabase
     .from('assessment_runs')
-    .select('id, status, methodology_version')
+    .select('id, status, methodology_version, completed_at')
     .eq('church_id', churchId)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
 
-  // The diagnoses row is still read — but ONLY for AI `prose` (fed to the lazy thunk below) and
-  // for row existence (EmptyState). Its `payload` is NO LONGER the view's source: CT-2(c)
-  // re-derives the Diagnosis from the run's responses under the current methodology instead, so a
-  // payload cached under an older methodology can never drive what renders.
+  // The diagnoses row is still read — but ONLY for row existence (EmptyState). Its `payload` is
+  // NOT the view's source: CT-2(c) re-derives the Diagnosis from the run's responses under the
+  // current methodology instead, so a payload cached under an older methodology can never drive
+  // what renders.
   let diagRow: { prose: unknown } | null = null
   if (run) {
     const { data } = await supabase
@@ -96,13 +115,20 @@ export default async function DiagnosisPage({
     respondent_id: r.respondent_user_id ?? r.respondent_label,
   }))
   // A second, separate array from the SAME raw rows — never merged into `responses` above
-  // (Response has no reflection field). No respondent identifier travels alongside: buildAreas
-  // (lib/report/view.ts) groups these by item_id only, so outreachVoices carries free text and
-  // nothing that could attribute it to a person.
+  // (Response has no reflection field). No respondent identifier travels alongside: this is the
+  // only reflections data that reaches a renderer, and it is deliberately keyless.
   const reflections = (rawResponses ?? []).map((r: RunResponseRow) => ({
     item_id: r.item_id,
     reflection: r.reflection,
   }))
+  // ⚠️ ANONYMITY — the sibling keyed array. The array above is deliberately keyless: no
+  // respondent identifier travels alongside it. The array below CARRIES respondent identity
+  // (respondent_key = respondent_user_id ?? respondent_label) because the inputs hash must
+  // change when a different respondent answers, not merely when the text does. Its sole
+  // consumer is reportInputs. Passing it to fallbackSections, assembleReport, a component, or
+  // any client boundary would leak respondent identity into the report.
+  const hashReflections = reflectionRowsFor(rawResponses ?? [])
+
   const derived = deriveDiagnosisForRun(
     responses,
     methodology,
@@ -112,34 +138,19 @@ export default async function DiagnosisPage({
 
   // The edition the scoring actually used — the current methodology for a current-edition run, the
   // item-filtered '0.2.0' clone for a run that predates the outreach questions. The whole report is
-  // built FROM it (view + prose) so it describes the question set this run was actually scored
-  // against. Reverting this to `methodology` is wrong, not merely stylistic: the view path reads
-  // `questions.categories[].items` via buildOutreachVoices (lib/report/view.ts), so a legacy run
-  // would surface outreach voices for questions it was never asked. The revert is caught, not
-  // silent — tests/report/route-methodology-wiring.test.ts source-reads this exact call site and
-  // fails immediately; lib/report/derive.ts's DeriveResult doc explains the full rationale. The
-  // not-ok arm carries no methodology and builds no view, so `methodology` is a never-read
-  // placeholder there.
+  // built FROM it so it describes the question set this run was actually scored against. Reverting
+  // this to `methodology` is wrong, not merely stylistic — lib/report/derive.ts's DeriveResult doc
+  // explains the full rationale; tests/report/route-methodology-wiring.test.ts source-reads this
+  // exact call site and fails immediately. The not-ok arm carries no methodology and assembles
+  // nothing, so `methodology` is a never-read placeholder there.
   const reportMethodology = derived.ok ? derived.effectiveMethodology : methodology
-
-  // `blocks` stays a lazy thunk taking the FRESH diagnosis — it is only evaluated on the
-  // scoreable path (resolveReportView, lib/report/view.ts). PROSE_MODE gates the AI prose read
-  // exactly as generateDiagnosis's write gate does; unset → deterministic fallbackProse.
-  const PROSE_MODE = process.env.PROSE_MODE ?? 'fallback'
-  const resolution = resolveReportView(
-    derived,
-    reportMethodology,
-    (d) =>
-      PROSE_MODE !== 'fallback' && diagRow.prose
-        ? (diagRow.prose as ReportBlocks)
-        : fallbackProse(d, reportMethodology),
-    { audience: 'screen', reflections },
-  )
 
   // A run that cannot be scored under the current methodology (some area has no complete
   // respondent, or the church's attendance band is unset/unknown) gets a plain notice in
   // generateDiagnosis's own tone, not a half-empty report. The regenerate action is offered
   // because completing the assessment / setting the band and regenerating is exactly the fix.
+  const resolution = resolveScoreability(derived)
+
   const notScoreableMessage = !resolution.scoreable
     ? resolution.reason === 'incomplete_areas'
       ? `This run can’t be scored yet — every area needs at least one person who answered all its questions.${
@@ -151,6 +162,75 @@ export default async function DiagnosisPage({
         }`
       : 'This run can’t be scored under the current methodology yet — set your church’s weekend attendance band before generating a diagnosis.'
     : null
+
+  // Built only on the scoreable path — `resolution.diagnosis` does not exist otherwise. Stays a
+  // `let` (rather than an early return) so the not-scoreable branch below can keep the page's
+  // existing single-return, ternary-JSX shape.
+  let sections: AssembledSection[] = []
+
+  if (resolution.scoreable) {
+    // Mirrors app/app/[churchId]/actions.ts's `hash = responseHash(responses, diagnosis
+    // .methodology_version)` argument-for-argument: same `responses`, and `.methodology_version`
+    // read off the diagnosis object itself (never `run.methodology_version` or a methodology
+    // edition's own `.questions.version`) — hash parity between generation and render depends on
+    // this matching exactly, or a persisted report is judged stale forever and themes never render.
+    const hash = responseHash(responses, resolution.diagnosis.methodology_version)
+
+    const { inputsHash, baseFacts } = reportInputs({
+      diagnosis: resolution.diagnosis,
+      methodology: reportMethodology,
+      responses,
+      church: churchFactsFrom(churchProfile, church.name),
+      // Spec §9.1: the run's own completion timestamp, not new Date() — this line is labelled
+      // "assessed", and a page-load moment would change on every reload. This intentionally
+      // diverges from generation's new Date().toISOString(); completedAt is not in the hash.
+      completedAt: run!.completed_at,
+      labelSource: knownLabels(responses),
+      responseHash: hash,
+      reflections: hashReflections,
+    })
+
+    // RLS on `reports` is admin-only select and this page is already admin-gated above, so a
+    // direct .from('reports') here adds no exposure. Any error, zero rows, or a malformed row
+    // resolves to null, which assembleReport already treats as "no AI" — every section then
+    // renders its deterministic fallback.
+    const { data: persistedRow, error: persistedError } = await supabase
+      .from('reports')
+      .select('inputs_hash, sections, facts')
+      .eq('run_id', run!.id)
+      .order('generated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (persistedError) console.warn('[diagnosis] reports read failed; rendering fallback sections')
+
+    const persisted = persistedRow ?? null
+
+    // D-P4-1: facts.themes is model output that cannot be re-derived from responses, so S8 is
+    // the one place a renderer reads model output back off the persisted row. The invariant
+    // narrows rather than breaks: no renderer reads derived NUMBERS from `facts`; model output
+    // that cannot be re-derived is read back, SCHEMA-REVALIDATED FIRST — a reports row outlives
+    // the code that wrote it and `facts` is untyped jsonb.
+    const themes = revalidatedThemes(persisted, inputsHash)
+    const facts = themes === null
+      ? baseFacts
+      : buildFacts({
+          diagnosis: resolution.diagnosis,
+          methodology: reportMethodology,
+          responses,
+          church: churchFactsFrom(churchProfile, church.name),
+          completedAt: run!.completed_at,
+          labelSource: knownLabels(responses),
+          themes,
+        })
+
+    sections = assembleReport({
+      facts,
+      methodology: reportMethodology,
+      reflections, // the KEYLESS array — never hashReflections
+      persisted,
+      liveInputsHash: inputsHash,
+    })
+  }
 
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
@@ -164,42 +244,73 @@ export default async function DiagnosisPage({
         <p className="font-display text-lg text-ink">{church.name}</p>
       </div>
 
-      {/* The PDF/Share controls are passed in as layer1Actions rather than rendered here
-          directly, so they land at the spec §7 Layer 1 position (after AreaTable, before
-          ChainWalk) instead of above the whole report — they need run.id/isAdmin/the share
-          token, which is why they're built here and not inside ReportBody itself. ReportBody
-          re-derives the same stored-vs-current comparison from storedVersion/currentVersion
-          (kept as defense in depth — tests/report/components.test.ts unit-tests that branch
-          directly), but under CT-2(c) the view is re-derived from responses, so storedVersion
-          and currentVersion are the same value and the fresh branch always renders here. */}
       {!resolution.scoreable ? (
         <StaleMethodologyNotice churchId={churchId}>{notScoreableMessage}</StaleMethodologyNotice>
       ) : (
-        <ReportBody
-          storedVersion={methodology.questions.version}
-          currentVersion={methodology.questions.version}
-          view={resolution.view}
-          churchId={churchId}
-          layer1Actions={
-            <div className="flex flex-col gap-4">
-              <a
-                href={`/api/report/${run!.id}/pdf`}
-                className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-              >
-                Download PDF
-              </a>
+        <>
+          <ReportSections sections={sections} />
+          <div className="flex flex-col gap-8">
+            <a
+              href={`/api/report/${run!.id}/pdf`}
+              className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              Download PDF
+            </a>
 
-              {isAdmin && (
-                <ShareControl
-                  churchId={churchId}
-                  runId={run!.id}
-                  existingLink={existingShareToken ? shareLink(APP_URL, existingShareToken) : null}
-                />
-              )}
-            </div>
-          }
-        />
+            {isAdmin && (
+              <ShareControl
+                churchId={churchId}
+                runId={run!.id}
+                existingLink={existingShareToken ? shareLink(APP_URL, existingShareToken) : null}
+              />
+            )}
+          </div>
+        </>
       )}
     </main>
   )
+}
+
+/**
+ * Structural validator for ThemeClusterFact[] (lib/report/facts.ts). There is deliberately no
+ * schema import here: ThemesSchema (lib/ai/themes.ts) validates the MODEL's RAW output —
+ * `{ themes: ThemeSchema[], affection_theme }` where each ThemeSchema carries
+ * `support_indices`/`verbatim_candidates` — not the post-processed ThemeClusterFact[] this page
+ * reads back off `facts.themes` (`support_count`/`verbatims`). The two shapes differ in both
+ * wrapper (object vs array) and fields, so `ThemesSchema.safeParse(facts.themes)` would reject
+ * every real row, always — a fail-closed bug that disables themes silently and is
+ * indistinguishable from "no data yet" (see lib/ai/theme-gates.ts / clusterThemes's return
+ * contract for where support_indices becomes support_count and verbatim_candidates becomes
+ * verbatims). This checks the same required string/number keys ThemeClusterFact declares.
+ */
+function isThemeClusterFact(value: unknown): value is ThemeClusterFact {
+  if (typeof value !== 'object' || value === null) return false
+  const t = value as Record<string, unknown>
+  return (
+    typeof t.label === 'string' &&
+    typeof t.gloss === 'string' &&
+    typeof t.support_count === 'number' &&
+    Array.isArray(t.item_ids) && t.item_ids.every((id) => typeof id === 'string') &&
+    Array.isArray(t.verbatims) && t.verbatims.every((v) => typeof v === 'string')
+  )
+}
+
+/**
+ * Returns the persisted themes only when the row is FRESH and its themes revalidate.
+ * On any failure — no row, stale hash, missing key, revalidation failure — returns null,
+ * and facts.themes stays []. s8Bullets (lib/report/fallback-sections.ts:106-120) already
+ * falls through to the per-area voices list built from the keyless reflections, so the
+ * fallback needs no new code path.
+ */
+function revalidatedThemes(
+  persisted: { inputs_hash: string; facts: unknown } | null,
+  liveInputsHash: string,
+): ThemeClusterFact[] | null {
+  if (!persisted || persisted.inputs_hash !== liveInputsHash) return null
+  const facts = persisted.facts
+  if (!facts || typeof facts !== 'object' || !('themes' in facts)) return null
+  const themes = (facts as { themes: unknown }).themes
+  return Array.isArray(themes) && themes.every(isThemeClusterFact)
+    ? (themes as ThemeClusterFact[])
+    : null
 }

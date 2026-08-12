@@ -19,13 +19,13 @@
 // resolveReportView, reintroduces the exact defect this file exists to catch: fallbackProse (or
 // buildReportView) throws on an old-shaped payload before the version check ever runs.
 //
-// This test pins, for the two remaining resolveReportView( routes (the authenticated diagnosis
-// page and the PDF route — the public share page moved to resolveScoreability( under plan 4's
-// web swap, and has its own ordering guard below), that the file (a) calls resolveReportView( at
-// all, (b) never calls fallbackProse(/buildReportView( anywhere OUTSIDE that call's own
-// parentheses (i.e. nothing runs before the version check), and (c) wherever fallbackProse(/
-// buildReportView( appears INSIDE the call, it does so as the body of the lazy `() => ...`
-// thunk argument, never as a bare eagerly-evaluated positional argument.
+// This test pins, for the one remaining resolveReportView( route (the PDF route — both the
+// public share page and, under plan 4's web swap, the authenticated diagnosis page moved to
+// resolveScoreability( instead, and each has its own ordering guard below), that the file (a)
+// calls resolveReportView( at all, (b) never calls fallbackProse(/buildReportView( anywhere
+// OUTSIDE that call's own parentheses (i.e. nothing runs before the version check), and (c)
+// wherever fallbackProse(/buildReportView( appears INSIDE the call, it does so as the body of
+// the lazy `() => ...` thunk argument, never as a bare eagerly-evaluated positional argument.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -39,7 +39,6 @@ const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$
 const GUARDED_CALLS = ['fallbackProse(', 'buildReportView('] as const
 
 const ROUTES = [
-  { label: 'app/app/[churchId]/diagnosis/page.tsx', segs: ['app', 'app', '[churchId]', 'diagnosis', 'page.tsx'] },
   { label: 'app/api/report/[runId]/pdf/route.ts', segs: ['app', 'api', 'report', '[runId]', 'pdf', 'route.ts'] },
 ] as const
 
@@ -160,6 +159,22 @@ describe('report routes resolve staleness before ever touching fallbackProse/bui
     expect(
       source,
       'the shared page must keep the not-scoreable guard spelled `!resolution.scoreable`',
+    ).toContain('!resolution.scoreable')
+  })
+
+  it('app/app/[churchId]/diagnosis/page.tsx resolves scoreability and the read seam before assembling (CT-1, plan 4)', () => {
+    const source = strip(read('app', 'app', '[churchId]', 'diagnosis', 'page.tsx'))
+
+    // BOTH anchors guarded on every ordering assertion — a missing needle yields
+    // indexOf === -1 and would satisfy `toBeLessThan` vacuously.
+    for (const needle of ['resolveScoreability(', ".from('reports')", 'assembleReport(']) {
+      expect(source, `the diagnosis page must call ${needle}`).toContain(needle)
+    }
+    expect(source.indexOf('resolveScoreability(')).toBeLessThan(source.indexOf('assembleReport('))
+    expect(source.indexOf(".from('reports')")).toBeLessThan(source.indexOf('assembleReport('))
+    expect(
+      source,
+      'the diagnosis page must keep the not-scoreable guard spelled `!resolution.scoreable`',
     ).toContain('!resolution.scoreable')
   })
 })
