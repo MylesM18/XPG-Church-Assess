@@ -120,12 +120,28 @@ const lowCapacityConstraintFacts: FactsPack = buildFacts({
   }),
 });
 
-// capacity archetype (no primary_constraint, no gating_conditions) also pushed under 70, used
-// only by the mutation-isolation test at the foot of the R6 describe block — see the comment
-// there for why a 'constraint'-archetype fixture alone cannot prove the sub-70 loop is live.
+// capacity archetype (no primary_constraint, no gating_conditions) also pushed under 70 — the
+// vehicle for the sub-70 loop's capacity-archetype guard (fix round 1, finding 2): this fixture
+// must ACCEPT its own required consolation register below 70, not reject it.
 const lowCapacityFacts: FactsPack = buildFacts({
   ...baseArgs,
   diagnosis: makeDiagnosis({ capacity: 65 }),
+});
+
+// foundation archetype (no primary_constraint, gating_conditions non-empty) pushed under 70 —
+// the natural vehicle for proving the sub-70 loop is non-vacuous post-guard (fix round 1,
+// finding 2). See the describe block below for why 'constraint' and 'capacity' fixtures cannot
+// isolate this loop but 'foundation' can.
+const lowCapacityFoundationFacts: FactsPack = buildFacts({
+  ...baseArgs,
+  diagnosis: makeDiagnosis({
+    capacity: 65,
+    primary_constraint: null,
+    gating_conditions: [{ enabler_id: 'comm', note: 'Comm gates guest and conn.' }],
+    categories: CAT_IDS.map((id, i) =>
+      makeCategory(id, [72, 68, 66, 61, 58, 70, 30, 64][i]!, { state: id === 'comm' ? 'gate' : 'ok' }),
+    ),
+  }),
 });
 
 const ctx = { facts: constraintFacts, methodology, labels: ['Priscilla Vandermeer'] };
@@ -190,13 +206,35 @@ describe('gate 3 — required and banned mentions', () => {
   });
 });
 
-describe('gate 3 — sub-70 register calibration (controller ruling R6)', () => {
-  // Natalie's ruling: the brief's own second banned-phrase loop was keyed to the wrong list
-  // (banned_phrases.capacity — constraint-thesis phrasing) when it should key to
-  // banned_phrases.constraint (the reassuring register: "healthy and ready to grow", "nothing
-  // in your chain is broken", "this is a capacity conversation", "every stage is strong"). As
-  // briefed, a genuinely low-scoring constraint report using its own required "X is the
-  // constraint" language would have been falsely rejected below the 70 tier boundary.
+describe('gate 3 — constraint-archetype primary-name requirement (fix round 1, finding 1)', () => {
+  // section-gates.ts:76-78 is a SECOND, archetype-specific required-mention check, distinct
+  // from the general `required_mentions` loop just above (s2's required_mentions is only
+  // [tier_name] — it never lists primary_name). The reviewer mutated this branch off and all
+  // 20 pre-existing tests still passed: goodS2 happens to satisfy it, but nothing exercised the
+  // branch in isolation. These two tests do, by holding tier_name (the general loop's only
+  // requirement) present while varying only the primary-constraint mention.
+  it('accepts a constraint S2 that names the primary constraint (the general required_mentions loop alone would not have caught its absence)', () => {
+    expect(gateSection('s2', goodS2, ctx)).toBeNull();
+  });
+  it('rejects a constraint S2 that omits the primary constraint name even though required_mentions (tier_name) is satisfied', () => {
+    const withoutPrimary = {
+      ...goodS2,
+      summary: goodS2.summary.replace(constraintFacts.primary_constraint!.name, 'the responsible area'),
+    };
+    expect(withoutPrimary.summary).toContain(constraintFacts.overall.tier.name); // tier_name still present
+    expect(withoutPrimary.summary).not.toContain(constraintFacts.primary_constraint!.name);
+    expect(gateSection('s2', withoutPrimary, ctx)).toBe('required mention');
+  });
+});
+
+describe('gate 3 — sub-70 register calibration (product owner ruling, fix round 1, finding 2)', () => {
+  // REVISED ruling: the sub-70 consolation-register loop is now guarded off for the capacity
+  // archetype. Reasoning: the intent is "no consolation framing below the 70 tier boundary",
+  // but a capacity-archetype report scoring below 70 is REQUIRED to use the capacity thesis
+  // register ("Nothing in the chain is broken" is its own S2 template) — banning it there was a
+  // false rejection. The loop was already a harmless no-op for 'constraint' (gate 3's first
+  // loop reads the identical banned_phrases.constraint array and fires first), so after this
+  // guard the loop does real, reachable work only for the 'foundation' archetype.
   const lowCapGoodS2 = {
     summary: `Overall health sits at ${lowCapacityConstraintFacts.overall.capacity} out of 100, in the ${lowCapacityConstraintFacts.overall.tier.name} band. ${lowCapacityConstraintFacts.primary_constraint!.name} is the constraint holding the rest back.`,
     what_this_is_not: 'This is not a verdict on anyone.',
@@ -204,26 +242,23 @@ describe('gate 3 — sub-70 register calibration (controller ruling R6)', () => 
   };
   const lowCapCtx = { ...ctx, facts: lowCapacityConstraintFacts };
 
-  it('accepts "is the constraint" language in a constraint report scoring below 70 — the regression this ruling fixes', () => {
+  it('accepts "is the constraint" language in a constraint report scoring below 70 — the original regression this ruling fixed', () => {
     expect(lowCapacityConstraintFacts.overall.capacity).toBeLessThan(70);
     expect(gateSection('s2', lowCapGoodS2, lowCapCtx)).toBeNull();
   });
 
-  it('still rejects consolation framing in a constraint report scoring below 70', () => {
-    const withConsolation = { ...lowCapGoodS2, what_this_is_not: 'Nothing in your chain is broken, but this needs attention.' };
-    expect(gateSection('s2', withConsolation, lowCapCtx)).toBe('banned phrase');
-  });
-
-  // Mutation-isolation note (kept in-suite, not just in the mutation table): for a
-  // 'constraint'-archetype fixture, `banned_phrases[ctx.facts.archetype]` (gate 3's FIRST
-  // loop) and `banned_phrases.constraint` (this sub-70 loop, post-ruling) are the identical
-  // array — so the reject case immediately above would return 'banned phrase' via the first
-  // loop even with the sub-70 loop deleted outright. That test alone cannot prove the sub-70
-  // loop is live. This one can: a 'capacity'-archetype report (no primary_constraint, no
-  // gating_conditions) scoring below 70, whose first loop checks banned_phrases.capacity — a
-  // DIFFERENT list that does not contain "nothing in your chain is broken" — so only the
-  // sub-70 loop can catch it here.
-  it('bans capacity-thesis consolation language in a NON-constraint report scoring below 70 too (proves the sub-70 loop is reachable, not just redundant)', () => {
+  // The regression guard for THIS round's fix: before the capacity-archetype guard, this exact
+  // input was wrongly rejected as 'banned phrase' by the sub-70 loop.
+  //
+  // Deliberately uses the banned_phrases.constraint ENTRY verbatim ("nothing in your chain is
+  // broken"), not report.yaml's real capacity S2 template text ("Nothing in the chain is
+  // broken" — no "your", methodology/report.yaml:31). Those two strings differ and do not
+  // substring-match each other. Verified empirically: with the capacity-archetype guard
+  // temporarily removed, a section using the real template's "no your" wording still returned
+  // null — the mutation was invisible, i.e. that wording can never have exercised this branch
+  // at all. Only text containing the actual banned-phrase wording proves the guard does
+  // anything; see the mutation table in task-7-report.md for the confirming run.
+  it('accepts "nothing in your chain is broken" in a CAPACITY report scoring below 70 — the regression this fix closes', () => {
     expect(lowCapacityFacts.archetype).toBe('capacity');
     expect(lowCapacityFacts.overall.capacity).toBeLessThan(70);
     const s2 = {
@@ -231,7 +266,25 @@ describe('gate 3 — sub-70 register calibration (controller ruling R6)', () => 
       what_this_is_not: 'This is not a verdict on anyone.',
       context_bullets: [],
     };
-    expect(gateSection('s2', s2, { ...ctx, facts: lowCapacityFacts })).toBe('banned phrase');
+    expect(gateSection('s2', s2, { ...ctx, facts: lowCapacityFacts })).toBeNull();
+  });
+
+  // Mutation-isolation: neither test above can prove the sub-70 loop is still reachable.
+  // 'constraint' is a permanent no-op (gate 3's first loop reads the same array first).
+  // 'capacity' is now explicitly guarded off. Only 'foundation' exercises the loop: its first
+  // loop checks banned_phrases.foundation (healthy and ready to grow / your primary constraint
+  // / is the constraint / this is a capacity conversation), which does NOT contain "every stage
+  // is strong" — that phrase lives only in banned_phrases.constraint, so only the sub-70 loop
+  // can catch it here.
+  it('rejects "every stage is strong" in a FOUNDATION report scoring below 70 — proves the sub-70 loop is still reachable', () => {
+    expect(lowCapacityFoundationFacts.archetype).toBe('foundation');
+    expect(lowCapacityFoundationFacts.overall.capacity).toBeLessThan(70);
+    const s2 = {
+      summary: `Overall health sits at ${lowCapacityFoundationFacts.overall.capacity} out of 100, in the ${lowCapacityFoundationFacts.overall.tier.name} band. Every stage is strong except the gate.`,
+      what_this_is_not: 'This is not a verdict on anyone.',
+      context_bullets: [],
+    };
+    expect(gateSection('s2', s2, { ...ctx, facts: lowCapacityFoundationFacts })).toBe('banned phrase');
   });
 });
 

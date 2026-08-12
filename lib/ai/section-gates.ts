@@ -79,12 +79,18 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
   for (const phrase of ctx.methodology.report.banned_phrases[ctx.facts.archetype]) {
     if (lower.includes(phrase.toLowerCase())) return 'banned phrase';
   }
-  // P1 register calibration: consolation framing is banned below the 70 tier boundary.
-  // Keyed to `constraint` because that list IS the reassuring register — "healthy and ready to
-  // grow", "nothing in your chain is broken", "this is a capacity conversation", "every stage is
-  // strong". The `capacity` list is the opposite register (constraint-thesis framing), which a
-  // genuinely low-scoring constraint report is REQUIRED to use.
-  if (ctx.facts.overall.capacity < 70) {
+  // P1 register calibration: below the 70 tier boundary, a report must not reach for the
+  // consolation register — banned_phrases.constraint's list ("healthy and ready to grow",
+  // "nothing in your chain is broken", "this is a capacity conversation", "every stage is
+  // strong"), despite that key naming the OTHER archetype (see gate 3's first loop above).
+  // Guarded off for the capacity archetype (product owner ruling, fix round 1): a
+  // capacity-archetype report scoring below 70 is REQUIRED to use exactly that register —
+  // "Nothing in the chain is broken" is its own S2 template — so banning it here would be a
+  // false rejection. For the constraint archetype this loop is already a harmless no-op (gate
+  // 3's first loop reads the identical banned_phrases.constraint array and fires first), so
+  // after this guard the loop does real, reachable work only for the foundation archetype,
+  // which must not claim "every stage is strong" just because it scored under 70.
+  if (ctx.facts.archetype !== 'capacity' && ctx.facts.overall.capacity < 70) {
     for (const phrase of ctx.methodology.report.banned_phrases.constraint) {
       if (lower.includes(phrase.toLowerCase())) return 'banned phrase';
     }
