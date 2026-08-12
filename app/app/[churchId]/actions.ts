@@ -8,6 +8,11 @@ import { deriveDiagnosisForRun } from '@/lib/report/derive'
 import type { Response } from '@/lib/engine/types'
 import { responseHash } from '@/lib/report/response-hash'
 import { generateProse } from '@/lib/ai/prose'
+import { buildFacts, type ChurchFacts } from '@/lib/report/facts'
+import { knownLabels } from '@/lib/report/anonymity'
+import { clusterThemes } from '@/lib/ai/themes'
+import { reportInputsHash } from '@/lib/report/report-hash'
+import { composeReport } from '@/lib/report/compose'
 
 // Raw shape of one get_run_responses row (supabase.rpc returns it untyped). respondent_user_id
 // is null for a row predating the 20260728000100 migration or a submission the RPC never
@@ -44,9 +49,25 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
 
   const { data: church } = await supabase
     .from('churches')
-    .select('attendance_band')
+    .select('name, denomination, context, attendance_band, adults_band, staff_fte_band, budget_band, church_age_band, growth_trajectory, campuses_band, facility_status, leadership_history, consultant_notes')
     .eq('id', churchId)
     .maybeSingle()
+
+  const churchFacts: ChurchFacts = {
+    name: church?.name ?? '',
+    denomination: church?.denomination ?? null,
+    context: church?.context ?? null,
+    attendance_band: church?.attendance_band ?? null,
+    adults_band: church?.adults_band ?? null,
+    staff_fte_band: church?.staff_fte_band ?? null,
+    budget_band: church?.budget_band ?? null,
+    church_age_band: church?.church_age_band ?? null,
+    growth_trajectory: church?.growth_trajectory ?? null,
+    campuses_band: church?.campuses_band ?? null,
+    facility_status: church?.facility_status ?? null,
+    leadership_history: church?.leadership_history ?? null,
+    consultant_notes: church?.consultant_notes ?? null,
+  }
 
   // The run row, read BEFORE scoring rather than inside the AI-prose block below, because its
   // `methodology_version` decides which edition of the questions this run is scored against
@@ -166,6 +187,103 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
       // lib/ai/prose.ts. Swallow everything here too so the committed diagnosis and the
       // redirect below are never affected. No secrets, no church/respondent data — reason only.
       console.warn('[m5b] AI prose persistence failed, falling back to deterministic prose:', err instanceof Error ? err.message : 'unknown error')
+    }
+  }
+
+  // Plan 3: best-effort executive report. A SECOND block, deliberately separate from the M5b
+  // prose block above — the 10-block diagnosis page is still live until plan 4, so both run.
+  // Same PROSE_MODE gate, so an unset mode makes no API call and logs nothing at all. The
+  // diagnosis is already committed, so nothing in here may break it or the redirect.
+  if ((process.env.PROSE_MODE ?? 'fallback') !== 'fallback') {
+    try {
+      // Reflection rows come from `raw`, NOT from `responses`: Response[] deliberately drops
+      // `.reflection` and tests/outreach/ai-exclusion.test.ts pins that it stays dropped.
+      // respondent_key is the STABLE identity (respondent_user_id ?? respondent_label), never
+      // respondent_label alone, which is display-only and can collide across two people —
+      // counting on labels would undercount and weaken the k>=3 gate.
+      const reflectionRows = (raw ?? [])
+        .filter((r: RunResponseRow) => r.reflection != null && r.reflection.trim().length > 0)
+        .map((r: RunResponseRow) => ({
+          item_id: r.item_id,
+          respondent_key: r.respondent_user_id ?? r.respondent_label,
+          text: (r.reflection as string).trim(),
+        }))
+
+      const labelSource = knownLabels(responses)
+
+      // INPUTS ONLY, and computed BEFORE the cache check: clustered themes are model output, so
+      // they must never participate in the key that decides whether to call the model.
+      const baseFacts = buildFacts({
+        diagnosis,
+        methodology: derived.effectiveMethodology,
+        responses,
+        church: churchFacts,
+        completedAt: new Date().toISOString(),
+        labelSource,
+      })
+      const inputsHash = reportInputsHash({
+        methodologyVersion: diagnosis.methodology_version,
+        responseHash: hash,
+        methodology: derived.effectiveMethodology,
+        reflections: reflectionRows,
+        profile: baseFacts.profile,
+        reportVersion: derived.effectiveMethodology.report.version,
+      })
+
+      // Cache check scoped to THIS church's run, for the same reason the prose cache above is:
+      // an unscoped lookup lets a sibling church's row suppress generation permanently. An
+      // unresolvable run degrades to a MISS (generate), never a skip.
+      let alreadyReported = false
+      if (run) {
+        const { data: rows } = await supabase
+          .from('reports')
+          .select('id')
+          .eq('run_id', run.id)
+          .eq('inputs_hash', inputsHash)
+        alreadyReported = (rows ?? []).length > 0
+      }
+
+      if (!alreadyReported) {
+        // null = the task failed: S8 falls back to the per-area voices lists and no themes are
+        // persisted. [] = determinate, the model answered and nothing survived the gates —
+        // persist as-is; retrying would produce the same verdict.
+        const themes = await clusterThemes(reflectionRows, derived.effectiveMethodology, labelSource)
+        const facts = themes === null
+          ? baseFacts
+          : buildFacts({
+              diagnosis,
+              methodology: derived.effectiveMethodology,
+              responses,
+              church: churchFacts,
+              completedAt: baseFacts.cover.completed_at,
+              labelSource,
+              themes,
+            })
+
+        const composed = await composeReport({
+          facts,
+          methodology: derived.effectiveMethodology,
+          labels: labelSource.kind === 'known' ? labelSource.labels : [],
+        })
+
+        await supabase.rpc('save_report', {
+          p_church_id: churchId,
+          p_inputs_hash: inputsHash,
+          p_methodology_version: diagnosis.methodology_version,
+          p_payload: {
+            archetype: facts.archetype,
+            tier: facts.overall.tier.id,
+            facts,
+            sections: composed.sections,
+            section_sources: composed.section_sources,
+          },
+        })
+      }
+    } catch (err) {
+      // Backstop for the Supabase calls around composeReport (cache-check SELECT, save_report
+      // RPC) — NOT for composeReport itself, which never throws. Swallow everything so the
+      // committed diagnosis and the redirect are never affected. Reason only.
+      console.warn('[report] generation failed:', err instanceof Error ? err.message : 'unknown error')
     }
   }
 
