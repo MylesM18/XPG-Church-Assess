@@ -332,7 +332,7 @@ git commit -m "feat: thread an explicit LabelSource through facts and clustering
   };
   // Methodology gains: report: Report;
   ```
-  `Archetype` here is the string union `'capacity'|'constraint'|'foundation'` — declared locally in `schema.ts` as `ReportArchetypeSchema` rather than imported, because `lib/report/tier.ts` imports *from* `schema.ts` and the reverse edge would be a cycle.
+  `Archetype` here is the string union `'capacity'|'constraint'|'foundation'`. It is spelled out locally in `schema.ts` rather than imported, because `lib/report/tier.ts` imports *from* `schema.ts` and the reverse edge would be a cycle. **AS SHIPPED:** the planned `ReportArchetypeSchema` enum was never needed and is not in the codebase — `ArchetypeTemplatesSchema` names the three keys directly. See the note at Step 2's code block.
 
 - [ ] **Step 1: Write the failing schema tests**
 
@@ -400,9 +400,11 @@ Expected: FAIL — `ReportSchema` is not exported and `m.report` is undefined.
 
 Insert immediately before the `export type Signal = ...` block:
 
-```ts
-const ReportArchetypeSchema = z.enum(['capacity', 'constraint', 'foundation']);
+**AS SHIPPED:** the `ReportArchetypeSchema` line below was dropped. Nothing ever consumed it —
+`ArchetypeTemplatesSchema` names the three archetype keys directly — and it was removed in fix round A
+after being proven dead. Do not re-introduce it in plans 4–5.
 
+```ts
 // Named keys, not z.record — the same rationale as DossierReadingBandSchema above. The three
 // archetypes are a closed set and lib/report/fallback-sections.ts indexes them directly, so a
 // z.record would load with any subset and let a missing archetype surface as `undefined`
@@ -1239,7 +1241,8 @@ git commit -m "feat: add deterministic per-section report fallbacks"
     maxOutputTokens: number;               // 8000 for s6, 4000 otherwise
   }
   export const SECTION_REGISTRY: Record<AiSectionId, SectionRegistryEntry>;
-  export function sectionSlice(id: AiSectionId, facts: FactsPack): unknown;
+  // AS SHIPPED: no `sectionSlice` export. It was written, proven to have zero production callers
+  // (composeSection calls entry.slice(facts) directly), and deleted in fix round A.
   export async function composeSection(
     id: AiSectionId, facts: FactsPack, methodology: Methodology,
   ): Promise<unknown | null>;   // null on incomplete / no parse / request failure. NEVER throws.
@@ -1264,21 +1267,42 @@ describe('the section registry', () => {
   });
 });
 
+// AS SHIPPED — this block was rewritten in fix round A (I5) and again in fix round C (Minor 1).
+// Asserting against `sectionSlice` could not observe what actually goes over the wire; the shipped
+// tests drive `composeSection` and assert on the real serialized `client.responses.parse` argument.
+// The leak assertion is scoped to the WHOLE stringified call, so a leak smuggled into the system
+// message is caught too. The non-vacuity assertion is scoped to the USER message and pinned to the
+// rendered key: a bare `String(capacity)` against the whole call also matches inside
+// `"max_output_tokens":4000`, which made it fail-open for 6 of 7 sections.
 describe('facts slices', () => {
-  it('never carries a verbatim into any slice', () => {
+  beforeEach(() => { mockParse.mockReset(); });
+
+  it('never sends a verbatim over the wire for any AI section', async () => {
     // Parent spec line 72: verbatims flow facts → the S8 renderer exclusively. S8 is not an AI
-    // section at all, so no slice has any business holding one.
+    // section at all, so no section's wire payload has any business holding one.
     const facts = { ...capacityFacts, themes: [{ label: 'L', gloss: 'g', support_count: 4, item_ids: ['conn_2'], verbatims: ['SENTINEL QUOTE'] }] };
     for (const id of AI_SECTION_IDS) {
-      expect(JSON.stringify(sectionSlice(id, facts)), id).not.toContain('SENTINEL QUOTE');
+      mockParse.mockReset();
+      mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+      await composeSection(id, facts, methodology);
+      const call = mockParse.mock.calls[0]![0];
+      const payload = JSON.stringify(call);
+      expect(payload, id).not.toContain('SENTINEL QUOTE');
+      expect(String(call.input[1].content), id).toContain(`"capacity": ${facts.overall.capacity}`);
     }
   });
 
-  it('never carries a profile field into a slice that has no use for it', () => {
+  it('never sends a profile field over the wire for a section that has no use for it', async () => {
     const facts = { ...capacityFacts, profile: { consultant_notes: 'SENTINEL NOTE' } };
     for (const id of AI_SECTION_IDS) {
       if (id === 's2') continue;   // S2 is the one section that renders profile context
-      expect(JSON.stringify(sectionSlice(id, facts)), id).not.toContain('SENTINEL NOTE');
+      mockParse.mockReset();
+      mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+      await composeSection(id, facts, methodology);
+      const call = mockParse.mock.calls[0]![0];
+      const payload = JSON.stringify(call);
+      expect(payload, id).not.toContain('SENTINEL NOTE');
+      expect(String(call.input[1].content), id).toContain(`"capacity": ${facts.overall.capacity}`);
     }
   });
 });
@@ -1414,9 +1438,9 @@ export const SECTION_REGISTRY: Record<AiSectionId, SectionRegistryEntry> = {
   s12: { schema: S12Schema, maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories }) },
 };
 
-export function sectionSlice(id: AiSectionId, facts: FactsPack): unknown {
-  return SECTION_REGISTRY[id].slice(facts);
-}
+// AS SHIPPED: `sectionSlice` is NOT in the codebase. It was written as planned, then proven to have
+// zero production callers — `composeSection` calls `entry.slice(facts)` directly when it builds the
+// `input[1]` user message — and deleted in fix round A. Do not re-introduce it in plans 4–5.
 
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
@@ -1785,7 +1809,7 @@ git commit -m "feat: add per-section fact-check gates"
 - Test: `tests/report/compose.test.ts`
 
 **Interfaces:**
-- Consumes: `composeSection`, `sectionSlice`, `SECTION_REGISTRY`, `AI_SECTION_IDS`, `AiSectionId` (`lib/ai/sections.ts`); `gateSection` (`lib/ai/section-gates.ts`); `fallbackSections`, `SectionBody` (`lib/report/fallback-sections.ts`); `FactsPack` (`lib/report/facts.ts`); `SectionId` (`lib/methodology/schema.ts`).
+- Consumes: `composeSection`, `SECTION_REGISTRY`, `AI_SECTION_IDS`, `AiSectionId` (`lib/ai/sections.ts`); `gateSection` (`lib/ai/section-gates.ts`); `fallbackSections`, `SectionBody` (`lib/report/fallback-sections.ts`); `FactsPack` (`lib/report/facts.ts`); `SectionId` (`lib/methodology/schema.ts`). (**AS SHIPPED:** `sectionSlice` was in this list and is not in the codebase — see fix round A.)
 - Produces:
   ```ts
   export type SectionSource = 'ai' | 'fallback';
