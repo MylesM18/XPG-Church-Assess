@@ -7,7 +7,16 @@ describe('the report generation block', () => {
   it('sits after save_diagnosis', () => {
     // R1a: anchored on the CALL SITE ('await composeReport(') rather than the bare identifier
     // 'composeReport', which would resolve to this task's new top-of-file import instead.
-    expect(src.indexOf('save_diagnosis')).toBeLessThan(src.indexOf('await composeReport('));
+    // FIX ROUND A / I1: the LEFT operand is now also anchored on its call site
+    // ("await supabase.rpc('save_diagnosis'") instead of the bare identifier 'save_diagnosis',
+    // whose first occurrence is a COMMENT 48 lines above the real RPC call — that let a mutation
+    // hoisting the whole report block above the RPC pass this test. Both operands are guarded
+    // against -1 (indexOf's no-match sentinel), since -1 < anything is vacuously true.
+    const saveIdx = src.indexOf("await supabase.rpc('save_diagnosis'");
+    const composeIdx = src.indexOf('await composeReport(');
+    expect(saveIdx).toBeGreaterThan(-1);
+    expect(composeIdx).toBeGreaterThan(-1);
+    expect(saveIdx).toBeLessThan(composeIdx);
   });
 
   it('is gated by PROSE_MODE, the same gate as the prose block', () => {

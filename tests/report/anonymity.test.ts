@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { containsRespondentLabel, respondentLabels } from '../../lib/report/anonymity';
-import { knownLabels } from '@/lib/report/anonymity';
+import { containsRespondentLabel, knownLabels, respondentLabels } from '@/lib/report/anonymity';
 
 describe('respondentLabels', () => {
   it('returns distinct labels', () => {

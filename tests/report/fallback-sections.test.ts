@@ -359,6 +359,38 @@ describe('S11 mirrors S10 (ruling 11-REVISED — supersedes the withdrawn per-bu
   });
 });
 
+// FIX ROUND A / I2: no existing test above asserts the offer TEXT on the offers.stages[primary]
+// path. constraintFacts (primary = conn) is only exercised for bullet COUNT and DISTINCTNESS, so
+// severing offers.stages[primaryId] in offerFor() (lib/report/fallback-sections.ts) left every
+// real constraint report falling through to offers.no_constraint's "Nothing here is broken…" —
+// the exact self-contradiction Natalie's ruling 12 added offers.foundation to prevent — with
+// 1161/1161 green. Hooks below are HARDCODED, not derived from methodology/offers.yaml — the
+// duplication IS the guard (controller error #4: a self-referential assertion survives every
+// edit). Own fixture per stage; govConstraintFacts is deliberately excluded — 'gov' is an
+// enabler, not a chain stage, and legitimately falls through to offers.no_constraint.
+describe('S11 offers.stages[primary] hook (fix round A / I2 — test gap)', () => {
+  const NO_CONSTRAINT_HOOK =
+    "Nothing here is broken. Let's talk about the ceiling you'll hit next, not the one you're hitting now.";
+
+  it.each([
+    ['guest', "You may be paying for guests you aren't keeping."],
+    ['conn', 'Your church may feel more connected than it is.'],
+    ['disc', "Your ceiling isn't your building. It's the number of people who can lead."],
+    ['vol', 'You may be one burnout away from three ministries stopping.'],
+  ])('routes primary=%s to offers.stages[%s], with the exact hook — NOT offers.no_constraint', (id, hook) => {
+    const facts: FactsPack = buildFacts({
+      ...baseArgs,
+      diagnosis: makeDiagnosis({ primary_constraint: { category_id: id } }),
+    });
+    const s11 = fallbackSection('s11', { facts, methodology, reflections: [] });
+    // Array.every() is TRUE for an empty array, so the hook assertion below would pass vacuously
+    // if a mutation emptied the bullets — the same fail-open shape as indexOf's -1 sentinel in I1.
+    expect(s11.bullets.length).toBeGreaterThan(0);
+    expect(s11.bullets.every((b) => b.includes(hook)), JSON.stringify(s11.bullets)).toBe(true);
+    expect(s11.bullets.some((b) => b.includes(NO_CONSTRAINT_HOOK)), JSON.stringify(s11.bullets)).toBe(false);
+  });
+});
+
 // Ruling 7 — the highest-risk lookup in this task: report.yaml carries BOTH
 // action_library.categories.{gov,comm,sys} and action_library.enablers.{gov,comm,sys} with
 // DIFFERENT text for the same ids. These tests assert the EXACT text from each bucket, so
@@ -410,17 +442,24 @@ describe('S6 area beats', () => {
     expect(s6.bullets[target]).toContain(expectedLine);
   });
 
-  it('uses copy.blocks.blind_spot for the evidence beat when a blind spot is present', () => {
+  it('uses copy.blocks.blind_spot for the evidence beat, with belief and evidence in their OWN slots', () => {
     const target = capacityFacts.categories[3]!;
     const facts: FactsPack = {
       ...capacityFacts,
+      // belief 80 / evidence 40 / gap 40 deliberately differ, and the assertion below is
+      // ORDER-SENSITIVE: the old `toContain('80')` + `toContain('40')` pair passed unchanged
+      // when bs_belief and bs_evidence were swapped in fallback-sections.ts's evidenceBeat(),
+      // which tells a church its leaders believe 40 when they believe 80. (gap: 40 also made
+      // '40' appear twice, so the old pair even survived dropping bs_evidence altogether.)
       blind_spots: [{ category_id: target.id, name: target.name, belief: 80, evidence: 40, gap: 40 }],
     };
     const s6 = fallbackSection('s6', { facts, methodology, reflections: [] });
     const idx = facts.categories.slice(3).findIndex((c) => c.id === target.id);
     expect(s6.bullets[idx]).toContain(target.name);
-    expect(s6.bullets[idx]).toContain('80');
-    expect(s6.bullets[idx]).toContain('40');
+    // Hardcoded, NOT interpolated from methodology/copy.yaml — the duplication is what makes the
+    // slot binding (belief in the belief slot, evidence in the evidence slot) observable
+    // independently of the template the implementation reads.
+    expect(s6.bullets[idx]).toContain('Belief sits at 80, the evidence at 40, a gap of 40 points.');
   });
 });
 
