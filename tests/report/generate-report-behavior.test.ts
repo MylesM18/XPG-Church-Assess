@@ -31,7 +31,18 @@ const { mockCreateClient, mockGenerateProse, mockClusterThemes, mockComposeRepor
 vi.mock('@/lib/supabase/server', () => ({ createClient: mockCreateClient }));
 vi.mock('@/lib/ai/prose', () => ({ generateProse: mockGenerateProse }));
 vi.mock('@/lib/ai/themes', () => ({ clusterThemes: mockClusterThemes }));
-vi.mock('@/lib/report/compose', () => ({ composeReport: mockComposeReport }));
+// Task 3 (I9): actions.ts now also imports isUsableCachedReport from this module, and calls it
+// for real inside the cache-check block below. A bare `{ composeReport: mockComposeReport }`
+// replacement (no importOriginal) would drop that export, so the cache-hit test below would hit
+// `isUsableCachedReport is not a function` — caught by generateDiagnosis's own try/catch and
+// silently swallowed, which would make the assertions pass for the wrong reason (a masked
+// exception, not a genuine cache-hit computation). importOriginal keeps isUsableCachedReport (and
+// assembleReport) real, mirroring tests/report/compose.test.ts's identical precedent for
+// @/lib/ai/sections.
+vi.mock('@/lib/report/compose', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/report/compose')>();
+  return { ...actual, composeReport: mockComposeReport };
+});
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
 
@@ -320,9 +331,12 @@ describe('branch coverage: report cache hit vs miss (R6)', () => {
     vi.stubEnv('PROSE_MODE', 'ai');
     mockClusterThemes.mockResolvedValue([]);
     mockComposeReport.mockResolvedValue({ sections: {}, section_sources: {} });
+    // Task 3 (I9): a matching row is only a hit if section_sources shows at least one section
+    // came from the model — a row with no section_sources (or all-fallback) is now a MISS by
+    // design, so this fixture must carry a genuine 'ai' entry to remain a real cache-hit case.
     const { rpcCalls } = setupSupabase({
       runRow: RUN_A_ROW,
-      reportsRows: [{ id: 'report-1', run_id: RUN_A_ROW.id, inputs_hash: REPORT_INPUTS_HASH }],
+      reportsRows: [{ id: 'report-1', run_id: RUN_A_ROW.id, inputs_hash: REPORT_INPUTS_HASH, section_sources: { s2: 'ai' } }],
     });
 
     await generateDiagnosis(CHURCH_A);
@@ -330,6 +344,12 @@ describe('branch coverage: report cache hit vs miss (R6)', () => {
     expect(mockClusterThemes).not.toHaveBeenCalled();
     expect(mockComposeReport).not.toHaveBeenCalled();
     expect(rpcCalls.some((c) => c.name === 'save_report')).toBe(false);
+    // Guards against a false-positive pass: if isUsableCachedReport ever came from a stale mock
+    // (e.g. a future edit reverts the vi.mock above to a bare replacement), the cache-check would
+    // throw and be swallowed by generateDiagnosis's own catch block, which would ALSO satisfy the
+    // three assertions above for the wrong reason — a masked exception, not a genuine hit. This
+    // pins that the "not called" outcome above is a real cache-hit decision, not a crash.
+    expect(reportLines()).toEqual([]);
   });
 
   it('a reports row for a DIFFERENT run with the SAME inputs_hash does not suppress generation', async () => {

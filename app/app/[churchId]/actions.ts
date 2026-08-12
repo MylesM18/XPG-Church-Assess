@@ -11,7 +11,7 @@ import { generateProse } from '@/lib/ai/prose'
 import { buildFacts } from '@/lib/report/facts'
 import { knownLabels } from '@/lib/report/anonymity'
 import { clusterThemes } from '@/lib/ai/themes'
-import { composeReport } from '@/lib/report/compose'
+import { composeReport, isUsableCachedReport } from '@/lib/report/compose'
 import { loadChurchProfile } from '@/lib/data/churches'
 import type { ChurchProfile } from '@/lib/data/churches'
 import { churchFactsFrom, reflectionRowsFor, reportInputs } from '@/lib/report/inputs-hash'
@@ -215,14 +215,21 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
       // Cache check scoped to THIS church's run, for the same reason the prose cache above is:
       // an unscoped lookup lets a sibling church's row suppress generation permanently. An
       // unresolvable run degrades to a MISS (generate), never a skip.
+      //
+      // I9: a matching row alone is not enough — a row written when every AI section failed its
+      // gate is 100% fallback, and treating it as a hit would pin that report to fallback
+      // forever with no regenerate path. isUsableCachedReport requires at least one section to
+      // have come from the model; unique (run_id, inputs_hash) means at most one row can match,
+      // so .maybeSingle() is safe here.
       let alreadyReported = false
       if (run) {
-        const { data: rows } = await supabase
+        const { data: cached } = await supabase
           .from('reports')
-          .select('id')
+          .select('section_sources')
           .eq('run_id', run.id)
           .eq('inputs_hash', inputsHash)
-        alreadyReported = (rows ?? []).length > 0
+          .maybeSingle()
+        alreadyReported = !!cached && isUsableCachedReport(cached.section_sources)
       }
 
       if (!alreadyReported) {

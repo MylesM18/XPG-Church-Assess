@@ -16,7 +16,7 @@ vi.mock('@/lib/ai/sections', async (importOriginal) => {
 
 // Imported AFTER the mock is declared (vitest hoists vi.mock above imports regardless) — same
 // convention as tests/ai/sections.test.ts's own comment.
-import { composeReport, assembleReport } from '../../lib/report/compose';
+import { composeReport, assembleReport, isUsableCachedReport } from '../../lib/report/compose';
 import { AI_SECTION_IDS, type AiSectionId } from '../../lib/ai/sections';
 import { loadMethodology } from '../../lib/methodology/load';
 import type { Diagnosis, DiagnosisCategory, Response } from '../../lib/engine/types';
@@ -316,5 +316,23 @@ describe('assembleReport', () => {
     const src = readFileSync('lib/report/compose.ts', 'utf8');
     expect(src).not.toMatch(/persisted\s*\.\s*facts/);
     expect(src).not.toMatch(/\bfacts\b\s*:\s*persisted/);
+  });
+});
+
+describe('isUsableCachedReport (I9)', () => {
+  it('is a hit when at least one section came from the model', () => {
+    expect(isUsableCachedReport({ s2: 'ai', s4: 'fallback' })).toBe(true);
+    expect(isUsableCachedReport(['fallback', 'ai'])).toBe(true);
+  });
+
+  it('is a MISS when every section fell back', () => {
+    expect(isUsableCachedReport({ s2: 'fallback', s4: 'fallback' })).toBe(false);
+    expect(isUsableCachedReport(['fallback', 'fallback'])).toBe(false);
+  });
+
+  it('is a MISS for a malformed or absent value', () => {
+    expect(isUsableCachedReport(null)).toBe(false);
+    expect(isUsableCachedReport(undefined)).toBe(false);
+    expect(isUsableCachedReport('ai')).toBe(false);
   });
 });

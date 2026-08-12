@@ -69,6 +69,19 @@ export async function composeReport(args: {
   return { sections, section_sources };
 }
 
+/**
+ * I9: a persisted report whose every section fell back is not a usable cache hit —
+ * treating it as one pins that report to 100% fallback forever, with no regenerate
+ * path. Re-running generation lets it self-heal.
+ */
+export function isUsableCachedReport(sectionSources: unknown): boolean {
+  if (Array.isArray(sectionSources)) return sectionSources.includes('ai');
+  if (sectionSources && typeof sectionSources === 'object') {
+    return Object.values(sectionSources).includes('ai');
+  }
+  return false;
+}
+
 export interface AssembledSection {
   id: SectionId;
   source: SectionSource;
