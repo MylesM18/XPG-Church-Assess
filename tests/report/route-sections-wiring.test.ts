@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const read = (...p: string[]) => fs.readFileSync(path.join(REPO_ROOT, ...p), 'utf8')
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+const countOf = (s: string, re: RegExp) => (s.match(re) ?? []).length
 
 const sharePage = strip(read('app', 'r', '[shareToken]', 'page.tsx'))
 const diagnosisPage = strip(read('app', 'app', '[churchId]', 'diagnosis', 'page.tsx'))
@@ -23,6 +24,9 @@ describe('the public share surface stays structurally excluded from AI, themes a
   })
 
   it('passes no themes into buildFacts', () => {
+    // Whole-file substring-ABSENCE check. Acceptable ONLY while the share page has zero
+    // legitimate uses of the word (verified: no code, no import path, no comment). If one is
+    // ever genuinely needed, switch this to occurrence-count equality — do NOT delete it.
     expect(sharePage).not.toContain('themes')
   })
 
@@ -37,7 +41,14 @@ describe('the diagnosis surface wires the keyed array to the hash and nothing el
     // Pins the §4.3 drift risk directly: a ChurchFacts built from four columns produces a
     // different profile slice and therefore a permanently stale hash, silently.
     expect(diagnosisPage).toContain('loadChurchProfile(')
-    expect(diagnosisPage).toContain('churchFactsFrom(churchProfile')
+    // Occurrence-count equality, NOT presence. There are two call sites — the reportInputs call
+    // that feeds inputsHash and the buildFacts call on the themes-rebuild path — and they must
+    // stay argument-identical. A bare toContain is satisfied by either one alone, so a
+    // regression at exactly one site would render a facts.profile that diverges from the one
+    // that was hashed, with every gate still green. Pinning both counts also forces a conscious
+    // decision if a third call site is ever added.
+    expect(countOf(diagnosisPage, /churchFactsFrom\(/g)).toBe(2)
+    expect(countOf(diagnosisPage, /churchFactsFrom\(churchProfile/g)).toBe(2)
     expect(diagnosisPage).not.toContain('churchFactsFrom(null')
   })
 
