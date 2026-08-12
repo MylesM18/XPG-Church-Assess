@@ -16,7 +16,7 @@ vi.mock('openai/helpers/zod', () => ({
 }));
 
 // Imported AFTER the mocks are declared (vitest hoists vi.mock above imports regardless).
-import { AI_SECTION_IDS, SECTION_REGISTRY, sectionSlice, composeSection, type AiSectionId } from '../../lib/ai/sections';
+import { AI_SECTION_IDS, SECTION_REGISTRY, composeSection, type AiSectionId } from '../../lib/ai/sections';
 import type { SectionId } from '../../lib/methodology/schema';
 
 const methodology = loadMethodology();
@@ -141,20 +141,41 @@ describe('the section registry', () => {
 });
 
 describe('facts slices', () => {
-  it('never carries a verbatim into any slice', () => {
+  beforeEach(() => { mockParse.mockReset(); });
+
+  // Fix round A (I5): asserted against the REAL serialized `client.responses.parse` call
+  // argument (house idiom: tests/ai/themes-generate.test.ts's `JSON.stringify(mockParse.mock
+  // .calls[0]![0])` pattern), not against `sectionSlice` — that helper has no production caller
+  // (`composeSection` calls `entry.slice(facts)` directly, lib/ai/sections.ts:125) and so cannot
+  // observe what actually goes over the wire. Stringifying the whole first argument, not just
+  // `input[1].content`, also catches a leak smuggled into the system message.
+
+  it('never sends a verbatim over the wire for any AI section', async () => {
     // Parent spec line 72: verbatims flow facts → the S8 renderer exclusively. S8 is not an AI
-    // section at all, so no slice has any business holding one.
+    // section at all, so no section's wire payload has any business holding one.
     const facts = { ...capacityFacts, themes: [{ label: 'L', gloss: 'g', support_count: 4, item_ids: ['conn_2'], verbatims: ['SENTINEL QUOTE'] }] };
     for (const id of AI_SECTION_IDS) {
-      expect(JSON.stringify(sectionSlice(id, facts)), id).not.toContain('SENTINEL QUOTE');
+      mockParse.mockReset();
+      mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+      await composeSection(id, facts, methodology);
+      const payload = JSON.stringify(mockParse.mock.calls[0]![0]);
+      expect(payload, id).not.toContain('SENTINEL QUOTE');
+      // Non-vacuity: `overall` is in every slice's head(), so this can't pass against a call
+      // that never happened or that sent an empty body.
+      expect(payload, id).toContain(String(facts.overall.capacity));
     }
   });
 
-  it('never carries a profile field into a slice that has no use for it', () => {
+  it('never sends a profile field over the wire for a section that has no use for it', async () => {
     const facts = { ...capacityFacts, profile: { consultant_notes: 'SENTINEL NOTE' } };
     for (const id of AI_SECTION_IDS) {
       if (id === 's2') continue; // S2 is the one section that renders profile context
-      expect(JSON.stringify(sectionSlice(id, facts)), id).not.toContain('SENTINEL NOTE');
+      mockParse.mockReset();
+      mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+      await composeSection(id, facts, methodology);
+      const payload = JSON.stringify(mockParse.mock.calls[0]![0]);
+      expect(payload, id).not.toContain('SENTINEL NOTE');
+      expect(payload, id).toContain(String(facts.overall.capacity));
     }
   });
 });

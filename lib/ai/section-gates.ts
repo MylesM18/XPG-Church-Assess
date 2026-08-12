@@ -68,8 +68,18 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
   };
   for (const key of required) {
     const needle = resolved[key];
-    // A primary_name requirement is vacuous when there is no primary constraint — skip rather
-    // than reject, or every capacity report fails a gate written for constraint reports.
+    // Not load-bearing at RUNTIME, but load-bearing for the COMPILER — both halves matter:
+    //  - Runtime: `required_mentions` is a closed enum (RequiredMentionSchema) of exactly the
+    //    three keys built above, so `needle` is always a string. Its only falsy value is the
+    //    `''` from `?? ''` when there is no primary constraint — and `x.includes('')` is true,
+    //    so the gate would pass anyway. Deleting this line would not change the verdict.
+    //  - Compile time: `resolved` is a Record<string, string> and `noUncheckedIndexedAccess`
+    //    is on, so `resolved[key]` is `string | undefined`. This skip is the narrowing that
+    //    lets `needle.toLowerCase()` compile; deleting it is a TS18048 error, not a silent
+    //    behaviour change.
+    // It also documents intent: a primary_name requirement is vacuous with no primary
+    // constraint. Note the runtime half depends on ReportSchema actually being enforced at
+    // load — see tests/methodology/report-yaml.test.ts, which pins exactly that.
     if (!needle) continue;
     if (!lower.includes(needle.toLowerCase())) return 'required mention';
   }

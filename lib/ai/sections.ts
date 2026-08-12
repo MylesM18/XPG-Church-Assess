@@ -90,10 +90,6 @@ export const SECTION_REGISTRY: Record<AiSectionId, SectionRegistryEntry> = {
   s12: { schema: S12Schema, maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories }) },
 };
 
-export function sectionSlice(id: AiSectionId, facts: FactsPack): unknown {
-  return SECTION_REGISTRY[id].slice(facts);
-}
-
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import type { Methodology } from '../methodology/schema';

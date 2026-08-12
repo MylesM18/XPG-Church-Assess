@@ -152,6 +152,16 @@ const goodS2 = {
   context_bullets: [],
 };
 
+// s9's own well-formed shape (S9Schema = { narrative, working_model }), digit-free so gate 2
+// (scoped numeric containment) can never reject it regardless of which facts pack it's paired
+// with, and clear of every banned_phrases.capacity / .foundation / .constraint entry so it is
+// safe to reuse against lowCapacityFacts (capacity) and lowCapacityFoundationFacts (foundation,
+// which also runs the sub-70 loop against banned_phrases.constraint since it scores under 70).
+const goodS9 = {
+  narrative: 'Momentum across the stages looks steady, with no single blocking bottleneck driving the picture.',
+  working_model: 'Keep investing broadly across the enablers rather than concentrating effort on one area.',
+};
+
 describe('gate 1 — field parity', () => {
   it('accepts a fully populated section', () => {
     expect(gateSection('s2', goodS2, ctx)).toBeNull();
@@ -285,6 +295,42 @@ describe('gate 3 — sub-70 register calibration (product owner ruling, fix roun
       context_bullets: [],
     };
     expect(gateSection('s2', s2, { ...ctx, facts: lowCapacityFoundationFacts })).toBe('banned phrase');
+  });
+});
+
+describe('gate 3 — s9 required_mentions against a non-constraint pack (fix round A, I11)', () => {
+  // s9 is the only section anywhere in report.yaml whose required_mentions contains
+  // primary_name, and primary_name resolves to '' for every capacity/foundation pack (no
+  // primary_constraint). No existing test anywhere gated s9 with such a pack before this —
+  // tests/ai/section-gates.test.ts's other 20 calls all use 's2'/'s7', and
+  // tests/report/compose.test.ts only ever gates s9 against a constraint pack.
+  //
+  // These two tests pin the BEHAVIOUR (a well-formed capacity/foundation s9 must pass), not the
+  // `if (!needle) continue` line's current implementation: today that skip is inert —
+  // `''.includes('')` is true, so `lower.includes(needle.toLowerCase())` would already pass on
+  // an empty needle even without the skip. What they actually catch is the skip being inverted
+  // into an unconditional rejection (`continue` -> `return 'required mention'`), which is the
+  // real, proven escape — and they will keep catching a future switch away from `.includes` (to
+  // word-boundary/regex matching, say) where the skip becomes genuinely load-bearing.
+  it('accepts a well-formed s9 against a CAPACITY pack (primary_name resolves to "")', () => {
+    expect(lowCapacityFacts.archetype).toBe('capacity');
+    expect(lowCapacityFacts.primary_constraint).toBeNull();
+    expect(gateSection('s9', goodS9, { ...ctx, facts: lowCapacityFacts })).toBeNull();
+  });
+
+  it('accepts a well-formed s9 against a FOUNDATION pack (primary_name resolves to "")', () => {
+    expect(lowCapacityFoundationFacts.archetype).toBe('foundation');
+    expect(lowCapacityFoundationFacts.primary_constraint).toBeNull();
+    expect(gateSection('s9', goodS9, { ...ctx, facts: lowCapacityFoundationFacts })).toBeNull();
+  });
+
+  // Non-vacuity / positive control: without this, a `gateSection` that unconditionally
+  // `return`ed `null` would also make both tests above pass. This proves s9 gating against
+  // lowCapacityFacts is not simply always-null by exercising a different gate (2, scoped
+  // numeric containment) on the same pack.
+  it('still rejects an invented number in an otherwise well-formed s9 against the same CAPACITY pack', () => {
+    const withInventedNumber = { ...goodS9, narrative: `${goodS9.narrative} Growth is up 37 percent.` };
+    expect(gateSection('s9', withInventedNumber, { ...ctx, facts: lowCapacityFacts })).toBe('numeric containment');
   });
 });
 

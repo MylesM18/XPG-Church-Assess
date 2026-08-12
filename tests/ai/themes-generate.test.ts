@@ -50,6 +50,10 @@ describe('clusterThemes', () => {
     const result = await clusterThemes(rows, m, { kind: 'redacted' });
     expect(result).toEqual([]);           // determinate, not null — no re-attempt
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('[report] themes:'));
+    // Fix round A (I6): the return value alone cannot tell "refused before calling the model"
+    // apart from "clustered everything, then returned [] anyway" — a rewrite that ships every
+    // raw reflection to OpenAI before discarding the result was invisible without this.
+    expect(mockParse).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 
