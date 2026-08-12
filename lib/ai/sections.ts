@@ -27,10 +27,17 @@ export const S4Schema = z.object({ thesis_word: z.string(), narrative: z.string(
 export const S5Schema = z.object({
   strengths: z.array(z.object({ category_id: z.string(), heading: z.string(), body: z.string() })),
 });
+// THREE beats, not six. report.yaml's s6 prose speaks of six micro-template beats, but only
+// affirm/evidence/reframe were ever given a concrete data source (see s6Bullet in
+// lib/report/fallback-sections.ts) — pivot, not_statement and trajectory have no lookup in the
+// facts pack or copy.yaml and were ruled aspirational. Every field here is required and
+// non-nullable under zodTextFormat's strict structured outputs, and gate 1 rejects any blank
+// among them, so listing a beat here COMPELS the model to invent text for it — text that then
+// counts against length_ceiling, numeric containment and banned phrases, each an extra chance to
+// lose the section to fallback. Do not re-add a beat here before it has a data source.
 export const S6Schema = z.object({
   areas: z.array(z.object({
-    category_id: z.string(), affirm: z.string(), pivot: z.string(), evidence: z.string(),
-    not_statement: z.string(), reframe: z.string(), trajectory: z.string(),
+    category_id: z.string(), affirm: z.string(), evidence: z.string(), reframe: z.string(),
   })),
 });
 export const S7Schema = z.object({ narrative: z.string(), pattern_claim: z.string().nullable() });

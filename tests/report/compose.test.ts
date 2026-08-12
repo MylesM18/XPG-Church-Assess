@@ -150,11 +150,8 @@ const good = (id: AiSectionId): unknown => {
         areas: [{
           category_id: 'conn',
           affirm: 'Community / Connection has real strengths worth naming.',
-          pivot: 'At 30 out of 100 it is the one area holding the rest of the chain back.',
           evidence: 'The connection pathway from guest to committed member is inconsistent.',
-          not_statement: 'This is not a judgment on the team running it.',
           reframe: 'Overall health still sits at 70 out of 100, so this is one fixable link, not a collapse.',
-          trajectory: 'Addressing it first unlocks the stages downstream.',
         }],
       };
     case 's7':
@@ -185,9 +182,13 @@ const good = (id: AiSectionId): unknown => {
 function gateFailingS2() {
   return { ...goodS2, summary: goodS2.summary + ' Growth is up 37 percent.' };
 }
+// The invented number MUST be appended to a field S6Schema still declares. z.object() strips
+// unknown keys, so hanging it on a dropped beat (this used to use `trajectory`) would see the
+// whole mutation silently removed at gate 1's safeParse — the gate would then PASS and this
+// helper would stop failing anything, while tsc stayed at 0 because the cast is from `unknown`.
 function gateFailingSix() {
-  const s6 = good('s6') as { areas: Array<{ trajectory: string }> };
-  return { ...s6, areas: [{ ...s6.areas[0]!, trajectory: s6.areas[0]!.trajectory + ' Growth is up 37 percent.' }] };
+  const s6 = good('s6') as { areas: Array<{ reframe: string }> };
+  return { ...s6, areas: [{ ...s6.areas[0]!, reframe: s6.areas[0]!.reframe + ' Growth is up 37 percent.' }] };
 }
 
 function mockSections(fn: (id: AiSectionId) => unknown) {
