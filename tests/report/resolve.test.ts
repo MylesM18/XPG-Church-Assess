@@ -285,3 +285,38 @@ describe('the PDF route is the second and last seam call site', () => {
     expect(route).not.toContain('ReportBlocks')
   })
 })
+
+// Task 8's regenerate control. `regenerateReport` (app/app/[churchId]/actions.ts:302) reads
+// `String(formData.get('churchId') ?? '')` and returns early — silently — when it's empty. A
+// `<form action={regenerateReport}>` that omits the hidden churchId input compiles clean, renders
+// clean, and is a permanent no-op: clicking "Regenerate report" would do nothing, with every gate
+// green. Source-text pinning is the only way to catch that, since there is no persisted-report
+// fixture wired up in this file's test harness to click through in an integration test.
+describe('the regenerate control (Task 8)', () => {
+  const page = readFileSync('app/app/[churchId]/diagnosis/page.tsx', 'utf8')
+
+  it('gates <form action={regenerateReport}> on `stale`, with the hidden churchId input inside that form, before <ReportSections>', () => {
+    // Captures everything between the `{stale &&` gate and the <ReportSections> call that must
+    // immediately follow it (per the brief's Step 1 slot) — so a form placed outside the gate,
+    // or after <ReportSections>, cannot satisfy this.
+    const staleGateMatch = page.match(/\{stale\s*&&([\s\S]*?)<ReportSections/)
+    expect(staleGateMatch).not.toBeNull()
+    const staleBlock = staleGateMatch![1]!
+
+    expect(staleBlock).toContain('<form action={regenerateReport}>')
+
+    const formMatch = staleBlock.match(/<form action=\{regenerateReport\}>([\s\S]*?)<\/form>/)
+    expect(formMatch).not.toBeNull()
+    // The hidden input must be INSIDE the form's own body, not merely somewhere on the page —
+    // a stray hidden input elsewhere would never actually submit with this form.
+    expect(formMatch![1]).toContain('<input type="hidden" name="churchId" value={churchId} />')
+  })
+
+  it('imports regenerateReport from the sibling actions module (../actions), never from ./actions', () => {
+    // '../actions' is app/app/[churchId]/actions.ts (Task 7's module, exports regenerateReport
+    // at :302). './actions' is app/app/[churchId]/diagnosis/actions.ts — a DIFFERENT module that
+    // only exports ShareResult/shareReport/revokeShare and has no regenerateReport at all.
+    expect(page).toMatch(/import\s*\{[^}]*\bregenerateReport\b[^}]*\}\s*from\s*'\.\.\/actions'/)
+    expect(page).not.toMatch(/import\s*\{[^}]*\bregenerateReport\b[^}]*\}\s*from\s*'\.\/actions'/)
+  })
+})

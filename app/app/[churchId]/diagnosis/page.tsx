@@ -18,6 +18,7 @@ import { readPersistedReport } from '@/lib/data/reports'
 import { ReportSections } from './report/sections'
 import { EmptyState, StaleMethodologyNotice } from './report/shared'
 import { ShareControl } from './share-control'
+import { regenerateReport } from '../actions'
 
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'
 
@@ -217,9 +218,20 @@ export default async function DiagnosisPage({
       ) : (
         <>
           {stale && (
-            <p className="font-body text-sm text-ink-soft">
-              This report predates your latest settings change.
-            </p>
+            <div className="flex flex-col gap-8">
+              <p className="font-body text-sm text-ink-soft">
+                This report predates your latest settings change.
+              </p>
+              <form action={regenerateReport}>
+                <input type="hidden" name="churchId" value={churchId} />
+                <button
+                  type="submit"
+                  className="py-1.5 font-body text-sm text-ink underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                >
+                  Regenerate report
+                </button>
+              </form>
+            </div>
           )}
           <ReportSections sections={sections} />
           <div className="flex flex-col gap-8">
