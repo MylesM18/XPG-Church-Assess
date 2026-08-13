@@ -186,8 +186,17 @@ button — it is the recovery path for exactly the failure D-P5-4 names.
 `readingBand`, `buildOutreachVoices`, `OutreachVoicesGroup`, `resolveScoreability`,
 `ScoreabilityResolution`.
 
-**Delete the five UNSHIPPED components** — zero production call sites, every remaining reference a
-comment: `app/app/[churchId]/diagnosis/report/{shared,cover,chain,system,dossier}.tsx`.
+**Delete the four UNSHIPPED components** — zero production call sites, every remaining reference a
+comment: `app/app/[churchId]/diagnosis/report/{cover,chain,system,dossier}.tsx`.
+
+⚠️ **`shared.tsx` SURVIVES — do not delete the file.** Only its three UNSHIPPED exports go:
+`ReportBody`, `NextStep`, `Appendix`. Four of its seven exports are LIVE production code with real
+call sites, and deleting the file breaks both pages that import from it:
+
+| Export | Consumer |
+|---|---|
+| `EmptyState`, `StaleMethodologyNotice` | `app/app/[churchId]/diagnosis/page.tsx:19` |
+| `BookingCta`, `SharedStaleMethodologyNotice` | `app/r/[shareToken]/page.tsx:27` |
 
 **Nine test files hang off the dying half.** Each gets an explicit disposition, because
 *deleting a test file is indistinguishable from a passing gate*:
