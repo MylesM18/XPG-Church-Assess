@@ -41,8 +41,17 @@ legacy blocks until plan 5 (decision **D-P4-2**).
 
 - The PDF route and everything it imports. `lib/report/view.ts`, `app/app/[churchId]/diagnosis/report/shared.tsx`
   and the four block component files (`cover.tsx`, `chain.tsx`, `system.tsx`, `dossier.tsx`) **survive
-  untouched** — they are the PDF route's renderer until plan 5. Plan 4 stops importing most of them
-  from the two pages; it deletes nothing.
+  untouched** — plan 4 stops importing most of them from the two pages; it deletes nothing.
+
+  ⚠️ **CORRECTION.** This bullet previously read *"they are the PDF route's renderer until plan 5."*
+  **That was false, and it was never true at any point in the project's history.** The PDF route
+  renders through `lib/report/pdf/render.ts` — `@react-pdf/renderer` plus `lib/report/pdf/document.tsx`
+  — which **structurally cannot consume DOM/JSX components**. `bd4dc17`, the commit that created that
+  renderer, says so outright: the DOM components in `diagnosis/report/*.tsx` *"can't be reused by a
+  non-DOM renderer"*, so the PDF **mirrors** them instead. Of the files named in this bullet the PDF
+  route imports **only `lib/report/view.ts`, and only for `resolveScoreability`**. The five `.tsx`
+  files survive plan 4 because **plan 4 deletes nothing** — not because anything renders them. A
+  teardown session must not treat "the PDF needs it" as a reason to keep them.
 - Any new visual language. Structural swap on existing tokens only (**D-P4-3**): `font-display`,
   `font-body`, `text-ink`, `text-ink-soft`, `max-w-2xl`, `gap-8`. No mockup round.
 - Any migration. No schema change, no RPC change, no methodology version bump.
@@ -525,6 +534,13 @@ Logging is reasons-only — never payloads, church data, or respondent data.
 | `supabase/migrations/20260811000100_reports.sql` | comment-only amendment at lines 16-18 |
 | `tests/report/**` (3 new files) · 4 re-pointed source-reading tests | §10 |
 
-Untouched and still live for the PDF route: `lib/report/view.ts`,
+Untouched by plan 4 — it deletes nothing: `lib/report/view.ts`,
 `app/app/[churchId]/diagnosis/report/{shared,cover,chain,system,dossier}.tsx`,
 `lib/report/report-hash.ts`, `lib/report/fallback-sections.ts`, `lib/report/facts.ts`.
+
+⚠️ **CORRECTION.** This line previously read *"Untouched and still live for the PDF route."* It is the
+§2 error restated — see the correction there. **"Untouched by plan 4" is not "rendered by the PDF
+route."** Of the files listed, the PDF route imports **only `lib/report/view.ts`**, and only for
+`resolveScoreability`. The five `.tsx` files are DOM components and **no PDF path has ever rendered
+them**; `fallback-sections.ts` is reached from the web renderer (`sections.tsx`), and
+`report-hash.ts` only via `lib/report/inputs-hash.ts`.
