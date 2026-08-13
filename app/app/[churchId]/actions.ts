@@ -280,3 +280,132 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
   revalidatePath(`/app/${churchId}/diagnosis`)
   redirect(`/app/${churchId}/diagnosis`)
 }
+
+/**
+ * Rebuilds and re-persists the AI report for a church whose persisted row no longer matches its
+ * live inputs (D-P5-4). This is the recovery path for exactly one failure: an admin edited the
+ * church profile after generation, the inputs hash moved, and every AI section silently reverted
+ * to fallback with no way back. It is NOT a general "regenerate" button.
+ *
+ * Reads through get_completed_run_responses — the STATUS-AGNOSTIC RPC. Generation's
+ * get_run_responses filters status='in_progress' and returns nothing once the run is complete,
+ * so using it here would persist a report built from zero responses.
+ *
+ * No migration: save_report has no status filter, resolves the run via current_run(), is
+ * require_church_admin-gated, and ends `on conflict (run_id, inputs_hash) do nothing` — so this
+ * is idempotent for free and a double-click is a no-op.
+ *
+ * Never throws to the user. A failed regenerate leaves the existing row and the existing notice
+ * untouched, and logs a reason only — never payloads, church data, or respondent data.
+ */
+export async function regenerateReport(formData: FormData): Promise<void> {
+  const churchId = String(formData.get('churchId') ?? '')
+  if (!churchId) return
+
+  if ((process.env.PROSE_MODE ?? 'fallback') === 'fallback') return
+
+  try {
+    const supabase = await createClient()
+    const methodology = loadMethodology()
+
+    const { data: raw } = await supabase.rpc('get_completed_run_responses', {
+      p_church_id: churchId,
+    })
+    const responses: Response[] = (raw ?? []).map((r: RunResponseRow) => ({
+      category_id: r.category_id,
+      item_id: r.item_id,
+      value: r.value,
+      respondent_label: r.respondent_label,
+      respondent_id: r.respondent_user_id ?? r.respondent_label,
+    }))
+    if (responses.length === 0) return
+
+    const { data: run } = await supabase
+      .from('assessment_runs')
+      .select('id, methodology_version, completed_at')
+      .eq('church_id', churchId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    if (!run) return
+
+    // D-P4-5: catch to null so this degrades EXACTLY as generation and both render surfaces do.
+    let churchProfile: ChurchProfile | null = null
+    try {
+      churchProfile = await loadChurchProfile(supabase, churchId)
+    } catch {
+      churchProfile = null
+    }
+
+    const { data: churchRow } = await supabase
+      .from('churches')
+      .select('name, attendance_band')
+      .eq('id', churchId)
+      .maybeSingle()
+    if (!churchRow) return
+
+    const derived = deriveDiagnosisForRun(
+      responses,
+      methodology,
+      { attendance_band: churchRow.attendance_band ?? '' },
+      run.methodology_version ?? null,
+    )
+    if (!derived.ok) return
+    const diagnosis = derived.diagnosis
+
+    const reflectionRows = reflectionRowsFor(raw ?? [])
+    const labelSource = knownLabels(responses)
+    const churchFacts = churchFactsFrom(churchProfile, churchRow.name)
+    const hash = responseHash(responses, diagnosis.methodology_version)
+
+    const { inputsHash, baseFacts } = reportInputs({
+      diagnosis,
+      methodology: derived.effectiveMethodology,
+      responses,
+      church: churchFacts,
+      completedAt: run.completed_at,
+      labelSource,
+      responseHash: hash,
+      reflections: reflectionRows,
+    })
+
+    // No cache check. Regenerating is the point; save_report's on-conflict makes it safe.
+    const themes = await clusterThemes(reflectionRows, derived.effectiveMethodology, labelSource)
+    const facts = themes === null
+      ? baseFacts
+      : buildFacts({
+          diagnosis,
+          methodology: derived.effectiveMethodology,
+          responses,
+          church: churchFacts,
+          completedAt: baseFacts.cover.completed_at,
+          labelSource,
+          themes,
+        })
+
+    const composed = await composeReport({
+      facts,
+      methodology: derived.effectiveMethodology,
+      labels: labelSource.kind === 'known' ? labelSource.labels : [],
+    })
+
+    await supabase.rpc('save_report', {
+      p_church_id: churchId,
+      p_inputs_hash: inputsHash,
+      p_methodology_version: diagnosis.methodology_version,
+      p_payload: {
+        archetype: facts.archetype,
+        tier: facts.overall.tier.id,
+        facts,
+        sections: composed.sections,
+        section_sources: composed.section_sources,
+      },
+    })
+  } catch (err) {
+    // Reason only — never the diagnosis, the facts, the composed sections, or respondent data.
+    console.warn('[report] regenerate failed:', err instanceof Error ? err.message : 'unknown error')
+    return
+  }
+
+  revalidatePath(`/app/${churchId}/diagnosis`)
+}

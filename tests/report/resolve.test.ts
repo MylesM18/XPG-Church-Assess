@@ -234,9 +234,8 @@ describe('the seam has exactly two call sites', () => {
 // which still counts against the repo's "0 problems" gate) — so Task 8's D-P5-8 stale-notice
 // copy is pulled forward here rather than silenced with a disable comment or deleted. The
 // regenerate CONTROL half of Task 8 stays out: it posts to `regenerateReport`
-// (app/app/[churchId]/actions.ts), a Task 7 server action that does not exist yet, so wiring a
-// form to it now would either not compile or call a stub — worse than leaving the button for
-// Task 8, once Task 7 has shipped the action it submits to.
+// (app/app/[churchId]/actions.ts), a Task 7 server action that now exists — but wiring the form
+// control that submits to it is still Task 8's own piece of work, not this task's.
 describe('the stale notice is pulled forward from Task 8 (eslint flagged `stale` as unused)', () => {
   const page = readFileSync('app/app/[churchId]/diagnosis/page.tsx', 'utf8')
 

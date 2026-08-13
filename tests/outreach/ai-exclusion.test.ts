@@ -72,38 +72,53 @@ describe('reflections and verbatims reach only the clustering task and its gate'
 const actionsSource = stripTs(readFileSync('app/app/[churchId]/actions.ts', 'utf8'));
 
 /**
- * Captures the object-literal body of `(raw ?? []).map((r: RunResponseRow) => ({ ... }))`.
- * Anchored on the map's parameter type so the RunResponseRow interface's own, legitimate
- * `reflection: string | null` field declaration (elsewhere in this file) cannot satisfy or
- * break this match — only the destination object literal actually built from `r` is inspected.
+ * Captures the object-literal body of EVERY `(raw ?? []).map((r: RunResponseRow) => ({ ... }))`
+ * call site. Anchored on the map's parameter type so the RunResponseRow interface's own,
+ * legitimate `reflection: string | null` field declaration (elsewhere in this file) cannot
+ * satisfy or break this match — only the destination object literals actually built from `r`
+ * are inspected.
+ *
+ * Global on purpose (Task 7, D-P5-4): actions.ts now has TWO such call sites — generateDiagnosis's
+ * original map and regenerateReport's own — and a non-global `re.exec` inspects only the first
+ * match it finds. That would silently stop covering regenerateReport's mapping the moment it was
+ * added, with nothing here to notice: the guard would still report green while checking only
+ * half the file.
  */
-function mapBody(source: string): string | null {
-  const re = /\.map\(\(r:\s*RunResponseRow\)\s*=>\s*\(\{([\s\S]*?)\}\)\)/;
-  const match = re.exec(source);
-  return match ? match[1]! : null;
+function mapBodies(source: string): string[] {
+  const re = /\.map\(\(r:\s*RunResponseRow\)\s*=>\s*\(\{([\s\S]*?)\}\)\)/g;
+  return [...source.matchAll(re)].map((match) => match[1]!);
 }
 
 describe('the raw-row to Response[] mapping stays an explicit allowlist that drops reflection', () => {
-  it('the map body is found', () => {
+  const bodies = mapBodies(actionsSource);
+
+  it('finds exactly two map bodies — generateDiagnosis and regenerateReport', () => {
+    // Occurrence-count equality, not a presence check: a presence check is satisfied by either
+    // call site alone and would not notice the other one going unchecked.
     expect(
-      mapBody(actionsSource),
-      'expected (raw ?? []).map((r: RunResponseRow) => ({ ... })) in app/app/[churchId]/actions.ts',
-    ).not.toBeNull();
+      bodies.length,
+      'expected two (raw ?? []).map((r: RunResponseRow) => ({ ... })) call sites in app/app/[churchId]/actions.ts',
+    ).toBe(2);
   });
 
-  it('the mapping does not spread the raw row', () => {
+  it('none of the mappings spread the raw row', () => {
     // A spread (...r) would silently carry r.reflection into Response[], and from there into
     // the Diagnosis object generateProse JSON.stringifies whole — the explicit field-by-field
     // allowlist is the only thing preventing that today. This is the "enrich the prompt with
     // member quotes" edit the whole file exists to catch, in its least conspicuous form: no
-    // occurrence of the word "reflection" anywhere near the change.
-    expect(mapBody(actionsSource)).not.toMatch(/\.\.\.\s*r\b/);
+    // occurrence of the word "reflection" anywhere near the change. Checked over EVERY body so a
+    // leak introduced in either call site fails this test, not just the first one found.
+    for (const body of bodies) {
+      expect(body).not.toMatch(/\.\.\.\s*r\b/);
+    }
   });
 
-  it('the mapping does not reference reflection', () => {
-    // Independent of the spread check: catches an explicit `reflection: r.reflection` key
-    // added to the allowlist, which a spread-only check would not.
-    expect(mapBody(actionsSource)).not.toContain('reflection');
+  it('none of the mappings reference reflection', () => {
+    // Independent of the spread check: catches an explicit `reflection: r.reflection` key added
+    // to either allowlist, which a spread-only check would not. Checked over EVERY body.
+    for (const body of bodies) {
+      expect(body).not.toContain('reflection');
+    }
   });
 });
 
