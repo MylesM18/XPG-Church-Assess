@@ -53,8 +53,10 @@ export async function GET(
   // row (no error), and both return 404 — never a 403, which would let a
   // caller probe which run ids exist. A real query failure sets `error`
   // instead, which we surface as a 500 so it isn't invisible in logs.
-  // The diagnoses row is read ONLY for AI `prose` (the lazy thunk) and row existence (404).
-  // Its `payload` is no longer the view's source — CT-2(c) re-derives from the run's responses.
+  // The diagnoses row is read ONLY for row existence (404). Its `payload` is NOT the view's
+  // source: CT-2(c) re-derives the Diagnosis from the run's responses under the current
+  // methodology instead, so a payload cached under an older methodology can never drive what
+  // renders.
   const { data: diag, error: diagError } = await supabase
     .from('diagnoses')
     .select('prose')

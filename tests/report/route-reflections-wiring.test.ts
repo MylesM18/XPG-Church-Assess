@@ -62,7 +62,7 @@ function extractCallArgs(source: string, callName: string): string | null {
   return source.slice(openParenIdx + 1, end - 1)
 }
 
-describe('report routes wire reflections into resolveReportView only on the authenticated surfaces, never on the shared surface', () => {
+describe('report routes wire reflections into the resolver seam only on the authenticated surfaces, never on the shared surface', () => {
   it('screen route (diagnosis/page.tsx) passes the KEYLESS reflections to resolveReportSections', () => {
     const source = strip(read('app', 'app', '[churchId]', 'diagnosis', 'page.tsx'))
 
@@ -107,6 +107,21 @@ describe('report routes wire reflections into resolveReportView only on the auth
       uses,
       'hashReflections must appear exactly once — its single consumer, resolveReportSections. ' +
         'A second use is a respondent-identity leak into a renderer.',
+    ).toBe(1)
+
+    // The file-wide count above is satisfied just as well by a `hashReflections:` key that got
+    // relocated onto a DIFFERENT call (e.g. renderReportDocument) — the total stays 1, but the
+    // one occurrence is no longer resolveReportSections's own argument, and a
+    // respondent-identity-carrying array has reached a renderer. Scope the same count to the
+    // call's own argument text (the `args` already extracted above) to close that hole: the one
+    // legitimate occurrence must live INSIDE resolveReportSections's own parentheses.
+    const usesInResolveCall = [...args!.matchAll(/\bhashReflections\b/g)].length
+    expect(
+      usesInResolveCall,
+      'hashReflections must appear exactly once INSIDE resolveReportSections(...)\'s own ' +
+        'argument list — a file-wide count of one is not enough if that one occurrence was ' +
+        'relocated onto a different call (e.g. renderReportDocument), which would leak ' +
+        'respondent identity into a renderer while the file-wide count above stays green.',
     ).toBe(1)
   })
 
