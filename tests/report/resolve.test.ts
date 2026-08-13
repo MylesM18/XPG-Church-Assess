@@ -162,9 +162,25 @@ describe('resolveReportSections', () => {
     ['themes of the wrong shape', { themes: [{ label: 'Belonging' }] }],
     ['themes that are not an array', { themes: 'Belonging' }],
     ['a null facts blob', null],
+    // Isolates the support_count check specifically: every OTHER ThemeClusterFact field is
+    // valid here, so this case only fails if isThemeClusterFact's support_count check is doing
+    // real work. The "wrong shape" case above does NOT exercise that check in isolation — it's
+    // also missing gloss/item_ids/verbatims, so it would still be rejected even with the
+    // support_count check deleted.
+    ['a theme missing support_count', {
+      themes: [{ label: 'Belonging', gloss: 'people feel known', item_ids: ['q1'], verbatims: ['we know each other'] }],
+    }],
   ])('drops persisted themes on %s', async (_label, facts) => {
     const r = await resolveReportSections({ ...baseArgs(), readPersisted: lookupWith(facts) })
-    expect(r.sections.find((s) => s.id === 's8')?.fallback).toBeDefined()
+    const s8 = r.sections.find((s) => s.id === 's8')
+    // Non-vacuous: with reflections: [] in baseArgs, s8Bullets (fallback-sections.ts:106-112)
+    // produces bullets from facts.themes ONLY when facts.themes.length > 0 — the reflections
+    // fallback path yields [] on an empty reflections array (buildOutreachVoices drops every
+    // item with no matching entries). A non-empty bullets array here is only possible if the
+    // malformed themes above were wrongly accepted by isThemeClusterFact and reached buildFacts
+    // — this is the discriminator a bare `.fallback).toBeDefined()` could never provide, since
+    // fallbackSections always returns a defined SectionBody regardless of which branch ran.
+    expect(s8?.fallback.bullets).toEqual([])
     expect(r.stale).toBe(false)
   })
 
@@ -174,5 +190,12 @@ describe('resolveReportSections', () => {
       readPersisted: lookupWith({ themes: [THEME] }),
     })
     expect(r.stale).toBe(false)
+    // Non-vacuous: proves the accepted theme actually reached facts.themes and s8Bullets used
+    // it — the exact bullet text s8Bullets emits (fallback-sections.ts:107) is
+    // `${label}: ${gloss} (${support_count} people).`, so this fails if revalidatedThemes
+    // dropped THEME (bullets would be [], the reflections-fallback result) or if any field was
+    // read from the wrong key.
+    const s8 = r.sections.find((s) => s.id === 's8')
+    expect(s8?.fallback.bullets).toEqual(['Belonging: people feel known (4 people).'])
   })
 })
