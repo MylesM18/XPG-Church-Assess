@@ -3,7 +3,7 @@
 **Date:** 2026-08-12 · **Branch:** `feat/final-report-3-composer` (continues off `919d70c`)
 **Parent spec:** `docs/superpowers/specs/2026-08-10-final-report-redesign-design.md` — plan 5 is defined
 at its line 137: *"**PDF** — extend `pdf/document.tsx` to the skeleton; guard extension."*
-**Status:** DRAFT — awaiting Natalie's review.
+**Status:** **APPROVED by Natalie, 2026-08-12.** Cleared to `superpowers:writing-plans`.
 
 ## Goal
 
@@ -257,7 +257,11 @@ paths (`[runId]`, `[churchId]`, `[shareToken]`) need `GIT_LITERAL_PATHSPECS=1` a
   are committed but **not applied**. Plan 5 does not close it and cannot. Applying both in order,
   running `npm run test:db`, and smoking both surfaces remains yours — and it is now a **precondition
   for meaningfully testing plan 5's regenerate path** against real data.
-- Copy for the stale notice and the regenerate control: implementation drafts, you review before
-  merge — same arrangement as the action library?
-- Phase 4's post-teardown test count will drop below 1209. Comfortable with the plan restating the
-  baseline explicitly rather than treating any decrease as a regression?
+
+### Resolved at approval, 2026-08-12
+
+| # | Ruling |
+|---|---|
+| **D-P5-7** | **Spec approved as written.** Cleared to `superpowers:writing-plans`; no spec changes requested. |
+| **D-P5-8** | **Stale-notice + regenerate-control copy: implementation drafts, Natalie reviews before merge** — the action-library arrangement. The plan must surface the exact drafted strings for her glance rather than burying them in a diff. |
+| **D-P5-9** | **Phase 4 restates the expected test counts and gates on that exact number.** A decrease is not a regression; a *silently uncollected file* is. Per-file delta table explicitly **not** required. |
