@@ -1,6 +1,8 @@
 import { Document, Page, Text, View, Link, StyleSheet } from '@react-pdf/renderer';
-import type { ReportView, SystemView, AreaDossierView } from '../view';
-import type { EdgeRead } from '../../engine/dependencies';
+import { AI_SECTION_IDS, S2Schema, S4Schema, S5Schema, S6Schema, S7Schema, S9Schema, S12Schema } from '../../ai/sections';
+import type { AiSectionId } from '../../ai/sections';
+import type { AssembledSection } from '../compose';
+import type { SectionBody } from '../fallback-sections';
 import { bookingCta } from '../cta';
 import { registerReportFonts, FONT_DISPLAY, FONT_BODY } from './fonts';
 
@@ -9,222 +11,222 @@ registerReportFonts();
 const INK = '#1A1A18';
 const INK_SOFT = '#5A5A54';
 const RULE = '#D8D5CE';
-const BERRY = '#8E2B3E'; // RESERVED: diagnosis/constraint/active only (app/globals.css --color-berry)
-const SAGE = '#4E6B60'; // healthy / enabler (app/globals.css --color-sage)
-const AMBER = '#B87D1E'; // at-risk status (app/globals.css --color-status-amber)
 
 const s = StyleSheet.create({
-  page: { paddingTop: 56, paddingBottom: 56, paddingHorizontal: 48,
-          fontFamily: FONT_BODY, fontSize: 11, color: INK, lineHeight: 1.5 },
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 24,
-            paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: RULE },
-  monogram: { width: 28, height: 28, borderRadius: 14, color: '#FFFFFF',
-              fontSize: 12, textAlign: 'center', paddingTop: 8, marginRight: 10 },
+  page: { paddingTop: 56, paddingBottom: 56, paddingHorizontal: 48, fontFamily: FONT_BODY, fontSize: 10.5, color: INK, lineHeight: 1.5 },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 24, borderBottomWidth: 1, borderBottomColor: RULE, paddingBottom: 8 },
+  monogram: { width: 28, height: 28, borderRadius: 14, color: '#FFFFFF', fontFamily: FONT_DISPLAY, fontSize: 12, textAlign: 'center', paddingTop: 7, marginRight: 8 },
   headerText: { flexDirection: 'column' },
   churchName: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14 },
   headerMeta: { fontSize: 9, color: INK_SOFT },
+  h1: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 18, marginBottom: 8 },
   h2: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 13, marginBottom: 6 },
   section: { marginBottom: 18 },
-
-  // Layer 1 — the verdict (mirrors app/app/[churchId]/diagnosis/report/cover.tsx)
-  coverSection: { alignItems: 'center', marginBottom: 20, paddingBottom: 16,
-                  borderBottomWidth: 1, borderBottomColor: RULE },
-  // No letterSpacing here: react-pdf renders it as real glyph-position offsets, which pushed
-  // pdf-parse's word-join heuristic into splitting "OVERALL CHURCH HEALTH" into stray single
-  // letters ("OV E R A L L ...") under test — confirmed by rendering and inspecting the actual
-  // extracted text, not guessed.
-  coverLabel: { fontSize: 9, color: INK_SOFT, textTransform: 'uppercase' },
-  coverScore: { fontFamily: FONT_DISPLAY, fontSize: 32, marginTop: 4 },
-  coverSub: { fontSize: 10, color: INK_SOFT, marginTop: 4 },
-  coverConstraint: { fontSize: 11, marginTop: 6, textAlign: 'center' },
-  coverGated: { fontSize: 10, color: BERRY, marginTop: 4, textAlign: 'center' },
-  confidenceRow: { fontSize: 10, color: INK_SOFT, marginBottom: 4 },
-  verdict: { fontFamily: FONT_DISPLAY, fontSize: 16, lineHeight: 1.4, marginBottom: 4 },
-
-  // Layer 1 — AreaTable
-  tableHeaderRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: RULE, paddingVertical: 4 },
-  tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: RULE, paddingVertical: 3 },
-  tableHeaderText: { fontSize: 9, color: INK_SOFT },
-  tableCellName: { flex: 2, fontSize: 10 },
-  tableCellSmall: { flex: 1, fontSize: 10 },
-
-  // Layer 2 — the chain walk
-  stage: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-           paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: RULE },
-  stageConstraint: { fontWeight: 700 },
-  stageDownstream: { color: INK_SOFT },
-  stageNote: { fontSize: 9, color: INK_SOFT, marginTop: 2 },
-  refs: { fontSize: 9, color: INK_SOFT, marginTop: 4 },
+  body: { marginBottom: 6 },
+  bullet: { marginBottom: 2, paddingLeft: 10 },
+  aiHeading: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 11, marginBottom: 2 },
+  block: { marginBottom: 8 },
   caveat: { fontSize: 9, color: INK_SOFT, marginTop: 8 },
-
-  // Layer 2 — dependency map
-  depGroup: { marginBottom: 10 },
-  depGroupHeading: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 11, marginBottom: 4 },
-  // Status pill (spec §3): a small rounded badge; background/text colour set inline per read.
-  depPill: { alignSelf: 'flex-start', fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 9,
-             paddingVertical: 2, paddingHorizontal: 6, borderRadius: 8, marginBottom: 4 },
-  // Each group's rows sit in one bordered, rounded box with a divider line between rows.
-  depBox: { borderWidth: 1, borderColor: RULE, borderRadius: 6 },
-  depGroupRead: { fontSize: 10, color: INK_SOFT, paddingHorizontal: 10, paddingVertical: 8,
-                  borderBottomWidth: 1, borderBottomColor: RULE },
-  depItem: { paddingHorizontal: 10, paddingVertical: 8 },
-  depItemDivider: { borderTopWidth: 1, borderTopColor: RULE },
-  depStatement: { fontSize: 9, color: INK_SOFT },
-  depRead: { fontSize: 10, color: INK_SOFT, marginTop: 1 },
-  depLine: { fontSize: 10.5 },
-  depCorr: { fontSize: 9, color: INK_SOFT, marginTop: 1 },
-
-  // Layer 3 — area dossiers
-  dossier: { marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: RULE },
-  dossierHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  dossierName: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 12 },
-  dossierMeta: { fontSize: 9, color: INK_SOFT },
-  fieldRow: { marginTop: 4 },
-  fieldLabel: { fontSize: 8, color: INK_SOFT, textTransform: 'uppercase', letterSpacing: 0.5 },
-  fieldValue: { fontSize: 10, marginTop: 1 },
-  voicesLabel: { fontSize: 8, color: INK_SOFT, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 6 },
-  voicesPrompt: { fontSize: 9, color: INK_SOFT, marginTop: 3 },
-  voicesQuote: { fontSize: 10, marginTop: 2, paddingLeft: 8, borderLeftWidth: 1, borderLeftColor: RULE },
-
-  // Layer 4 — booking CTA + appendix
-  ctaButton: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: INK, color: '#FFFFFF',
-               paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, fontSize: 11,
-               textDecoration: 'none' },
-  appendixRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
-  footer: { position: 'absolute', bottom: 24, left: 48, right: 48,
-            flexDirection: 'row', justifyContent: 'space-between',
-            fontSize: 8, color: INK_SOFT },
+  ctaButton: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: INK, color: '#FFFFFF', fontFamily: FONT_DISPLAY, fontSize: 10, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 4, textDecoration: 'none' },
+  footer: { position: 'absolute', bottom: 24, left: 48, right: 48, flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: INK_SOFT },
 });
 
 export interface ReportDocumentProps {
-  view: ReportView;
+  sections: AssembledSection[];
   churchName: string;
   brandColor: string;
   monogram: string;
   generatedAt: Date;
+  /**
+   * The respondent labels the facts pack was built from — the SAME value the resolver was handed
+   * as `labelSource`, never a second knownLabels() call. The fail-closed guard in ./render.ts
+   * checks the sections against exactly this list; a guard checking a different list than the one
+   * the report was built from would fail open.
+   */
+  labels: readonly string[];
+  /** A report exists for this run but not for these inputs. Renders as an appendix caveat. */
+  stale: boolean;
+}
+
+const STALE_CAVEAT =
+  'This export was produced from the current assessment data. A previously generated narrative report exists for different settings and is not shown here.';
+
+/**
+ * The uniform renderer: the { body, bullets } half of a SectionBody. Used for every
+ * source:'fallback' section. The title is rendered by ReportDocument, never here — one title
+ * source for both branches, mirroring SectionBodyView in
+ * app/app/[churchId]/diagnosis/report/sections.tsx.
+ */
+function SectionBodyView({ body, bullets }: { body: string; bullets: string[] }) {
+  return (
+    <>
+      <Text style={s.body}>{body}</Text>
+      {bullets.map((bullet) => (
+        <Text key={bullet} style={s.bullet}>{`•  ${bullet}`}</Text>
+      ))}
+    </>
+  );
+}
+
+type AiRendererProps = { ai: unknown; fallback: SectionBody };
+
+/** Every AI renderer's failure path: the section's own deterministic fallback. */
+function AiFallback({ fallback }: { fallback: SectionBody }) {
+  return <SectionBodyView body={fallback.body} bullets={fallback.bullets} />;
+}
+
+function S2View({ ai, fallback }: AiRendererProps) {
+  const parsed = S2Schema.safeParse(ai);
+  if (!parsed.success) return <AiFallback fallback={fallback} />;
+  const { summary, what_this_is_not, context_bullets } = parsed.data;
+  return (
+    <>
+      <Text style={s.body}>{summary}</Text>
+      <Text style={s.body}>{what_this_is_not}</Text>
+      {context_bullets.map((bullet) => (
+        <Text key={bullet} style={s.bullet}>{`•  ${bullet}`}</Text>
+      ))}
+    </>
+  );
+}
+
+function S4View({ ai, fallback }: AiRendererProps) {
+  const parsed = S4Schema.safeParse(ai);
+  if (!parsed.success) return <AiFallback fallback={fallback} />;
+  const { thesis_word, narrative } = parsed.data;
+  return (
+    <>
+      <Text style={s.aiHeading}>{thesis_word}</Text>
+      <Text style={s.body}>{narrative}</Text>
+    </>
+  );
+}
+
+function S5View({ ai, fallback }: AiRendererProps) {
+  const parsed = S5Schema.safeParse(ai);
+  if (!parsed.success) return <AiFallback fallback={fallback} />;
+  return (
+    <>
+      {parsed.data.strengths.map((strength) => (
+        <View key={strength.category_id} style={s.block}>
+          <Text style={s.aiHeading}>{strength.heading}</Text>
+          <Text style={s.body}>{strength.body}</Text>
+        </View>
+      ))}
+    </>
+  );
+}
+
+function S6View({ ai, fallback }: AiRendererProps) {
+  const parsed = S6Schema.safeParse(ai);
+  if (!parsed.success) return <AiFallback fallback={fallback} />;
+  return (
+    <>
+      {parsed.data.areas.map((area) => (
+        <View key={area.category_id} style={s.block}>
+          <Text style={s.body}>{area.affirm}</Text>
+          <Text style={s.body}>{area.evidence}</Text>
+          <Text style={s.body}>{area.reframe}</Text>
+        </View>
+      ))}
+    </>
+  );
+}
+
+function S7View({ ai, fallback }: AiRendererProps) {
+  const parsed = S7Schema.safeParse(ai);
+  if (!parsed.success) return <AiFallback fallback={fallback} />;
+  const { narrative, pattern_claim } = parsed.data;
+  return (
+    <>
+      <Text style={s.body}>{narrative}</Text>
+      {pattern_claim !== null && <Text style={s.body}>{pattern_claim}</Text>}
+    </>
+  );
+}
+
+function S9View({ ai, fallback }: AiRendererProps) {
+  const parsed = S9Schema.safeParse(ai);
+  if (!parsed.success) return <AiFallback fallback={fallback} />;
+  const { narrative, working_model } = parsed.data;
+  return (
+    <>
+      <Text style={s.body}>{narrative}</Text>
+      <Text style={s.body}>{working_model}</Text>
+    </>
+  );
+}
+
+function S12View({ ai, fallback }: AiRendererProps) {
+  const parsed = S12Schema.safeParse(ai);
+  if (!parsed.success) return <AiFallback fallback={fallback} />;
+  const { assessment, overall_percent, tier_name, primary_objective } = parsed.data;
+  return (
+    <>
+      <Text style={s.body}>{assessment}</Text>
+      <Text style={s.bullet}>{`•  Overall: ${overall_percent}%`}</Text>
+      <Text style={s.bullet}>{`•  Tier: ${tier_name}`}</Text>
+      <Text style={s.bullet}>{`•  Primary objective: ${primary_objective}`}</Text>
+    </>
+  );
 }
 
 /**
- * UI-only presentation mapping, deliberately duplicated from (not imported from)
- * app/app/[churchId]/diagnosis/report/cover.tsx's identical private helper: that
- * file returns DOM elements (h1/p/table), which @react-pdf/renderer's reconciler
- * cannot render, so the component itself cannot be reused here — only the pure
- * band logic can, and cover.tsx does not export it. Exported (only from this
- * file — cover.tsx's own copy stays private) so tests/report/audience-parity.test.ts
- * can pin the 0.75/0.5 thresholds by calling this directly and comparing it against
- * cover.tsx's real behavior via its exported VerdictHeader component at the same
- * boundary values — that test is what actually keeps the two copies in agreement;
- * keep both in sync by hand if you ever touch either.
+ * Narrows `section.id: SectionId` (13 possible values) down to `AiSectionId` (the 7 that have a
+ * renderer). The co-occurrence of `source === 'ai'` with one of these ids is a compose.ts runtime
+ * invariant, not something the type system tracks on its own.
  */
-export function confidenceBand(c: number): { label: string; low: boolean } {
-  if (c >= 0.75) return { label: 'High', low: false };
-  if (c >= 0.5) return { label: 'Moderate', low: false };
-  return { label: 'Low', low: true };
+function isAiSectionId(id: AssembledSection['id']): id is AiSectionId {
+  return (AI_SECTION_IDS as readonly string[]).includes(id);
 }
 
-// Mirrors system.tsx's private READ_ORDER/READ_LABEL — same "cannot import a DOM component"
-// constraint as confidenceBand above. The read sentence is no longer mirrored here:
-// it is precomputed once in lib/report/view.ts (methodology.copy.dependency_reads, spec §10) and
-// arrives on e.readSentence, so both surfaces render the identical string.
-const DEP_READ_ORDER = ['load_bearing', 'at_risk', 'clear', 'both_strong'] as const satisfies readonly EdgeRead[];
-
-const DEP_READ_LABEL: Record<string, string> = {
-  load_bearing: 'Load-bearing',
-  at_risk: 'At risk',
-  clear: 'Clear',
-  both_strong: 'Both strong',
-};
-
-// Mirrors system.tsx's READ_PILL — the status-pill colour per group (spec §3).
-// Keyed by EdgeRead (not string) so DEP_PILL[read] is never possibly-undefined.
-const DEP_PILL: Record<EdgeRead, { bg: string; color: string }> = {
-  load_bearing: { bg: BERRY, color: '#FFFFFF' },
-  at_risk: { bg: AMBER, color: '#FFFFFF' },
-  clear: { bg: '#EEE8DD', color: INK }, // sand / ink (app/globals.css --color-sand)
-  both_strong: { bg: SAGE, color: '#FFFFFF' },
-};
-
-// Exported so tests/report/pdf-document.test.ts can pin the exact string without a full render —
-// the default render fixture has no authored edges, so the rows never appear in extracted text.
-// Same pattern as confidenceBand above. Mirrors system.tsx's relationshipLine byte-for-byte: the
-// `From (n) verb → To (m)` arrow line, with the read sentence rendered as a SEPARATE subline.
-export function depRelationshipLine(e: SystemView['dependencies'][number]): string {
-  const verb = e.kind === 'gate' ? 'gates' : 'feeds';
-  return `${e.fromName} (${e.fromScore}) ${verb} → ${e.toName} (${e.toScore})`;
+/**
+ * Dispatches a section's body content: its own AI renderer when source is 'ai' and that id is one
+ * of the seven AI sections, the shared deterministic view otherwise.
+ *
+ * The `never` check in the default arm is the compile-time guarantee: add an eighth id to
+ * AiSectionId without a case here, and tsc — not a human — fails the build. Keep the switch;
+ * a Record/Map lookup is what the web renderer avoided for eslint's react-hooks/static-components.
+ */
+function SectionContent({ section }: { section: AssembledSection }) {
+  if (section.source === 'ai' && isAiSectionId(section.id)) {
+    const { id, ai, fallback } = section;
+    switch (id) {
+      case 's2':
+        return <S2View ai={ai} fallback={fallback} />;
+      case 's4':
+        return <S4View ai={ai} fallback={fallback} />;
+      case 's5':
+        return <S5View ai={ai} fallback={fallback} />;
+      case 's6':
+        return <S6View ai={ai} fallback={fallback} />;
+      case 's7':
+        return <S7View ai={ai} fallback={fallback} />;
+      case 's9':
+        return <S9View ai={ai} fallback={fallback} />;
+      case 's12':
+        return <S12View ai={ai} fallback={fallback} />;
+      default: {
+        const _exhaustive: never = id;
+        return _exhaustive;
+      }
+    }
+  }
+  return <SectionBodyView body={section.fallback.body} bullets={section.fallback.bullets} />;
 }
 
-// Mirrors dossier.tsx's private UNAVAILABLE/field() — same constraint again: dossier.tsx
-// returns <dt>/<dd> DOM elements, so only the literal copy and the join/null logic travel
-// here, not the component itself. The literal string must match dossier.tsx's byte for byte:
-// it is copy a customer reads, not layout, and tests/report/components.test.ts already pins
-// the screen side of this exact string.
-const UNAVAILABLE = 'Not available for this area.';
-
-function fieldBody(value: string | string[] | null): string {
-  if (Array.isArray(value)) return value.length > 0 ? value.join(' · ') : UNAVAILABLE;
-  return value ?? UNAVAILABLE;
-}
-
-function DossierField({ label, value }: { label: string; value: string | string[] | null }) {
-  return (
-    <View style={s.fieldRow}>
-      <Text style={s.fieldLabel}>{label}</Text>
-      <Text style={s.fieldValue}>{fieldBody(value)}</Text>
-    </View>
-  );
-}
-
-/** One inline area dossier — never collapsed (PDF cannot collapse anyway; spec §7.8).
- *  The header row and six fields stay atomic (`wrap={false}` on the inner View) so they never
- *  split across a page boundary; free-text outreach voices are a sibling outside that inner
- *  View so a long quote CAN flow across a page break instead of overflowing or being clipped. */
-function AreaDossierBlock({ area }: { area: AreaDossierView }) {
-  const voices = area.outreachVoices ?? [];
-  return (
-    <View style={s.dossier}>
-      <View wrap={false}>
-        <View style={s.dossierHeaderRow}>
-          <Text style={s.dossierName}>{area.name}</Text>
-          <Text style={s.dossierMeta}>{area.score}</Text>
-        </View>
-        <DossierField label="Reading" value={area.reading} />
-        <DossierField label="Inside it" value={area.insideIt} />
-        <DossierField label="Agreement" value={area.agreement} />
-        <DossierField label="Position" value={area.position} />
-        <DossierField label="Depends on" value={area.dependsOn} />
-        <DossierField label="Watch for" value={area.watchFor} />
-      </View>
-      {voices.length > 0 && (
-        <View>
-          <Text style={s.voicesLabel}>Voices on outreach</Text>
-          {voices.map((group) => (
-            <View key={group.itemId}>
-              <Text style={s.voicesPrompt}>{group.reflectionPrompt}</Text>
-              {group.entries.map((entry, i) => (
-                <Text key={i} style={s.voicesQuote}>{entry}</Text>
-              ))}
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-}
-
+/**
+ * The PDF mirror of app/app/[churchId]/diagnosis/report/sections.tsx. Same 13 sections, same
+ * order, same one-title-source rule — different primitives, because @react-pdf/renderer cannot
+ * render DOM components and never could.
+ *
+ * Iterates `sections` in array order and NEVER re-sorts: assembleReport returns them in
+ * Object.keys(methodology.report.sections) order, which is report.yaml order.
+ */
 export function ReportDocument({
-  view, churchName, brandColor, monogram, generatedAt,
+  sections, churchName, brandColor, monogram, generatedAt, stale,
 }: ReportDocumentProps) {
   const dateLabel = generatedAt.toISOString().slice(0, 10);
-  const confidence = confidenceBand(view.confidence);
-  const chainIds = view.stages.map((st) => st.category_id);
-  const anyDownstreamStage = view.stages.some((st) => st.bucket === 'downstream');
-
-  const depNames = new Map<string, string>();
-  for (const e of view.system.dependencies) {
-    depNames.set(e.from, e.fromName);
-    depNames.set(e.to, e.toName);
-  }
-  const unexpectedCorrelations = view.system.correlations.filter((c) => c.verdict === 'unexpected');
 
   return (
     <Document title={`${churchName} — Church Health Diagnosis`}>
@@ -237,208 +239,18 @@ export function ReportDocument({
           </View>
         </View>
 
-        {/* Layer 1 — the verdict: CoverCard · VerdictHeader · AreaTable (spec §7 Layer 1;
-            no PDF/Share buttons here — those are screen-only admin chrome). */}
-        <View style={s.coverSection}>
-          <Text style={s.coverLabel}>Overall church health</Text>
-          <Text style={s.coverScore}>{`${view.cover.throughput}%`}</Text>
-          <Text style={s.coverSub}>{`Capacity ${view.cover.capacity}  ·  Gap ${view.cover.gap} pts`}</Text>
-          <Text style={s.coverConstraint}>
-            {view.cover.constraintName ? `Constraint: ${view.cover.constraintName}` : 'Constraint: none — every stage strong'}
-          </Text>
-          {view.cover.gatedBy.length > 0 && (
-            <Text style={s.coverGated}>
-              {`⚠ Gated by: ${view.cover.gatedBy.map((g) => `${g.name} (${g.score})`).join(', ')}`}
-            </Text>
-          )}
-        </View>
-
-        <View style={s.section}>
-          <Text style={s.confidenceRow}>{`Confidence: ${confidence.label}`}</Text>
-          <Text style={s.verdict}>{view.verdict}</Text>
-          {confidence.low && (
-            <Text style={s.refs}>Based on limited responses — add respondents to sharpen this.</Text>
-          )}
-        </View>
-
-        <View style={s.section}>
-          <View style={s.tableHeaderRow}>
-            <Text style={[s.tableHeaderText, s.tableCellName]}>Area</Text>
-            <Text style={[s.tableHeaderText, s.tableCellSmall]}>Score</Text>
-            <Text style={[s.tableHeaderText, s.tableCellSmall]}>Band</Text>
+        {sections.map((section, index) => (
+          <View key={section.id} style={s.section}>
+            <Text style={index === 0 ? s.h1 : s.h2}>{section.fallback.title}</Text>
+            <SectionContent section={section} />
+            {stale && section.id === 'appendix' && <Text style={s.caveat}>{STALE_CAVEAT}</Text>}
           </View>
-          {view.areas.map((area) => (
-            <View key={area.category_id} style={s.tableRow}>
-              <Text style={s.tableCellName}>{area.name}</Text>
-              <Text style={s.tableCellSmall}>{area.score}</Text>
-              <Text style={s.tableCellSmall}>{area.readingLabel}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Layer 2 — how your system behaves */}
-        <View style={s.section}>
-          <Text style={s.h2}>The chain walk</Text>
-          {view.stages.map((st) => {
-            const isConstraint = st.bucket === 'constraint';
-            const isDownstream = st.bucket === 'downstream';
-            const label = isConstraint ? 'Constraint' : isDownstream ? 'Downstream' : 'Strong';
-            return (
-              <View key={st.category_id} style={s.stage}>
-                <View>
-                  <Text style={isConstraint ? s.stageConstraint : isDownstream ? s.stageDownstream : undefined}>
-                    {st.name}{isConstraint ? '  ← your constraint' : ''}
-                  </Text>
-                  {isConstraint && <Text style={s.stageNote}>Your constraint — work here first.</Text>}
-                  {isDownstream && st.isDoNotWorkOn && <Text style={s.stageNote}>Symptom of the constraint</Text>}
-                </View>
-                <Text style={isDownstream ? s.stageDownstream : undefined}>{`${label} · ${st.score}`}</Text>
-              </View>
-            );
-          })}
-          {anyDownstreamStage && <Text style={s.caveat}>Don’t work on the faded stages yet.</Text>}
-        </View>
-
-        {view.evidence && (
-          <View style={s.section}>
-            <Text style={s.h2}>Why we say that</Text>
-            <Text>{view.evidence.text}</Text>
-            {view.evidence.refs.length > 0 && (
-              <Text style={s.refs}>
-                {view.evidence.refs.map((r) => `${r.ref}${r.value === null ? '' : `: ${r.value}`}`).join('  ·  ')}
-              </Text>
-            )}
-          </View>
-        )}
-
-        {view.cost && (
-          <View style={s.section}>
-            <Text style={s.h2}>What it is costing you</Text>
-            <Text>{view.cost.cost}</Text>
-            {view.cost.doNotWorkOn && <Text style={s.refs}>{view.cost.doNotWorkOn}</Text>}
-          </View>
-        )}
-
-        <View style={s.section}>
-          <Text style={s.h2}>How your areas depend on each other</Text>
-          {DEP_READ_ORDER.map((read) => {
-            const edges = view.system.dependencies.filter((e) => e.read === read);
-            if (edges.length === 0) return null;
-            // both_strong reads are identical on every edge ("nothing to flag here"): show once
-            // at group level and suppress the per-row subline (mirrors system.tsx).
-            const groupRead = read === 'both_strong';
-            return (
-              <View key={read} style={s.depGroup}>
-                <Text style={[s.depPill, { backgroundColor: DEP_PILL[read].bg, color: DEP_PILL[read].color }]}>
-                  {DEP_READ_LABEL[read]}
-                </Text>
-                <View style={s.depBox}>
-                  {groupRead && edges[0] && <Text style={s.depGroupRead}>{edges[0].readSentence}</Text>}
-                  {edges.map((e, i) => {
-                    const corr = view.system.correlations.find(
-                      (c) => (c.from === e.from && c.to === e.to) || (c.from === e.to && c.to === e.from),
-                    );
-                    return (
-                      <View key={`${e.from}-${e.to}`} style={i > 0 ? [s.depItem, s.depItemDivider] : s.depItem}>
-                        <Text style={s.depLine}>{depRelationshipLine(e)}</Text>
-                        {!groupRead && <Text style={s.depRead}>{e.readSentence}</Text>}
-                        <Text style={s.depStatement}>{e.statement}</Text>
-                        {corr && (
-                          <Text style={s.depCorr}>
-                            {`Correlation ${corr.verdict.replace('_', ' ')} — r=${corr.r.toFixed(2)} (n=${corr.n})`}
-                          </Text>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            );
-          })}
-          {unexpectedCorrelations.length > 0 && (
-            <View style={s.depGroup}>
-              <Text style={s.depGroupHeading}>Unexpected findings</Text>
-              {unexpectedCorrelations.map((c) => (
-                <Text key={`${c.from}-${c.to}`} style={s.depLine}>
-                  {`${depNames.get(c.from) ?? c.from} ↔ ${depNames.get(c.to) ?? c.to}: r=${c.r.toFixed(2)} (n=${c.n})`}
-                </Text>
-              ))}
-            </View>
-          )}
-        </View>
-
-        <View style={s.section}>
-          <Text style={s.h2}>Calibration</Text>
-          <Text>{view.system.calibrationText}</Text>
-        </View>
-
-        {view.system.disagreement && (
-          <View style={s.section}>
-            <Text style={s.h2}>Where your leaders disagree</Text>
-            <Text>{view.system.disagreement.text}</Text>
-            {view.system.disagreement.respondents.map((r) => (
-              <Text key={r.label} style={s.refs}>{r.label}: {r.mean.toFixed(1)}</Text>
-            ))}
-          </View>
-        )}
-
-        {view.system.gating && (
-          // Flags never headline — a muted secondary note (spec §6.2 row 6), same as
-          // system.tsx's GatingFlags: no heading, just the sentence.
-          <View style={s.section}>
-            <Text style={s.caveat}>{view.system.gating}</Text>
-          </View>
-        )}
-
-        {/* Layer 3 — the eight areas, fixed chain-then-enabler order (same order as
-            view.areas itself — never re-sorted here). `break` starts this on a fresh
-            page since eight inline dossiers are substantial content. */}
-        <View style={s.section} break>
-          <Text style={s.h2}>The eight areas</Text>
-        </View>
-        {view.areas.map((area) => (
-          <AreaDossierBlock key={area.category_id} area={area} />
         ))}
-
-        {/* Layer 4 — what to do. No generated 30/60/90 roadmap (spec §7.6). */}
-        {view.nextStep && (
-          <View style={s.section}>
-            <Text style={s.h2}>Your next step</Text>
-            <Text>{view.nextStep.text}</Text>
-            <Text style={s.refs}>{view.nextStep.callType} — {view.nextStep.hook}</Text>
-          </View>
-        )}
 
         <View style={s.section}>
           <Text style={s.h2}>{bookingCta.heading}</Text>
-          <Text>{bookingCta.body}</Text>
+          <Text style={s.body}>{bookingCta.body}</Text>
           <Link src={bookingCta.url} style={s.ctaButton}>{bookingCta.buttonLabel}</Link>
-        </View>
-
-        <View style={s.section} break>
-          <Text style={s.h2}>Appendix — all category scores</Text>
-          <View style={s.tableHeaderRow}>
-            <Text style={[s.tableHeaderText, s.tableCellName]}>Area</Text>
-            <Text style={[s.tableHeaderText, s.tableCellSmall]}>Role</Text>
-            <Text style={[s.tableHeaderText, s.tableCellSmall]}>Score</Text>
-            <Text style={[s.tableHeaderText, s.tableCellSmall]}>Percentile</Text>
-          </View>
-          {view.appendix.categories.map((c) => {
-            const idx = chainIds.indexOf(c.category_id);
-            const role = idx >= 0 ? `Stage ${idx + 1}` : 'Enabler';
-            return (
-              <View key={c.category_id} style={s.tableRow}>
-                <Text style={s.tableCellName}>{c.name}</Text>
-                <Text style={s.tableCellSmall}>{role}</Text>
-                <Text style={s.tableCellSmall}>{String(c.score)}</Text>
-                <Text style={s.tableCellSmall}>
-                  {c.cohort_percentile !== null ? `${c.cohort_percentile}th pct` : '—'}
-                </Text>
-              </View>
-            );
-          })}
-          <Text style={s.caveat}>{view.appendix.benchmarkNote}</Text>
-          <Text style={s.caveat}>{view.appendix.dependencyNote}</Text>
         </View>
 
         <View style={s.footer} fixed>

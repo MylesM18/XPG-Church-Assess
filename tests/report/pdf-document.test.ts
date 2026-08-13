@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PDFParse } from 'pdf-parse';
 import { renderReportDocument } from '@/lib/report/pdf/render';
-import { depRelationshipLine } from '@/lib/report/pdf/document';
 import { buildReportView, type ReportView } from '@/lib/report/view';
 import { loadMethodology } from '@/lib/methodology/load';
 import { fallbackProse } from '@/lib/ai/fallback';
@@ -306,39 +305,6 @@ describe('ReportDocument', () => {
           generatedAt: new Date('2026-07-18T00:00:00Z'),
         }))(),
     ).rejects.toThrow('view carries respondent names');
-  });
-});
-
-// --- depRelationshipLine: the PDF dependency-map primary line (Change #3) --------------------
-//
-// The dependency-map rows are pure JSX inside ReportDocument, and the default renderText('pdf')
-// fixture has no authored edges (diagnosis.dependencies === []), so the arrow rows never appear
-// in its extracted text. The primary-line string is therefore pinned directly on the exported
-// pure helper — the same "export so a test can pin it without a full render" pattern confidenceBand
-// already uses in document.tsx. It mirrors system.tsx's relationshipLine byte-for-byte: a
-// `From (score) → To (score)` arrow line carrying the gates/feeds verb, with the plain-English
-// read now a separate subline (NOT appended here).
-describe('depRelationshipLine', () => {
-  it('renders a "From (score) → To (score)" arrow line carrying the gates verb', () => {
-    expect(
-      depRelationshipLine({
-        from: 'sys', to: 'vol', kind: 'gate',
-        statement: 'Systems capacity caps volunteers.', read: 'load_bearing',
-        fromName: 'Systems', toName: 'Volunteers', fromScore: 74, toScore: 48,
-        readSentence: 'Systems is strong — so Volunteers has room to grow.',
-      }),
-    ).toBe('Systems (74) gates → Volunteers (48)');
-  });
-
-  it('uses the feeds verb for feed edges and does not append the read sentence', () => {
-    const line = depRelationshipLine({
-      from: 'gen', to: 'comm', kind: 'feed',
-      statement: 'Generosity feeds community.', read: 'both_strong',
-      fromName: 'Generosity', toName: 'Community', fromScore: 80, toScore: 78,
-      readSentence: 'Both are strong — nothing to flag here.',
-    });
-    expect(line).toBe('Generosity (80) feeds → Community (78)');
-    expect(line).not.toContain('nothing to flag here');
   });
 });
 
