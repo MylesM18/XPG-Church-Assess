@@ -1,8 +1,20 @@
 import { describe, it, expect } from 'vitest';
+import { isValidElement } from 'react';
 import { buildReportView, type ReportAudience } from '@/lib/report/view';
 import { loadMethodology } from '@/lib/methodology/load';
 import { fallbackProse } from '@/lib/ai/fallback';
 import type { Diagnosis } from '@/lib/engine/types';
+import { VerdictHeader } from '@/app/app/[churchId]/diagnosis/report/cover';
+
+/** Same tiny walker tests/report/components.test.ts uses locally to read a plain-function
+ *  component's output without a DOM (it's file-local there, not exported, hence duplicated). */
+function textOf(node: unknown): string {
+  if (node === null || node === undefined || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join(' ');
+  if (isValidElement(node)) return textOf((node.props as { children?: unknown }).children);
+  return '';
+}
 
 const methodology = loadMethodology();
 
@@ -63,6 +75,34 @@ describe('report view audience parity (Task 16 drift guard)', () => {
       const v = buildReportView(d, blocks, methodology, { audience });
       expect(v.cover.throughput).toBe(d.throughput);
       expect(v.cover.capacity).toBe(d.capacity);
+    }
+  });
+});
+
+/**
+ * FIX ROUND 1 (Task 4 review, Finding F3). Task 4 deleted `lib/report/pdf/document.tsx`'s own
+ * confidenceBand() along with the ReportView-era PDF verdict block, and — correctly — de-imported
+ * it here. But the describe block that went with it also covered cover.tsx's `VerdictHeader`,
+ * whose own private confidenceBand() is the live 0.75/0.5 threshold logic still shown on the
+ * authenticated diagnosis page (app/app/[churchId]/diagnosis/report/cover.tsx:12-16) until Tasks
+ * 8/9 retire that page. Deleting that half too left the thresholds with zero surviving coverage.
+ *
+ * This restores ONLY the screen-side half: VerdictHeader called directly as a plain function (no
+ * DOM/renderer needed — same pattern tests/report/components.test.ts uses), no comparison against
+ * any PDF-side value. `lib/report/pdf/document.tsx` no longer has a confidenceBand of its own to
+ * compare against.
+ */
+describe('VerdictHeader confidence bands (cover.tsx)', () => {
+  it('labels confidence High/Moderate/Low on both sides of the 0.75 and 0.5 thresholds', () => {
+    const cases: Array<{ confidence: number; label: string }> = [
+      { confidence: 0.75, label: 'High' },
+      { confidence: 0.74, label: 'Moderate' },
+      { confidence: 0.5, label: 'Moderate' },
+      { confidence: 0.49, label: 'Low' },
+    ];
+    for (const { confidence, label } of cases) {
+      const screenText = textOf(VerdictHeader({ verdict: 'irrelevant for this test', confidence }));
+      expect(screenText, `VerdictHeader at confidence=${confidence}`).toContain(`Confidence: ${label}`);
     }
   });
 });

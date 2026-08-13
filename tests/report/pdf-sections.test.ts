@@ -55,7 +55,7 @@ function makeDiagnosis(over: Partial<Diagnosis> = {}): Diagnosis {
     confidence: 0.85,
     evidence_trail: [],
     ...over,
-  } as Diagnosis
+  }
 }
 
 const CHURCH: ChurchFacts = {
