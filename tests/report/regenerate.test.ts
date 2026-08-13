@@ -50,5 +50,22 @@ describe('regenerateReport wiring', () => {
     expect(regenerateSrc.indexOf('requireChurchAdmin')).toBeLessThan(
       regenerateSrc.indexOf('clusterThemes('),
     )
+
+    // FINAL REVIEW: the two assertions above pin the CALL, not the ENFORCEMENT. Deleting the
+    // guard body while keeping `await requireChurchAdmin(churchId)` left them both green — i.e.
+    // the admin gate could be gutted to a no-op with the whole suite passing, on this branch's
+    // ONLY unbounded model-spend path (regenerate has no cache-check skip, so every invocation
+    // is a real clusterThemes + composeReport spend). Pin that the guard's verdict is both
+    // CAPTURED off the result and ACTED ON.
+    expect(
+      regenerateSrc,
+      'requireChurchAdmin\'s result must destructure its error — an ignored error is an ' +
+        'ungated action, and the call alone reads as if it throws, which it does not.',
+    ).toMatch(/const \{[^}]*\berror: authErr\b[^}]*\} = await requireChurchAdmin\(/)
+    expect(
+      regenerateSrc,
+      'a failed admin check must RETURN. Without this, any authenticated church member can ' +
+        'invoke the action directly and drive unbounded AI model spend.',
+    ).toMatch(/if \(authErr\)[\s\S]{0,120}return/)
   })
 })

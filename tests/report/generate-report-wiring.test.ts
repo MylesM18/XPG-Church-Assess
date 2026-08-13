@@ -1,9 +1,46 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const src = readFileSync('app/app/[churchId]/actions.ts', 'utf8');
+const file = readFileSync('app/app/[churchId]/actions.ts', 'utf8');
+
+// FINAL REVIEW: actions.ts holds TWO near-identical report blocks — generateDiagnosis and the
+// newer regenerateReport (plan 5, Task 7). Every assertion in this file scanned the whole file,
+// so each silently re-targeted regenerateReport's copy: gutting generateDiagnosis's
+// composeReport call was proven to leave this suite green. Scope once, here.
+// The start boundary is guarded: indexOf's -1 sentinel would otherwise re-widen the slice back to
+// the whole file, reinstating the exact bug this fixes.
+const START = 'export async function generateDiagnosis';
+const startIdx = file.indexOf(START);
+if (startIdx === -1) {
+  throw new Error(
+    'generate-report-wiring: cannot scope to generateDiagnosis — its declaration is gone. ' +
+      'Re-anchor this slice before trusting any assertion in this file.',
+  );
+}
+// The END boundary is the NEXT top-level export after generateDiagnosis (regenerateReport today),
+// or end-of-file when generateDiagnosis is the file's last export. Deliberately NOT a fixed
+// indexOf('export async function regenerateReport'): that is brittle in the opposite direction —
+// a behaviour-neutral reorder putting regenerateReport ABOVE generateDiagnosis yields
+// endIdx < startIdx, which either throws or (unguarded) produces a backwards, empty slice. Both
+// are false failures on a pure move. Scanning forward from generateDiagnosis is order-independent
+// and cannot silently widen: the first test below asserts the sibling is excluded either way.
+const bodyOffset = startIdx + START.length;
+const nextExportRel = file.slice(bodyOffset).indexOf('\nexport ');
+const endIdx = nextExportRel === -1 ? file.length : bodyOffset + nextExportRel;
+const src = file.slice(startIdx, endIdx);
 
 describe('the report generation block', () => {
+  it('scopes every assertion to generateDiagnosis, not the sibling regenerateReport', () => {
+    // The guard for the scoping above: if the slice ever re-widens (a rename, a reorder, a third
+    // report block), every OTHER assertion in this file quietly starts reading regenerateReport's
+    // near-identical copy and stops proving anything about generation. This test fails loudly
+    // first. Positive AND negative: the positive anchor proves we captured generateDiagnosis's
+    // body (save_diagnosis is generation-only — regenerate never writes a diagnosis), the
+    // negative proves the sibling is excluded.
+    expect(src).toContain("await supabase.rpc('save_diagnosis'");
+    expect(src).not.toContain('export async function regenerateReport');
+  });
+
   it('sits after save_diagnosis', () => {
     // R1a: anchored on the CALL SITE ('await composeReport(') rather than the bare identifier
     // 'composeReport', which would resolve to this task's new top-of-file import instead.
@@ -30,7 +67,15 @@ describe('the report generation block', () => {
 
   it('is wrapped in its own try/catch, separate from the prose block', () => {
     // Neither best-effort block may break the other, the committed diagnosis, or the redirect.
-    expect(src.match(/catch \(err\)/g)?.length).toBeGreaterThanOrEqual(2);
+    //
+    // FINAL REVIEW: EQUALITY, not a >= threshold. actions.ts holds three `catch (err)` in total
+    // (generation's prose block, generation's report block, regenerateReport's) — so a whole-file
+    // `>= 2` stayed green with generation's ENTIRE report try/catch deleted, the exact regression
+    // this test exists to catch. Scoped to generateDiagnosis the true count is 2, and equality is
+    // non-vacuous in both directions: deleting either block fails, and a THIRD bare try/catch
+    // added inside generation — a new unguarded swallow of an error nobody chose to swallow —
+    // fails too, which a threshold would wave through.
+    expect(src.match(/catch \(err\)/g)?.length).toBe(2);
   });
 
   it('computes the inputs hash before the cache check', () => {

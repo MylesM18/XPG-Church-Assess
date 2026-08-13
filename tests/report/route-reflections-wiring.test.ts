@@ -85,6 +85,24 @@ describe('report routes wire reflections into the resolver seam only on the auth
       'hashReflections must appear exactly twice — its declaration and its single ' +
         'consumer, resolveReportSections. A third use is a respondent-identity leak into a renderer.',
     ).toBe(2)
+
+    // FINAL REVIEW: the file-wide count above is satisfied just as well by a `hashReflections`
+    // consumer that got relocated onto a DIFFERENT call (e.g. a `<ReportSections hashReflections=
+    // {...} />` prop, or a renderer) — the total stays 2 (declaration + the one consumer), but the
+    // consuming occurrence is no longer resolveReportSections's own argument, and a
+    // respondent-identity-carrying array has reached a renderer. Scope the same count to the
+    // call's own argument text to close that hole, exactly as the PDF-route sibling below does:
+    // the one consuming occurrence must live INSIDE resolveReportSections's own parentheses.
+    const args = extractCallArgs(source, 'resolveReportSections')
+    expect(args, 'expected a resolveReportSections( call').not.toBeNull()
+    const usesInResolveCall = [...args!.matchAll(/\bhashReflections\b/g)].length
+    expect(
+      usesInResolveCall,
+      'hashReflections must appear exactly once INSIDE resolveReportSections(...)\'s own ' +
+        'argument list — a file-wide count of two is not enough if the consuming occurrence was ' +
+        'relocated onto a different call (e.g. a ReportSections prop), which would leak ' +
+        'respondent identity into a renderer while the file-wide count above stays green.',
+    ).toBe(1)
   })
 
   it('PDF route (pdf/route.ts, Task 6) passes the KEYLESS reflections to resolveReportSections', () => {
