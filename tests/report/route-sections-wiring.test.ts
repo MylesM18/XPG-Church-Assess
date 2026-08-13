@@ -8,6 +8,30 @@ const read = (...p: string[]) => fs.readFileSync(path.join(REPO_ROOT, ...p), 'ut
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
 const countOf = (s: string, re: RegExp) => (s.match(re) ?? []).length
 
+/**
+ * Extracts the balanced-parenthesis argument text of the first `callName(...)` call in
+ * `source`, or null if the call isn't present. Local copy of the helper in
+ * tests/report/route-methodology-wiring.test.ts — per this test suite's existing
+ * no-shared-fixture-module convention (see resolve.test.ts's fixture-kit comment), each
+ * consumer keeps its own, rather than importing across test files.
+ */
+function extractCallArgs(source: string, callName: string): string | null {
+  const marker = `${callName}(`
+  const start = source.indexOf(marker)
+  if (start === -1) return null
+  const openParenIdx = start + marker.length - 1
+  let depth = 0
+  let end = openParenIdx
+  for (; end < source.length; end++) {
+    if (source[end] === '(') depth++
+    else if (source[end] === ')') {
+      depth--
+      if (depth === 0) { end++; break }
+    }
+  }
+  return source.slice(openParenIdx + 1, end - 1)
+}
+
 const sharePage = strip(read('app', 'r', '[shareToken]', 'page.tsx'))
 const diagnosisPage = strip(read('app', 'app', '[churchId]', 'diagnosis', 'page.tsx'))
 
@@ -64,7 +88,22 @@ describe('the diagnosis surface wires the keyed array to the hash and nothing el
     // now "computed once, consumed once", pinned by occurrence count on both identifiers.
     expect(countOf(diagnosisPage, /knownLabels\(responses\)/g)).toBe(1)
     expect(diagnosisPage).toContain('const labelSource = knownLabels(responses)')
-    expect(countOf(diagnosisPage, /\blabelSource\b/g)).toBe(2)
+
+    // Pins the BINDING reaching the call, not merely the identifier `labelSource` appearing
+    // somewhere in the file. A bare `\blabelSource\b` count of 2 is satisfied by the const
+    // declaration's own name PLUS an object *key* — so a regression like
+    // `labelSource: { kind: 'redacted' as const },` at the call site (silently dropping the
+    // eight FREE_TEXT_PROFILE_KEYS from the hashed profile, lib/report/facts.ts:182, and staling
+    // the persisted report forever) would satisfy that count while breaking the invariant. Scope
+    // to the call's own argument text and require the bare shorthand form — `labelSource` not
+    // immediately followed by `:` — to close that hole.
+    const resolveArgs = extractCallArgs(diagnosisPage, 'resolveReportSections')
+    expect(resolveArgs, 'expected a resolveReportSections( call').not.toBeNull()
+    expect(
+      /(^|[{,])\s*labelSource\s*[,}]/.test(resolveArgs!),
+      'resolveReportSections must receive labelSource as a bare shorthand property (the ' +
+        'knownLabels(responses) binding itself), not a re-typed or redacted object literal',
+    ).toBe(true)
   })
 
   it('reads the response hash off the diagnosis edition, not the run row', () => {

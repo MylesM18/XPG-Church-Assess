@@ -240,7 +240,16 @@ describe('the seam has exactly two call sites', () => {
 describe('the stale notice is pulled forward from Task 8 (eslint flagged `stale` as unused)', () => {
   const page = readFileSync('app/app/[churchId]/diagnosis/page.tsx', 'utf8')
 
-  it('renders the D-P5-8 stale-notice copy, gated on `stale`', () => {
+  it('renders the D-P5-8 stale-notice copy exactly once, gated on `stale`', () => {
+    // Occurrence-count equality, NOT presence. Task 8's brief instructs adding a
+    // `{stale && (…)}` block carrying this SAME drafted copy, in this SAME slot — immediately
+    // before <ReportSections>. A verbatim Task 8 transcription on top of this pulled-forward
+    // notice would render it TWICE; a bare `toMatch` is satisfied by either occurrence alone and
+    // cannot see the duplicate.
+    expect(
+      page.match(/This report predates your latest settings change\./g)?.length,
+    ).toBe(1)
+    // Still pins that the one occurrence is gated behind `stale &&`, not unconditional.
     expect(page).toMatch(/\{stale\s*&&[\s\S]{0,200}This report predates your latest settings change\./)
   })
 })
