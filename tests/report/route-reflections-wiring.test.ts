@@ -49,24 +49,27 @@ function optsTail(source: string, audience: string): string | null {
 }
 
 describe('report routes wire reflections into resolveReportView only on the authenticated surfaces, never on the shared surface', () => {
-  it('screen route (diagnosis/page.tsx) passes the KEYLESS reflections to assembleReport', () => {
+  it('screen route (diagnosis/page.tsx) passes the KEYLESS reflections to resolveReportSections', () => {
     const source = strip(read('app', 'app', '[churchId]', 'diagnosis', 'page.tsx'))
 
-    expect(source, 'the screen route must call assembleReport(').toContain('assembleReport(')
+    // Plan 5's resolver seam: resolveReportSections (lib/report/resolve.ts) is now the page's
+    // one call site — it threads `reflections` through to assembleReport internally.
+    expect(source, 'the screen route must call resolveReportSections(').toContain('resolveReportSections(')
     expect(
       source,
       'the screen route must pass reflections, or outreach voices silently disappear from ' +
         'the on-screen report while every current test stays green.',
-    ).toMatch(/assembleReport\(\{[\s\S]*?\breflections\b[\s\S]*?\}\)/)
+    ).toMatch(/resolveReportSections\(\{[\s\S]*?\breflections\b[\s\S]*?\}\)/)
 
-    // The keyed sibling carries respondent identity and must reach reportInputs and
-    // NOTHING else. Occurrence-count equality, not substring absence: the identifier is
-    // legitimately present in the file, so what matters is how many places consume it.
+    // The keyed sibling carries respondent identity and must reach resolveReportSections (which
+    // threads it into reportInputs, lib/report/resolve.ts) and NOTHING else. Occurrence-count
+    // equality, not substring absence: the identifier is legitimately present in the file, so
+    // what matters is how many places consume it.
     const uses = [...source.matchAll(/\bhashReflections\b/g)].length
     expect(
       uses,
       'hashReflections must appear exactly twice — its declaration and its single ' +
-        'consumer, reportInputs. A third use is a respondent-identity leak into a renderer.',
+        'consumer, resolveReportSections. A third use is a respondent-identity leak into a renderer.',
     ).toBe(2)
   })
 

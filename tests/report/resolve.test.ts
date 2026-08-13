@@ -199,3 +199,48 @@ describe('resolveReportSections', () => {
     expect(s8?.fallback.bullets).toEqual(['Belonging: people feel known (4 people).'])
   })
 })
+
+describe('the seam has exactly two call sites', () => {
+  const page = readFileSync('app/app/[churchId]/diagnosis/page.tsx', 'utf8')
+
+  it('the diagnosis page calls resolveReportSections once', () => {
+    expect(page.match(/resolveReportSections\(/g)?.length).toBe(1)
+  })
+
+  it('the diagnosis page no longer calls buildFacts directly', () => {
+    // buildFacts moved behind the seam. A surviving call here is a second, drifting pipeline.
+    expect(page.match(/buildFacts\(/g)?.length ?? 0).toBe(0)
+  })
+
+  it('the diagnosis page calls knownLabels exactly once', () => {
+    // Was twice (:188 and :222). One label source per request, threaded through — a guard
+    // checking a different label list than the facts pack was built from fails open.
+    expect(page.match(/knownLabels\(/g)?.length).toBe(1)
+  })
+
+  it('the diagnosis page no longer inlines the reports query', () => {
+    expect(page).not.toContain("from('reports')")
+  })
+
+  it('revalidatedThemes moved out of the page', () => {
+    expect(page).not.toContain('function revalidatedThemes')
+    expect(page).not.toContain('function isThemeClusterFact')
+  })
+})
+
+// `stale` (resolveReportSections's third return field) is assigned in the scoreable branch but,
+// per the Task 3 brief, is "unused until Task 8". eslint's @typescript-eslint/no-unused-vars
+// flags an assigned-but-never-read `let` as a problem (`npx eslint .` reported it as a warning,
+// which still counts against the repo's "0 problems" gate) — so Task 8's D-P5-8 stale-notice
+// copy is pulled forward here rather than silenced with a disable comment or deleted. The
+// regenerate CONTROL half of Task 8 stays out: it posts to `regenerateReport`
+// (app/app/[churchId]/actions.ts), a Task 7 server action that does not exist yet, so wiring a
+// form to it now would either not compile or call a stub — worse than leaving the button for
+// Task 8, once Task 7 has shipped the action it submits to.
+describe('the stale notice is pulled forward from Task 8 (eslint flagged `stale` as unused)', () => {
+  const page = readFileSync('app/app/[churchId]/diagnosis/page.tsx', 'utf8')
+
+  it('renders the D-P5-8 stale-notice copy, gated on `stale`', () => {
+    expect(page).toMatch(/\{stale\s*&&[\s\S]{0,200}This report predates your latest settings change\./)
+  })
+})

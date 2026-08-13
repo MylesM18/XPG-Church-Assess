@@ -9,13 +9,12 @@ import { resolveScoreability } from '@/lib/report/view'
 import { deriveDiagnosisForRun } from '@/lib/report/derive'
 import { shareLink } from '@/lib/report/share-link'
 import type { Response } from '@/lib/engine/types'
-import { buildFacts } from '@/lib/report/facts'
-import type { ThemeClusterFact } from '@/lib/report/facts'
 import { knownLabels } from '@/lib/report/anonymity'
-import { churchFactsFrom, reflectionRowsFor, reportInputs } from '@/lib/report/inputs-hash'
-import { assembleReport } from '@/lib/report/compose'
+import { churchFactsFrom, reflectionRowsFor } from '@/lib/report/inputs-hash'
 import type { AssembledSection } from '@/lib/report/compose'
 import { responseHash } from '@/lib/report/response-hash'
+import { resolveReportSections } from '@/lib/report/resolve'
+import { readPersistedReport } from '@/lib/data/reports'
 import { ReportSections } from './report/sections'
 import { EmptyState, StaleMethodologyNotice } from './report/shared'
 import { ShareControl } from './share-control'
@@ -167,6 +166,7 @@ export default async function DiagnosisPage({
   // `let` (rather than an early return) so the not-scoreable branch below can keep the page's
   // existing single-return, ternary-JSX shape.
   let sections: AssembledSection[] = []
+  let stale = false
 
   if (resolution.scoreable) {
     // Mirrors app/app/[churchId]/actions.ts's `hash = responseHash(responses, diagnosis
@@ -176,7 +176,11 @@ export default async function DiagnosisPage({
     // this matching exactly, or a persisted report is judged stale forever and themes never render.
     const hash = responseHash(responses, resolution.diagnosis.methodology_version)
 
-    const { inputsHash, baseFacts } = reportInputs({
+    // ONE label source per request, threaded through. Two label-source lookups that can
+    // disagree is the labelSource finding class; the PDF guard depends on this being singular.
+    const labelSource = knownLabels(responses)
+
+    const resolved = await resolveReportSections({
       diagnosis: resolution.diagnosis,
       methodology: reportMethodology,
       responses,
@@ -185,51 +189,15 @@ export default async function DiagnosisPage({
       // "assessed", and a page-load moment would change on every reload. This intentionally
       // diverges from generation's new Date().toISOString(); completedAt is not in the hash.
       completedAt: run!.completed_at,
-      labelSource: knownLabels(responses),
+      labelSource,
       responseHash: hash,
-      reflections: hashReflections,
+      reflections, // the KEYLESS array
+      hashReflections, // the KEYED array — reportInputs only
+      readPersisted: (inputsHash) => readPersistedReport(supabase, run!.id, inputsHash),
     })
 
-    // RLS on `reports` is admin-only select and this page is already admin-gated above, so a
-    // direct .from('reports') here adds no exposure. Any error, zero rows, or a malformed row
-    // resolves to null, which assembleReport already treats as "no AI" — every section then
-    // renders its deterministic fallback.
-    const { data: persistedRow, error: persistedError } = await supabase
-      .from('reports')
-      .select('inputs_hash, sections, facts')
-      .eq('run_id', run!.id)
-      .order('generated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (persistedError) console.warn('[diagnosis] reports read failed; rendering fallback sections')
-
-    const persisted = persistedRow ?? null
-
-    // D-P4-1: facts.themes is model output that cannot be re-derived from responses, so S8 is
-    // the one place a renderer reads model output back off the persisted row. The invariant
-    // narrows rather than breaks: no renderer reads derived NUMBERS from `facts`; model output
-    // that cannot be re-derived is read back, SCHEMA-REVALIDATED FIRST — a reports row outlives
-    // the code that wrote it and `facts` is untyped jsonb.
-    const themes = revalidatedThemes(persisted, inputsHash)
-    const facts = themes === null
-      ? baseFacts
-      : buildFacts({
-          diagnosis: resolution.diagnosis,
-          methodology: reportMethodology,
-          responses,
-          church: churchFactsFrom(churchProfile, church.name),
-          completedAt: run!.completed_at,
-          labelSource: knownLabels(responses),
-          themes,
-        })
-
-    sections = assembleReport({
-      facts,
-      methodology: reportMethodology,
-      reflections, // the KEYLESS array — never hashReflections
-      persisted,
-      liveInputsHash: inputsHash,
-    })
+    sections = resolved.sections
+    stale = resolved.stale
   }
 
   return (
@@ -248,6 +216,11 @@ export default async function DiagnosisPage({
         <StaleMethodologyNotice churchId={churchId}>{notScoreableMessage}</StaleMethodologyNotice>
       ) : (
         <>
+          {stale && (
+            <p className="font-body text-sm text-ink-soft">
+              This report predates your latest settings change.
+            </p>
+          )}
           <ReportSections sections={sections} />
           <div className="flex flex-col gap-8">
             <a
@@ -269,48 +242,4 @@ export default async function DiagnosisPage({
       )}
     </main>
   )
-}
-
-/**
- * Structural validator for ThemeClusterFact[] (lib/report/facts.ts). There is deliberately no
- * schema import here: ThemesSchema (lib/ai/themes.ts) validates the MODEL's RAW output —
- * `{ themes: ThemeSchema[], affection_theme }` where each ThemeSchema carries
- * `support_indices`/`verbatim_candidates` — not the post-processed ThemeClusterFact[] this page
- * reads back off `facts.themes` (`support_count`/`verbatims`). The two shapes differ in both
- * wrapper (object vs array) and fields, so `ThemesSchema.safeParse(facts.themes)` would reject
- * every real row, always — a fail-closed bug that disables themes silently and is
- * indistinguishable from "no data yet" (see lib/ai/theme-gates.ts / clusterThemes's return
- * contract for where support_indices becomes support_count and verbatim_candidates becomes
- * verbatims). This checks the same required string/number keys ThemeClusterFact declares.
- */
-function isThemeClusterFact(value: unknown): value is ThemeClusterFact {
-  if (typeof value !== 'object' || value === null) return false
-  const t = value as Record<string, unknown>
-  return (
-    typeof t.label === 'string' &&
-    typeof t.gloss === 'string' &&
-    typeof t.support_count === 'number' &&
-    Array.isArray(t.item_ids) && t.item_ids.every((id) => typeof id === 'string') &&
-    Array.isArray(t.verbatims) && t.verbatims.every((v) => typeof v === 'string')
-  )
-}
-
-/**
- * Returns the persisted themes only when the row is FRESH and its themes revalidate.
- * On any failure — no row, stale hash, missing key, revalidation failure — returns null,
- * and facts.themes stays []. s8Bullets (lib/report/fallback-sections.ts:106-120) already
- * falls through to the per-area voices list built from the keyless reflections, so the
- * fallback needs no new code path.
- */
-function revalidatedThemes(
-  persisted: { inputs_hash: string; facts: unknown } | null,
-  liveInputsHash: string,
-): ThemeClusterFact[] | null {
-  if (!persisted || persisted.inputs_hash !== liveInputsHash) return null
-  const facts = persisted.facts
-  if (!facts || typeof facts !== 'object' || !('themes' in facts)) return null
-  const themes = (facts as { themes: unknown }).themes
-  return Array.isArray(themes) && themes.every(isThemeClusterFact)
-    ? (themes as ThemeClusterFact[])
-    : null
 }

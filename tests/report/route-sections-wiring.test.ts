@@ -37,22 +37,20 @@ describe('the public share surface stays structurally excluded from AI, themes a
 })
 
 describe('the diagnosis surface wires the keyed array to the hash and nothing else', () => {
-  it('passes churchFactsFrom(churchProfile, …) into reportInputs, not a null profile', () => {
+  it('passes churchFactsFrom(churchProfile, …) into resolveReportSections, not a null profile', () => {
     // Pins the §4.3 drift risk directly: a ChurchFacts built from four columns produces a
     // different profile slice and therefore a permanently stale hash, silently.
     expect(diagnosisPage).toContain('loadChurchProfile(')
-    // Occurrence-count equality, NOT presence. There are two call sites — the reportInputs call
-    // that feeds inputsHash and the buildFacts call on the themes-rebuild path — and they must
-    // stay argument-identical. A bare toContain is satisfied by either one alone, so a
-    // regression at exactly one site would render a facts.profile that diverges from the one
-    // that was hashed, with every gate still green. Pinning both counts also forces a conscious
-    // decision if a third call site is ever added.
-    expect(countOf(diagnosisPage, /churchFactsFrom\(/g)).toBe(2)
-    expect(countOf(diagnosisPage, /churchFactsFrom\(churchProfile/g)).toBe(2)
+    // Occurrence-count equality, NOT presence. Plan 5's resolver seam collapsed the old two call
+    // sites (the reportInputs call that fed inputsHash and the buildFacts call on the
+    // themes-rebuild path) into resolveReportSections's single call — a regression that
+    // reintroduces a second, drifting church-facts source would show up here.
+    expect(countOf(diagnosisPage, /churchFactsFrom\(/g)).toBe(1)
+    expect(countOf(diagnosisPage, /churchFactsFrom\(churchProfile/g)).toBe(1)
     expect(diagnosisPage).not.toContain('churchFactsFrom(null')
   })
 
-  it('passes knownLabels(responses) as the label source at both facts call sites', () => {
+  it('computes knownLabels(responses) once and threads it as the single labelSource', () => {
     // labelSource IS a hash input, by the same indirect route as church: buildFacts admits the
     // eight FREE_TEXT_PROFILE_KEYS into facts.profile only when labelSource.kind === 'known'
     // (lib/report/facts.ts:182), and facts.profile is component 5 of the inputs hash. Generation
@@ -60,10 +58,13 @@ describe('the diagnosis surface wires the keyed array to the hash and nothing el
     // type-checks fine, silently drops eight keys from the hashed profile, and stales the
     // persisted report forever with every gate green.
     //
-    // Occurrence-count equality, NOT presence — sibling of the churchFactsFrom pin above and the
-    // same two call sites (reportInputs, and buildFacts on the themes-rebuild path).
-    expect(countOf(diagnosisPage, /labelSource:/g)).toBe(2)
-    expect(countOf(diagnosisPage, /labelSource: knownLabels\(responses\)/g)).toBe(2)
+    // Plan 5's resolver seam collapsed the old two inline call sites (reportInputs, and buildFacts
+    // on the themes-rebuild path) into one: labelSource is computed once and threaded through as
+    // a shorthand property, so the literal `labelSource:` no longer appears — the invariant is
+    // now "computed once, consumed once", pinned by occurrence count on both identifiers.
+    expect(countOf(diagnosisPage, /knownLabels\(responses\)/g)).toBe(1)
+    expect(diagnosisPage).toContain('const labelSource = knownLabels(responses)')
+    expect(countOf(diagnosisPage, /\blabelSource\b/g)).toBe(2)
   })
 
   it('reads the response hash off the diagnosis edition, not the run row', () => {

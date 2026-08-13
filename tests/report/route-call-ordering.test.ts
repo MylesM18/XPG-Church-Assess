@@ -162,16 +162,19 @@ describe('report routes resolve staleness before ever touching fallbackProse/bui
     ).toContain('!resolution.scoreable')
   })
 
-  it('app/app/[churchId]/diagnosis/page.tsx resolves scoreability and the read seam before assembling (CT-1, plan 4)', () => {
+  it('app/app/[churchId]/diagnosis/page.tsx resolves scoreability before calling the resolver seam (CT-1, plan 5)', () => {
     const source = strip(read('app', 'app', '[churchId]', 'diagnosis', 'page.tsx'))
 
+    // Plan 5's resolver seam (lib/report/resolve.ts, resolveReportSections) collapsed this
+    // page's own `.from('reports')` read and `assembleReport(` call into one call site — the
+    // CT-1 invariant did not change, only where it is enforced: resolveScoreability must still
+    // run, and be checked, before the assembly pipeline is ever invoked.
     // BOTH anchors guarded on every ordering assertion — a missing needle yields
     // indexOf === -1 and would satisfy `toBeLessThan` vacuously.
-    for (const needle of ['resolveScoreability(', ".from('reports')", 'assembleReport(']) {
+    for (const needle of ['resolveScoreability(', 'resolveReportSections(']) {
       expect(source, `the diagnosis page must call ${needle}`).toContain(needle)
     }
-    expect(source.indexOf('resolveScoreability(')).toBeLessThan(source.indexOf('assembleReport('))
-    expect(source.indexOf(".from('reports')")).toBeLessThan(source.indexOf('assembleReport('))
+    expect(source.indexOf('resolveScoreability(')).toBeLessThan(source.indexOf('resolveReportSections('))
     expect(
       source,
       'the diagnosis page must keep the not-scoreable guard spelled `!resolution.scoreable`',

@@ -139,30 +139,28 @@ describe('report routes build the view and the prose thunk from reportMethodolog
   it('app/app/[churchId]/diagnosis/page.tsx: every methodology argument is reportMethodology', () => {
     const source = strip(read('app', 'app', '[churchId]', 'diagnosis', 'page.tsx'))
 
-    // Plan 4's web swap: reportInputs and assembleReport (plus buildFacts, on the
-    // themes-revalidated branch) replace resolveReportView on this page, but the invariant did
-    // not change — a legacy run must be RENDERED against the edition it was scored under, never
-    // the current one.
+    // Plan 5's resolver seam: resolveReportSections (lib/report/resolve.ts) replaces this page's
+    // own reportInputs/assembleReport/buildFacts call sites with exactly one, but the invariant
+    // did not change — a legacy run must be RENDERED against the edition it was scored under,
+    // never the current one.
     const passed = [...source.matchAll(/methodology:\s*([A-Za-z_$][\w$]*)/g)].map((m) => m[1]!)
     expect(
       passed.length,
-      'expected at least two methodology: <arg> call sites (reportInputs and assembleReport)',
-    ).toBeGreaterThanOrEqual(2)
+      'expected exactly one methodology: <arg> call site (resolveReportSections)',
+    ).toBe(1)
     expect(new Set(passed)).toEqual(new Set(['reportMethodology']))
 
     // Shorthand `{ methodology }` would pass the RAW methodology while matching no
     // `methodology:` key at all — the fail-open hole the regex above cannot see. Scoped to
-    // reportInputs's and assembleReport's own argument text (not the whole file): a whole-file
-    // scan for `[{,]\s*methodology\s*[,}]` also matches deriveDiagnosisForRun's ordinary
-    // positional `(responses, methodology, {...})` argument above, which legitimately passes
-    // the CURRENT methodology and is not an object literal at all.
-    const reportInputsArgs = extractCallArgs(source, 'reportInputs')
-    const assembleReportArgs = extractCallArgs(source, 'assembleReport')
-    expect(reportInputsArgs, 'expected a reportInputs( call').not.toBeNull()
-    expect(assembleReportArgs, 'expected an assembleReport( call').not.toBeNull()
+    // resolveReportSections's own argument text (not the whole file): a whole-file scan for
+    // `[{,]\s*methodology\s*[,}]` also matches deriveDiagnosisForRun's ordinary positional
+    // `(responses, methodology, {...})` argument above, which legitimately passes the CURRENT
+    // methodology and is not an object literal at all.
+    const resolveArgs = extractCallArgs(source, 'resolveReportSections')
+    expect(resolveArgs, 'expected a resolveReportSections( call').not.toBeNull()
     const shorthand = /[{,]\s*methodology\s*[,}]/
     expect(
-      shorthand.test(reportInputsArgs!) || shorthand.test(assembleReportArgs!),
+      shorthand.test(resolveArgs!),
       'the diagnosis page must never pass the raw `methodology` via object shorthand',
     ).toBe(false)
 
