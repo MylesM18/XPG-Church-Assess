@@ -234,8 +234,29 @@ describe('gate 1b — s5/s6 category coverage', () => {
     expect(gateSection('s5', outOfSlice, ctx)).toBe('category coverage');
   });
 
+  // Completeness, one per section. The membership + uniqueness loop above constrains only the
+  // ids that ARE present, so a proper SUBSET of the slice satisfied every check and shipped as a
+  // passing AI section. That is material, not cosmetic: methodology/report.yaml:65-67 has all
+  // three s5 templates assert "Three areas are carrying real weight" while s5's slice is exactly
+  // three (lib/ai/sections.ts:93), so a 2-of-3 response renders two strengths under a heading
+  // claiming three. s6's templates read "Each area below…" (report.yaml:74-76).
+  //
+  // Short-by-one rather than a single entry: it is the weakest failing case, so it also pins the
+  // stronger ones, and it is the realistic model error (a dropped item, not a wholesale refusal).
+  it('rejects an s5 that covers only part of its slice', () => {
+    const shortByOne = { strengths: goodS5.strengths.slice(0, -1) };
+    expect(shortByOne.strengths).toHaveLength(s5Ids.length - 1);
+    expect(gateSection('s5', shortByOne, ctx)).toBe('category coverage');
+  });
+
+  it('rejects an s6 that covers only part of its slice', () => {
+    const shortByOne = { areas: goodS6.areas.slice(0, -1) };
+    expect(shortByOne.areas).toHaveLength(s6Ids.length - 1);
+    expect(gateSection('s6', shortByOne, ctx)).toBe('category coverage');
+  });
+
   // Anti-vacuity, one per section: without these, a gate that rejected every s5 and s6 payload
-  // outright would pass all four rejection tests above.
+  // outright would pass all six rejection tests above.
   it('accepts a well-formed s5 covering each category in its slice exactly once', () => {
     expect(gateSection('s5', goodS5, ctx)).toBeNull();
   });

@@ -79,6 +79,13 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
       if (!known.has(entry.category_id) || seen.has(entry.category_id)) return 'category coverage';
       seen.add(entry.category_id);
     }
+    // Completeness. The loop above constrains only the ids that ARE present, so a proper subset
+    // of the slice cleared it: every entry was known and unique, just not all of them. That is
+    // material because the headings are not neutral — report.yaml:65-67's s5 templates all assert
+    // "Three areas are carrying real weight" against a slice of exactly three, so a 2-of-3
+    // response renders two strengths under a heading claiming three. s6's read "Each area below".
+    // Uniqueness above makes size equality sufficient: `seen` cannot exceed `known`.
+    if (seen.size !== known.size) return 'category coverage';
   }
 
   const text = strings.join(' ');

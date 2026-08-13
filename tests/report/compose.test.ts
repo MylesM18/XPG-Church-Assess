@@ -146,13 +146,48 @@ const good = (id: AiSectionId): unknown => {
         ],
       };
     case 's6':
+      // Gate 1b requires FULL coverage of the section's slice, not just known, unique ids. s6's
+      // slice is buildFacts' score-desc remainder — sys, vol, gen, comm, conn — so all five must
+      // appear. This mock carried `conn` alone until the completeness check landed: one of five,
+      // every id valid, and it passed as a well-formed s6 everywhere it was used.
+      //
+      // Same hardcoded-and-sort-dependent form as the s5 case above; if the score vector at :117
+      // changes, both lists move together. The `conn` entry is kept verbatim because it is the
+      // gate-proven one (its 70/100 are in-slice for gate 2); the other four are deliberately
+      // digit-free so they cannot introduce a numeric-containment failure of their own.
       return {
-        areas: [{
-          category_id: 'conn',
-          affirm: 'Community / Connection has real strengths worth naming.',
-          evidence: 'The connection pathway from guest to committed member is inconsistent.',
-          reframe: 'Overall health still sits at 70 out of 100, so this is one fixable link, not a collapse.',
-        }],
+        areas: [
+          {
+            category_id: 'conn',
+            affirm: 'Community / Connection has real strengths worth naming.',
+            evidence: 'The connection pathway from guest to committed member is inconsistent.',
+            reframe: 'Overall health still sits at 70 out of 100, so this is one fixable link, not a collapse.',
+          },
+          {
+            category_id: 'sys',
+            affirm: 'Systems work is further along here than most teams expect.',
+            evidence: 'Process lives with a few people rather than in anything written down.',
+            reframe: 'Read this as knowledge worth capturing, not as a failure to organise.',
+          },
+          {
+            category_id: 'vol',
+            affirm: 'Volunteers are willing and turn up when they are asked.',
+            evidence: 'Recruitment leans on personal invitation from the same handful of leaders.',
+            reframe: 'The willingness is already there; what is missing is a repeatable path into it.',
+          },
+          {
+            category_id: 'gen',
+            affirm: 'Generosity is steady and quietly carries more than it is credited for.',
+            evidence: 'Giving is concentrated among long-tenured members rather than broadly shared.',
+            reframe: 'This is a breadth question, not a commitment question.',
+          },
+          {
+            category_id: 'comm',
+            affirm: 'Communication reaches the people already close to the centre.',
+            evidence: 'Announcements repeat across channels without a clear primary one.',
+            reframe: 'Treat this as a focus problem rather than an effort problem.',
+          },
+        ],
       };
     case 's7':
       return {
@@ -186,9 +221,16 @@ function gateFailingS2() {
 // unknown keys, so hanging it on a dropped beat (this used to use `trajectory`) would see the
 // whole mutation silently removed at gate 1's safeParse — the gate would then PASS and this
 // helper would stop failing anything, while tsc stayed at 0 because the cast is from `unknown`.
+// It must also keep EVERY area. This used to rebuild `areas` as a single-element array, which
+// gate 1b now rejects for incomplete coverage — and coverage is checked BEFORE numeric
+// containment, so the helper would still "fail" but for the wrong reason, silently invalidating
+// the reason-text assertion it exists to serve. Mutate the first entry in place, drop none.
 function gateFailingSix() {
   const s6 = good('s6') as { areas: Array<{ reframe: string }> };
-  return { ...s6, areas: [{ ...s6.areas[0]!, reframe: s6.areas[0]!.reframe + ' Growth is up 37 percent.' }] };
+  return {
+    ...s6,
+    areas: s6.areas.map((a, i) => (i === 0 ? { ...a, reframe: a.reframe + ' Growth is up 37 percent.' } : a)),
+  };
 }
 
 function mockSections(fn: (id: AiSectionId) => unknown) {
