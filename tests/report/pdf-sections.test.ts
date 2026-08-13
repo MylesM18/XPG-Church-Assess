@@ -143,20 +143,81 @@ describe('the PDF document renders the 13 assembled sections', () => {
     expect(src).not.toContain('AreaDossierView')
   })
 
-  // unskip in Task 5
-  it.skip('renders to a real PDF buffer', async () => {
+  it('renders to a real PDF buffer', async () => {
     const buffer = await renderReportDocument(baseProps())
     expect(buffer.length).toBeGreaterThan(0)
     expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
   })
 
-  // unskip in Task 5
-  it.skip('falls back for a section whose AI payload is malformed', async () => {
+  it('falls back for a section whose AI payload is malformed', async () => {
     const sections = fallbackSectionsFixture().map((s) =>
       s.id === 's2' ? { ...s, source: 'ai' as const, ai: { nonsense: true } } : s,
     )
     // safeParse rejects → that section renders its own fallback → still a valid PDF, no throw.
     const buffer = await renderReportDocument({ ...baseProps(), sections })
+    expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
+  })
+})
+
+describe('the re-homed fail-closed anonymity guard', () => {
+  // renderReportDocument is declared as a plain (non-async) function (lib/report/pdf/render.ts),
+  // so the guard's `throw` runs synchronously during the call itself — `renderReportDocument(...)`
+  // throws before ever producing a Promise for `expect(...).rejects` to observe. Wrapping the call
+  // in an async closure defers evaluation until the closure runs, turning the throw into a
+  // rejection `.rejects` can catch. Same technique tests/report/pdf-document.test.ts's pre-Task-5
+  // guard tests used for the same reason (its own inline comment documents it). Brief's Step 1
+  // snippet omitted this wrapper — a brief defect confirmed by watching these three fail with an
+  // uncaught synchronous exception instead of the expected rejection.
+  it('throws when a respondent label appears in a fallback body', async () => {
+    const sections = fallbackSectionsFixture().map((s, i) =>
+      i === 0 ? { ...s, fallback: { ...s.fallback, body: 'Marcus said the welcome is warm.' } } : s,
+    )
+    await expect(
+      (async () => renderReportDocument({ ...baseProps(), sections, labels: ['Marcus'] }))(),
+    ).rejects.toThrow(/respondent/i)
+  })
+
+  it('throws when a respondent label appears in a bullet', async () => {
+    const sections = fallbackSectionsFixture().map((s, i) =>
+      i === 0 ? { ...s, fallback: { ...s.fallback, bullets: ['Marcus mentioned parking'] } } : s,
+    )
+    await expect(
+      (async () => renderReportDocument({ ...baseProps(), sections, labels: ['Marcus'] }))(),
+    ).rejects.toThrow(/respondent/i)
+  })
+
+  it('throws when a respondent label appears in an AI payload string', async () => {
+    const sections = fallbackSectionsFixture().map((s) =>
+      s.id === 's4'
+        ? { ...s, source: 'ai' as const, ai: { thesis_word: 'Trust', narrative: 'Marcus put it plainly.' } }
+        : s,
+    )
+    await expect(
+      (async () => renderReportDocument({ ...baseProps(), sections, labels: ['Marcus'] }))(),
+    ).rejects.toThrow(/respondent/i)
+  })
+
+  it('does not throw when no label is present', async () => {
+    const buffer = await renderReportDocument({ ...baseProps(), labels: ['Marcus'] })
+    expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
+  })
+
+  // The brief's own instruction (not one of its Step 1 test snippets): "Check fallback.body,
+  // fallback.bullets, and the string fields of the AI payload — not fallback.title." Titles come
+  // from report.yaml, never respondent data, and a label that happens to be a common word
+  // appearing in a title would 500 every export — fail-closed in the wrong direction. None of the
+  // brief's five Step-1 tests actually exercises this; this closes that gap directly.
+  it('does not throw when a label appears only in a section title (titles are exempt)', async () => {
+    const sections = fallbackSectionsFixture().map((s, i) =>
+      i === 0 ? { ...s, fallback: { ...s.fallback, title: 'Marcus Ministries Overview' } } : s,
+    )
+    const buffer = await renderReportDocument({ ...baseProps(), sections, labels: ['Marcus'] })
+    expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
+  })
+
+  it('does not throw on an empty label list', async () => {
+    // containsRespondentLabel skips empty needles, so [] is a no-op, not a match-everything.
+    const buffer = await renderReportDocument({ ...baseProps(), labels: [] })
     expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
   })
 })

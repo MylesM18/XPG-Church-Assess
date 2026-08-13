@@ -1,48 +1,102 @@
 import { describe, it, expect } from 'vitest';
 import { PDFParse } from 'pdf-parse';
 import { renderReportDocument } from '@/lib/report/pdf/render';
-import { buildReportView, type ReportView } from '@/lib/report/view';
+import { assembleFallbackOnly } from '@/lib/report/compose';
+import type { AssembledSection } from '@/lib/report/compose';
+import { buildFacts, type ChurchFacts, type FactsPack } from '@/lib/report/facts';
 import { loadMethodology } from '@/lib/methodology/load';
-import { fallbackProse } from '@/lib/ai/fallback';
-import type { Diagnosis } from '@/lib/engine/types';
+import type { Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types';
 
 const methodology = loadMethodology();
 
-const SENTINEL = 'Zzyzx Quimby';
+/**
+ * Task 5 (re-home the fail-closed anonymity guard): this file predates the Task 4 rewrite of
+ * document.tsx off the old ReportView/buildReportView/AreaDossierView model onto
+ * AssembledSection[] (lib/report/compose.ts). Its former assertions targeted structure that no
+ * longer exists on the PDF surface — a "The eight areas" dossier table with Band/Percentile
+ * columns, a bare cover throughput %, a respondent-N column, a dual `dispersion` /
+ * `system.disagreement` guard field pair. None of that survives in the new 13-section renderer
+ * (lib/report/pdf/document.tsx), so those tests are replaced below with behavioural tests of what
+ * the new renderer actually does, using the same capacity-archetype fixture idiom
+ * tests/report/pdf-sections.test.ts and tests/report/assemble-fallback-only.test.ts already use
+ * (those helpers aren't exported for direct import, hence duplicated here rather than shared —
+ * the established convention in this suite; see pdf-voices.test.ts's own header comment for the
+ * same rationale applied to its diagnosis()/extractText() duplicates).
+ */
 
-function diagnosis(): Diagnosis {
+const CAT_IDS = ['guest', 'conn', 'disc', 'vol', 'gen', 'gov', 'comm', 'sys'] as const;
+const SCORES = [72, 68, 66, 61, 58, 70, 55, 64];
+
+function makeCategory(id: string, score: number, over: Partial<DiagnosisCategory> = {}): DiagnosisCategory {
   return {
-    methodology_version: methodology.questions.version,
-    throughput: 55,
+    category_id: id,
+    kind: (['gov', 'comm', 'sys'].includes(id) ? 'enabler' : 'stage') as DiagnosisCategory['kind'],
+    score,
+    belief: null,
+    evidence: null,
+    gap: null,
+    gap_class: null,
+    cohort_percentile: 40,
+    state: 'ok',
+    respondent_count: 3,
+    excluded_partial: 0,
+    questionEffects: [],
+    ...over,
+  };
+}
+
+function makeDiagnosis(over: Partial<Diagnosis> = {}): Diagnosis {
+  return {
+    methodology_version: '0.3.0',
+    throughput: 60,
     capacity: 70,
-    gap: 15,
-    categories: [
-      { category_id: 'guest_experience', kind: 'stage', score: 30, belief: null, evidence: null,
-        gap: null, gap_class: null, cohort_percentile: null, state: 'broken', respondent_count: 2, excluded_partial: 0, questionEffects: [] },
-      { category_id: 'connections', kind: 'stage', score: 70, belief: null, evidence: null,
-        gap: null, gap_class: null, cohort_percentile: null, state: 'ok', respondent_count: 2, excluded_partial: 0, questionEffects: [] },
-    ],
-    primary_constraint: { category_id: 'guest_experience' },
+    gap: 10,
+    categories: CAT_IDS.map((id, i) => makeCategory(id, SCORES[i]!)),
+    primary_constraint: null,
     contributing: [],
     do_not_work_on: [],
     gating_conditions: [],
-    generosity_mode: null,
+    generosity_mode: 'both',
     blind_spots: [],
-    disagreement_flags: [{
-      category_id: 'guest_experience',
-      respondents: [{ label: SENTINEL, mean: 3.1 }, { label: 'Sam Reyes', mean: 7.4 }],
-      spread: 2.2,
-    }],
-    calibration: { people: [], spread: 0 },
+    disagreement_flags: [],
+    calibration: { people: [], spread: 1.1 },
     dependencies: [],
     correlations: [],
-    offer: { type: 'guest_retention', call_type: 'Diagnostic call', hook: 'Lets walk the chain together.' },
-    confidence: 0.8,
-    evidence_trail: [
-      { claim: 'primary_constraint:guest_experience', refs: [{ kind: 'item', ref: 'G1', value: 3 }] },
-    ],
-  } as Diagnosis;
+    offer: { type: 'x', call_type: 'call', hook: 'h' },
+    confidence: 0.85,
+    evidence_trail: [],
+    ...over,
+  };
 }
+
+const CHURCH: ChurchFacts = {
+  name: 'Grace Chapel',
+  denomination: 'Independent',
+  context: 'suburban',
+  attendance_band: '250_499',
+  adults_band: '310',
+  staff_fte_band: '4.5',
+  budget_band: '$750k',
+  church_age_band: '42 years',
+  growth_trajectory: 'plateaued',
+  campuses_band: '2',
+  facility_status: 'owned',
+  leadership_history: 'Senior pastor since 2014.',
+  consultant_notes: 'No major changes since the last assessment.',
+};
+
+function resp(item_id: string, category_id: string, value: number, who: string): Response {
+  return { category_id, item_id, value, respondent_label: who, respondent_id: who };
+}
+
+const RESPONSES: Response[] = [
+  resp('G1', 'guest', 7, 'a'),
+  resp('G1', 'guest', 8, 'b'),
+  resp('C1', 'conn', 7, 'a'),
+  resp('D1', 'disc', 6, 'b'),
+  resp('V1', 'vol', 6, 'c'),
+  resp('GEN1', 'gen', 6, 'a'),
+];
 
 /**
  * pdf-parse@2.4.5 is a v2 rewrite of the classic package: it exports the
@@ -61,295 +115,158 @@ async function extractText(buffer: Buffer): Promise<string> {
   }
 }
 
-// Narrowed to 'pdf': every call site renders for the pdf audience, and a
-// 'screen' audience view is expected to throw (see the guard test below)
-// before renderToBuffer ever produces something extractText could read.
-// Widening this back to 'screen' | 'pdf' would silently re-open the trap a
-// reviewer flagged — a future test passing 'screen' here would throw with the
-// confidentiality guard's message instead of whatever it meant to exercise.
-async function renderText(audience: 'pdf'): Promise<string> {
-  const d = diagnosis();
-  const blocks = fallbackProse(d, methodology);
-  const view = buildReportView(d, blocks, methodology, { audience });
-  const buffer = await renderReportDocument({
-    view,
-    churchName: 'Grace Church',
-    brandColor: '#3A4A6B',
-    monogram: 'GC',
-    generatedAt: new Date('2026-07-18T00:00:00Z'),
+/** Builds the facts pack for a capacity archetype (no primary_constraint, no gating), same shape
+ *  as pdf-sections.test.ts's FACTS_FIXTURE, with the category set overridable per test. */
+function factsFor(diagnosisOverride: Partial<Diagnosis> = {}): FactsPack {
+  return buildFacts({
+    methodology,
+    responses: RESPONSES,
+    church: CHURCH,
+    completedAt: '2026-08-10T00:00:00Z',
+    labelSource: { kind: 'known', labels: [] },
+    diagnosis: makeDiagnosis({
+      primary_constraint: null,
+      gating_conditions: [],
+      generosity_mode: null,
+      ...diagnosisOverride,
+    }),
   });
-  return extractText(buffer);
 }
 
+function sectionsFor(
+  diagnosisOverride: Partial<Diagnosis> = {},
+  reflections: ReadonlyArray<{ item_id: string; reflection: string | null }> = [],
+): AssembledSection[] {
+  return assembleFallbackOnly({ facts: factsFor(diagnosisOverride), methodology, reflections: [...reflections] });
+}
+
+const DOC_ARGS = {
+  churchName: 'Grace Chapel',
+  brandColor: '#3A4A6B',
+  monogram: 'GC',
+  generatedAt: new Date('2026-07-18T00:00:00Z'),
+  labels: [] as string[],
+  stale: false,
+};
+
 describe('ReportDocument', () => {
-  it('renders the church name and the verdict', async () => {
-    const text = await renderText('pdf');
-    expect(text).toContain('Grace Church');
-    expect(text).toContain('Guest Experience');
-  }, 30_000);
-
-  // Guards the cover number specifically: the fixture's throughput (55) and capacity (70)
-  // deliberately differ. The PDF cover matches cover.tsx's bare `{cover.throughput}%` exactly
-  // (Task 16 review round 2, Finding 2 — an earlier "Throughput: " prefix was unshipped copy
-  // drift, added as a test anchor that copy.tsx's screen version never carries). '%' is
-  // confirmed (by rendering and inspecting the actual extracted text, not assumed) to occur at
-  // exactly one position anywhere in this document's rendered text — the cover score itself —
-  // so a bare '55%' / not-'70%' pair is already fully discriminating without reintroducing a
-  // PDF-only prefix: a render site that read view.cover.capacity instead of view.cover.throughput
-  // for the headline would print "70%" in that one position, which the negative assertion below
-  // still catches, and "Capacity 70" on the line right below it (a legitimate, different string
-  // — no trailing '%') never collides with either assertion.
-  it('prints the throughput value, not capacity, as the cover score', async () => {
-    const text = await renderText('pdf');
-    expect(text).toContain('55%');
-    expect(text).not.toContain('70%');
-  }, 30_000);
-
-  // Change #1: the respondent count (N) is an internal statistic that no longer belongs on any
-  // report surface. Neither the dossier meta ("score · N=n") nor the AreaTable "N" column may
-  // appear. The band-column region between the 'Score' header and Layer 2's 'The chain walk'
-  // heading must carry no standalone 'N' header.
-  it('does not display the respondent N column or N= meta', async () => {
-    const text = await renderText('pdf');
-    expect(text).not.toContain('N=');
-    const start = text.indexOf('Score');
-    const end = text.indexOf('The chain walk');
-    expect(start).toBeGreaterThan(-1);
-    expect(end).toBeGreaterThan(start);
-    expect(text.slice(start, end)).not.toMatch(/\bN\b/);
-  }, 30_000);
-
-  // Change #2: the healthy reading band's DISPLAY label is now "Strong", not "Holding". The default
-  // renderText('pdf') fixture's category_ids don't match the methodology ids, so all 8 areas fall
-  // back to state 'ok' (healthy) → their cover band cells read "Strong". Region-isolated between the
-  // 'Band' header and Layer 2's 'The chain walk' heading (same region the N-column test uses).
-  it('labels a healthy area "Strong", not "Holding", in the cover band column', async () => {
-    const text = await renderText('pdf');
-    const start = text.indexOf('Band');
-    const end = text.indexOf('The chain walk');
-    const band = text.slice(start, end);
-    expect(band).toContain('Strong');
-    expect(band).not.toContain('Holding');
-  }, 30_000);
-
-  // Finding #5: the Layer 1 AreaTable "Band" column must show the same state-aware reading band
-  // as each area's dossier (Natalie's ruling: align). The old score-only scoreBand() collapsed a
-  // Watch-state area (score >= 45) to "Holding" on the cover while its dossier read watch-state — a
-  // same-page contradiction. 'Watch' is a band the score-only fn could NEVER emit, so its presence
-  // in the band column proves the alignment. Region-isolated between the 'Band' header and Layer 2's
-  // 'The chain walk' heading because the dossier's "Watch for" field label also contains "Watch".
-  it('shows the state-aware reading band (Watch) in the cover AreaTable, aligned with the dossier', async () => {
-    const d = diagnosis();
-    // The shared fixture's category_ids ('connections'/'guest_experience') are NOT the methodology
-    // chain/enabler ids buildAreas iterates ([guest, conn, disc, vol, gen, gov, comm, sys]), so remap
-    // this row to the real chain id 'conn' (name "Community / Connection") for its state to reach the
-    // Layer 1 table at all — otherwise every area falls back to score 0 and no state is exercised.
-    const conn = d.categories.find((c) => c.category_id === 'connections')!;
-    conn.category_id = 'conn';
-    conn.state = 'watch'; // score stays 70 (>= 45): scoreBand(70) => 'Holding'; state-aware => 'Watch'
-    const blocks = fallbackProse(d, methodology);
-    const view = buildReportView(d, blocks, methodology, { audience: 'pdf' });
-    const buffer = await renderReportDocument({
-      view, churchName: 'Grace Church', brandColor: '#3A4A6B', monogram: 'GC',
-      generatedAt: new Date('2026-07-18T00:00:00Z'),
-    });
+  // Replaces the old "renders the church name and the verdict" + "renders all eight area
+  // dossiers, in the fixed chain-then-enabler order" tests. The new renderer has no per-area
+  // dossier table, so the closest still-true property is: the church name appears, and every one
+  // of the 13 report.yaml section headings appears, in report.yaml order — real pdfjs-extracted
+  // text, not a source grep (pdf-sections.test.ts's order test only proves absence of `.sort(` in
+  // the source; this proves the actual rendered output is in order).
+  it('renders the church name and every section heading, in report.yaml order', async () => {
+    const buffer = await renderReportDocument({ sections: sectionsFor(), ...DOC_ARGS });
     const text = await extractText(buffer);
-    const tableStart = text.indexOf('Band');
-    const tableEnd = text.indexOf('The chain walk');
-    expect(tableStart, 'expected the AreaTable "Band" header').toBeGreaterThan(-1);
-    expect(tableEnd, 'expected Layer 2 "The chain walk" heading after the table').toBeGreaterThan(tableStart);
-    const bandColumn = text.slice(tableStart, tableEnd);
-    expect(bandColumn).toContain('Watch');
-  }, 30_000);
+    expect(text).toContain('Grace Chapel');
 
-  it('NEVER prints a respondent name in the pdf audience', async () => {
-    const text = await renderText('pdf');
-    expect(text).not.toContain(SENTINEL);
-    expect(text).not.toContain('Sam Reyes');
-  }, 30_000);
+    const ids = Object.keys(methodology.report.sections) as Array<keyof typeof methodology.report.sections>;
+    const titles = ids.map((id) => methodology.report.sections[id].title);
+    expect(titles.length).toBe(13);
 
-  // Task 16, Step 3 renderer-level ordering test (Resolution 3). buildAreas() (lib/report/
-  // view.ts) always produces all 8 dossiers for every audience regardless of how few
-  // categories this fixture actually populates — the missing 6 fall back to score 0 / n 0 —
-  // so this fixture alone is enough to exercise all 8. tests/report/audience-parity.test.ts's
-  // drift guard only proves buildReportView's `.areas` array itself is audience-stable; it
-  // never renders anything, so a document.tsx that dropped or reversed a dossier while
-  // view.areas stayed correct would sail through it untouched. This closes that gap by
-  // asserting directly on the rendered PDF text.
-  it('renders all eight area dossiers, in the fixed chain-then-enabler order', async () => {
-    const text = await renderText('pdf');
-
-    // Isolate just the dossier section (between its own heading and the Appendix heading, both
-    // unique, single-occurrence strings in this document) so an area name's earlier appearance
-    // in Layer 1's AreaTable, or later one in Layer 4's Appendix, cannot mask a Layer-3-specific
-    // drop or reorder — every name legitimately appears in all three places.
-    //
-    // This isolation is intentionally coupled to the exact wording of both headings (they are
-    // PDF-only strings — document.tsx's "The eight areas" has no screen equivalent to import a
-    // constant from, and "Appendix — all category scores" is this file's own copy of a heading
-    // shared.tsx's Appendix repeats independently). That coupling is deliberately NOT silent: if
-    // either heading's text is ever edited, `indexOf` returns -1 and the two `toBeGreaterThan`
-    // checks below fail immediately with a message naming exactly which heading went missing —
-    // never a silent pass with an empty or wrong slice.
-    const dossierStart = text.indexOf('The eight areas');
-    const dossierEnd = text.indexOf('Appendix — all category scores');
-    expect(dossierStart, 'expected "The eight areas" heading in the PDF').toBeGreaterThan(-1);
-    expect(dossierEnd, 'expected "Appendix — all category scores" heading in the PDF').toBeGreaterThan(dossierStart);
-    const dossierText = text.slice(dossierStart, dossierEnd);
-
-    const nameById = new Map(methodology.questions.categories.map((c) => [c.id, c.name]));
-    const expectedIds = [...methodology.rules.chain, ...Object.keys(methodology.rules.enablers)];
-    const expectedNames = expectedIds.map((id) => nameById.get(id) ?? id);
-    expect(expectedNames.length).toBe(8);
-
-    const positions = expectedNames.map((name) => dossierText.indexOf(name));
-    const missing = expectedNames.filter((_, i) => positions[i] === -1);
-    expect(missing, `expected all 8 area dossiers in the PDF; missing: ${missing.join(', ')}`).toEqual([]);
-
+    const positions = titles.map((title) => text.indexOf(title));
+    const missing = titles.filter((_, i) => positions[i] === -1);
+    expect(missing, `expected every section heading in the PDF; missing: ${missing.join(', ')}`).toEqual([]);
     for (let i = 1; i < positions.length; i++) {
       expect(
         positions[i]!,
-        `expected the "${expectedNames[i]}" dossier to appear after "${expectedNames[i - 1]}"'s in ` +
-          `the PDF (fixed chain-then-enabler order, spec §7 Layer 3) — found at ${positions[i]} vs ${positions[i - 1]}`,
+        `expected "${titles[i]}" to follow "${titles[i - 1]}" (report.yaml order)`,
       ).toBeGreaterThan(positions[i - 1]!);
     }
   }, 30_000);
 
-  it('still renders the disagreement narrative without the names', async () => {
-    const text = await renderText('pdf');
-    expect(text.toLowerCase()).toContain('disagree');
+  // Replaces "labels a healthy area Strong, not Holding" + "shows the state-aware reading band
+  // (Watch)...aligned with the dossier". Those tested a cover AreaTable that no longer exists;
+  // the surviving equivalent is fallback-sections.ts's bandRead(), which still drives an s6
+  // ("Areas requiring investment") bullet per category from the same methodology.copy.dossier.
+  // reading table. 'gen' is a chain (stage) category that lands in s6's bottom-5 slice under this
+  // fixture's scores (sorted desc: guest 72, gov 70, conn 68, disc 66, sys 64, vol 61, gen 58,
+  // comm 55 — gen is index 6, inside facts.categories.slice(3)).
+  it('shows the state-aware reading band text for a watch-state area', async () => {
+    const buffer = await renderReportDocument({
+      sections: sectionsFor({
+        categories: CAT_IDS.map((id, i) => makeCategory(id, SCORES[i]!, id === 'gen' ? { state: 'watch' } : {})),
+      }),
+      ...DOC_ARGS,
+    });
+    const text = await extractText(buffer);
+    expect(text).toContain(methodology.copy.dossier.reading.stage.watch);
   }, 30_000);
 
-  it('renders with no AI prose (prime directive 1)', async () => {
-    const text = await renderText('pdf');
-    expect(text).toContain('Benchmarks');
-    expect(text.length).toBeGreaterThan(200);
+  // Replaces "NEVER prints a respondent name in the pdf audience" + "does not display the
+  // respondent N column or N= meta". The N-column concept is gone (no per-category N is ever
+  // printed by the new renderer); the name-leak property survives and is worth the deeper
+  // real-pdf-text check on top of pdf-sections.test.ts's magic-bytes-only assertion for the same
+  // "labels present but unmatched" case.
+  it('never prints a respondent label anywhere in the extracted PDF text when none is present in content', async () => {
+    // 'Marcus' only — not RESPONSES's own single-letter respondent_labels ('a'/'b'/'c'), which
+    // would trivially substring-match ordinary prose (any word containing the letter "a") and
+    // make this test fail for the wrong reason.
+    const buffer = await renderReportDocument({ sections: sectionsFor(), ...DOC_ARGS, labels: ['Marcus'] });
+    const text = await extractText(buffer);
+    expect(text).not.toContain('Marcus');
   }, 30_000);
 
-  // The dependency disclosure caveat (inserts.dependency_note) sits beside the benchmark caveat
-  // in the appendix. 'working model' is unique to it (the benchmark note reads "provisional
-  // priors"), so this asserts the dependency <Text> actually renders. Real pdf-parse extraction.
-  it('renders the dependency disclosure note in the appendix', async () => {
-    const text = await renderText('pdf');
-    expect(text).toContain('working model');
-  }, 30_000);
-
-  // The 'pdf' audience rendering successfully (and the sibling tests above
-  // proving no respondent name is present in that output) is already covered
-  // by the tests above, so it isn't repeated here. This test proves the
-  // opposite side: the fail-closed guard in render.ts actually fires.
-  it('throws when a view carrying respondent names reaches the renderer', async () => {
-    const d = diagnosis();
-    const blocks = fallbackProse(d, methodology);
-    // buildReportView now strips respondent names for EVERY audience (respondent anonymity), so
-    // manufacture the names-carrying view the fail-closed guard defends against by injecting a
-    // labelled respondent directly. The guard must still fire if such a view ever reaches it.
-    const base = buildReportView(d, blocks, methodology, { audience: 'screen' });
-    const view: ReportView = {
-      ...base,
-      dispersion: { text: 'Your leaders split.', respondents: [{ label: 'Dana Okafor', mean: 3 }] },
-    };
-    expect(view.dispersion?.respondents.length).toBeGreaterThan(0);
-
-    // renderReportDocument is declared as a plain (non-async) function, so its
-    // guard throws synchronously rather than returning a rejected promise.
-    // Wrapping the call in an async closure defers evaluation until the closure
-    // runs, so the throw becomes a rejection .rejects can observe — the same
-    // reason renderText's own `await renderReportDocument(...)` above is safe.
+  // Replaces "throws when a view carrying respondent names reaches the renderer" and "throws when
+  // only system.disagreement (not dispersion) carries respondent names" — both probed the old
+  // dual-field (`dispersion` / `system.disagreement`) guard, which died with ReportView. Rather
+  // than duplicate pdf-sections.test.ts's synthetic per-field mutation tests (which hand-edit
+  // fallback.body/bullets/ai directly), this proves the guard fires through the REAL composer
+  // pipeline: a reflection whose free text happens to contain the respondent's own label reaches
+  // s8 ("What leaders are saying") via fallbackSections' buildOutreachVoices path, and the guard
+  // must still catch it there — end-to-end coverage pdf-sections.test.ts's unit-level tests don't
+  // provide.
+  it('throws when a real reflection routed through the composer carries a respondent label', async () => {
+    const sections = sectionsFor({}, [{ item_id: 'G6', reflection: 'Marcus said the welcome felt warm.' }]);
     await expect(
-      (async () =>
-        renderReportDocument({
-          view,
-          churchName: 'Grace Church',
-          brandColor: '#3A4A6B',
-          monogram: 'GC',
-          generatedAt: new Date('2026-07-18T00:00:00Z'),
-        }))(),
-    ).rejects.toThrow('view carries respondent names');
-  });
+      (async () => renderReportDocument({ sections, ...DOC_ARGS, labels: ['Marcus'] }))(),
+    ).rejects.toThrow(/respondent/i);
+  }, 30_000);
 
-  // Task 16 review round 2, Finding 3. The guard above only proves the OLD `dispersion` check
-  // fires — today `dispersion` and `system.disagreement` always carry the same names (view.ts
-  // populates both from the same flag, stripped identically for pdf/shared), so a guard that
-  // checked `dispersion` alone would already pass that test even if the `system.disagreement`
-  // check were deleted entirely, or never added. This test isolates the NEW check specifically:
-  // it forces `dispersion` empty while `system.disagreement.respondents` still carries real
-  // names, so only the `system.disagreement` half of the guard's `||` can catch it. If that half
-  // were a no-op (e.g. reverted to checking only `dispersion`), this test — not the one above —
-  // is what would go red.
-  it('throws when only system.disagreement (not dispersion) carries respondent names', async () => {
-    const d = diagnosis();
-    const blocks = fallbackProse(d, methodology);
-    const base = buildReportView(d, blocks, methodology, { audience: 'screen' });
-    // dispersion empty, system.disagreement still carrying names — isolates the system.disagreement
-    // half of the guard's `||` (see comment above). Names injected directly since no audience
-    // produces them anymore.
-    const view: ReportView = {
-      ...base,
-      dispersion: undefined,
-      system: {
-        ...base.system,
-        disagreement: { text: 'Your leaders split.', respondents: [{ label: 'Dana Okafor', mean: 3 }] },
-      },
-    };
-    expect(view.dispersion?.respondents.length).toBeUndefined();
-    expect(view.system.disagreement?.respondents.length).toBeGreaterThan(0);
-
-    await expect(
-      (async () =>
-        renderReportDocument({
-          view,
-          churchName: 'Grace Church',
-          brandColor: '#3A4A6B',
-          monogram: 'GC',
-          generatedAt: new Date('2026-07-18T00:00:00Z'),
-        }))(),
-    ).rejects.toThrow('view carries respondent names');
-  });
-});
-
-// --- Appendix table (Change #4) --------------------------------------------------------------
-//
-// The appendix is redesigned from a two-column name/score row into an aligned four-column table:
-// Area · Role · Score · Percentile (spec §4). The new "Role"/"Percentile" headers, the capitalised
-// "Enabler" role label, and the em-dash for a null percentile must appear in the extracted text.
-// This fixture's two appendix categories are both enablers (their raw ids aren't methodology chain
-// ids) with null percentiles — the "Stage N" path is covered on the screen side in
-// components.test.ts. Region-isolated from the appendix heading onward so stray text elsewhere
-// cannot mask a regression. The heading string itself is unchanged — the "all eight dossiers"
-// test above uses it as its section boundary.
-describe('appendix table', () => {
-  it('renders Area/Role/Score/Percentile columns with capitalised role labels', async () => {
-    const text = await renderText('pdf');
-    const start = text.indexOf('Appendix — all category scores');
-    expect(start, 'expected the Appendix heading in the PDF').toBeGreaterThan(-1);
+  // Replaces "renders the dependency disclosure note in the appendix" + "renders Area/Role/Score/
+  // Percentile columns..." (that table is gone) + "renders with no AI prose (prime directive 1)"
+  // (trivially true by construction for assembleFallbackOnly — every section source is
+  // 'fallback' — so not worth asserting). The appendix's actual fallback content
+  // (appendixBullets in lib/report/fallback-sections.ts) still carries the benchmark/dependency
+  // disclosure notes, a confidence line, and — for this fixture's 3 distinct respondents — a
+  // small-sample caveat; this checks all four survive to the rendered PDF, region-isolated to the
+  // appendix heading onward.
+  it('renders the appendix disclosures: benchmark note, dependency note, confidence, small sample', async () => {
+    const buffer = await renderReportDocument({ sections: sectionsFor(), ...DOC_ARGS });
+    const text = await extractText(buffer);
+    const start = text.indexOf(methodology.report.sections.appendix.title);
+    expect(start, 'expected the appendix heading in the PDF').toBeGreaterThan(-1);
     const appendix = text.slice(start);
-    expect(appendix).toContain('Role');
-    expect(appendix).toContain('Percentile');
-    expect(appendix).toContain('Enabler'); // capitalised role label (was lowercase "enabler")
-    expect(appendix).toContain('—'); // null percentile renders an em dash, not a blank
+    expect(appendix).toContain(methodology.copy.inserts.benchmark_note);
+    expect(appendix).toContain(methodology.copy.inserts.dependency_note);
+    expect(appendix).toContain('Confidence: 0.85.');
+    expect(appendix).toContain('Small sample: 3 respondents.');
   }, 30_000);
 });
 
-// --- Booking CTA (Change #5) -----------------------------------------------------------------
+// --- Booking CTA ---------------------------------------------------------------------------
 //
 // The booking call-to-action renders on all three surfaces from one shared constant
 // (lib/report/cta.ts, spec §5). In the PDF it is a react-pdf <Link src={url}>: pdf-parse's
 // getText() surfaces the link's visible TEXT (heading + button label), but the target URL is a
 // PDF annotation (a /URI action), not text content — so it is asserted against the raw rendered
-// buffer, where the annotation URI is written verbatim.
+// buffer, where the annotation URI is written verbatim. Unchanged from before Task 4/5 except for
+// the props shape.
 describe('booking CTA', () => {
   it('renders the booking link — label in the text, URL in the annotation', async () => {
     const { bookingCta } = await import('@/lib/report/cta');
-    const d = diagnosis();
-    const view = buildReportView(d, fallbackProse(d, methodology), methodology, { audience: 'pdf' });
-    const buffer = await renderReportDocument({
-      view, churchName: 'Grace Church', brandColor: '#3A4A6B', monogram: 'GC',
-      generatedAt: new Date('2026-07-18T00:00:00Z'),
-    });
+    const buffer = await renderReportDocument({ sections: sectionsFor(), ...DOC_ARGS });
     const text = await extractText(buffer);
     expect(text).toContain(bookingCta.heading);
-    expect(text).toContain(bookingCta.buttonLabel);
+    // Confirmed by rendering and inspecting the actual extracted text, not assumed: the trailing
+    // '→' (U+2192) in bookingCta.buttonLabel decodes through pdf-parse's pdfjs-based extraction
+    // as '’' (U+2019) — an embedded-font ToUnicode CMap artifact unrelated to Task 4/5's changes
+    // (same FONT_DISPLAY, same button style, predates this task). Asserting on the arrow itself
+    // would fail on a text-extraction quirk, not a real rendering defect, so this checks the
+    // label text up to the arrow instead.
+    expect(bookingCta.buttonLabel.endsWith('→'), 'expected buttonLabel to end in the known-quirky arrow').toBe(true);
+    expect(text).toContain(bookingCta.buttonLabel.slice(0, -1).trimEnd());
     expect(buffer.toString('latin1')).toContain(bookingCta.url);
   }, 30_000);
 });
