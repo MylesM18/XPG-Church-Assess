@@ -1,4 +1,4 @@
-import type { FactsPack } from '../report/facts';
+import type { CategoryFact, FactsPack } from '../report/facts';
 import type { Methodology, RequiredMention } from '../methodology/schema';
 import { SECTION_REGISTRY, type AiSectionId } from './sections';
 
@@ -42,6 +42,11 @@ const THEME_WORDS: Record<string, string[]> = {
  *  every on-template composition of those sections is falsely rejected in production. */
 const SCALE_DENOMINATOR = 100;
 
+/** The two sections whose payload is an array keyed to a category, and the field carrying it.
+ *  Partial because the other five have no category-keyed array at all — an entry here is what
+ *  opts a section into gate 1b, so adding one is deliberate. */
+const COVERAGE_FIELD: Partial<Record<AiSectionId, 'strengths' | 'areas'>> = { s5: 'strengths', s6: 'areas' };
+
 export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext): string | null {
   // 1. Field parity — the schema is the expectation. A shape miss and a blank required field
   // are the same failure: the section did not come back whole.
@@ -49,6 +54,32 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
   if (!check.success) return 'field parity';
   const strings = allStrings(check.data);
   if (strings.some((s) => s.trim().length === 0)) return 'field parity';
+
+  // 1b. Category coverage — s5/s6 only. Their payload is an array keyed to this section's own
+  // category slice, and no other gate constrains it: gate 1's blank check is `.some()` over a
+  // FLATTENED array and `[].some()` is false, so an empty array passes; the joined `text` is
+  // then '', which vacuously satisfies gates 2/3/4/6; and s5/s6 are the only two AI sections
+  // with `required_mentions: []` (report.yaml:69,78), so gate 3 has no content requirement here
+  // either. Nothing downstream catches it: both renderers use `category_id` purely as a React
+  // key. Without this check an empty section shipped as a passing AI section rendering nothing,
+  // and a duplicated or cross-slice id shipped as prose about the wrong category.
+  //
+  // The known-id set is read straight off the registry slice rather than re-deriving
+  // `categories.slice(0, 3)` / `.slice(3)` here: duplicating those boundaries would drift
+  // silently the moment the registry changes.
+  const coverageField = COVERAGE_FIELD[id];
+  if (coverageField) {
+    const entries = (check.data as Record<string, { category_id: string }[]>)[coverageField] ?? [];
+    if (entries.length === 0) return 'category coverage';
+    const known = new Set(
+      (SECTION_REGISTRY[id].slice(ctx.facts) as { categories: CategoryFact[] }).categories.map((c) => c.id),
+    );
+    const seen = new Set<string>();
+    for (const entry of entries) {
+      if (!known.has(entry.category_id) || seen.has(entry.category_id)) return 'category coverage';
+      seen.add(entry.category_id);
+    }
+  }
 
   const text = strings.join(' ');
   const lower = text.toLowerCase();

@@ -174,6 +174,77 @@ describe('gate 1 — field parity', () => {
   });
 });
 
+describe('gate 1b — s5/s6 category coverage', () => {
+  // s5 and s6 are the only two AI sections whose payload is an array keyed to a category, and
+  // the only two whose `required_mentions` is [] (methodology/report.yaml:69,78). Nothing
+  // downstream validates those ids either: both renderers use `category_id` only as a React key
+  // (lib/report/pdf/document.tsx:110,125 · app/app/[churchId]/diagnosis/report/sections.tsx:70,85).
+  //
+  // Every payload below was ACCEPTED before this gate existed. An empty array flattens to [] and
+  // `[].some()` is false, so gate 1's blank check passes; the joined text is then '', which
+  // vacuously satisfies gates 2/3/4/6; and the empty `required_mentions` leaves gate 3 with no
+  // content requirement precisely here. An empty s5 therefore shipped as a passing AI section
+  // that rendered nothing at all.
+  //
+  // The valid ids are DERIVED from the pack, never hardcoded: buildFacts re-sorts
+  // facts.categories score-desc (ties by id asc), so a literal list would bake in that sort.
+  const s5Ids = constraintFacts.categories.slice(0, 3).map((c) => c.id);
+  const s6Ids = constraintFacts.categories.slice(3).map((c) => c.id);
+
+  // Digit-free prose (gate 2 rejects any number outside the section's own slice), clear of the
+  // respondent label in ctx.labels (gate 4) and of every banned_phrases.constraint entry (gate
+  // 3), and far under the ceilings (s5 = 2200, s6 = 6000).
+  const goodS5 = {
+    strengths: s5Ids.map((id) => ({
+      category_id: id,
+      heading: 'Carrying real weight',
+      body: 'This area is holding steady and gives the repair somewhere solid to stand.',
+    })),
+  };
+  const goodS6 = {
+    areas: s6Ids.map((id) => ({
+      category_id: id,
+      affirm: 'There is real work happening here already.',
+      evidence: 'Responses point to steady but uneven practice across the team.',
+      reframe: 'Read this as room to grow rather than a failure to fix.',
+    })),
+  };
+
+  it('rejects an s5 whose strengths array is empty', () => {
+    expect(gateSection('s5', { strengths: [] }, ctx)).toBe('category coverage');
+  });
+
+  it('rejects an s6 whose areas array is empty', () => {
+    expect(gateSection('s6', { areas: [] }, ctx)).toBe('category coverage');
+  });
+
+  it('rejects an s5 that covers the same category twice', () => {
+    const duplicated = { strengths: [goodS5.strengths[0]!, goodS5.strengths[0]!, goodS5.strengths[1]!] };
+    expect(gateSection('s5', duplicated, ctx)).toBe('category coverage');
+  });
+
+  // Deliberately a REAL category drawn from s6's slice rather than a fabricated string — the
+  // stronger form. A known-id set built from the whole pack (ctx.facts.categories) instead of
+  // this section's own registry slice would still reject a made-up id, but would ACCEPT this
+  // one. s5 and s6 partition the same category list, so a cross-slice id is the realistic model
+  // error, and this is the assertion that pins the set to the slice.
+  it('rejects an s5 naming a category outside its own slice', () => {
+    expect(s5Ids).not.toContain(s6Ids[0]!);
+    const outOfSlice = { strengths: [{ ...goodS5.strengths[0]!, category_id: s6Ids[0]! }] };
+    expect(gateSection('s5', outOfSlice, ctx)).toBe('category coverage');
+  });
+
+  // Anti-vacuity, one per section: without these, a gate that rejected every s5 and s6 payload
+  // outright would pass all four rejection tests above.
+  it('accepts a well-formed s5 covering each category in its slice exactly once', () => {
+    expect(gateSection('s5', goodS5, ctx)).toBeNull();
+  });
+
+  it('accepts a well-formed s6 covering each category in its slice exactly once', () => {
+    expect(gateSection('s6', goodS6, ctx)).toBeNull();
+  });
+});
+
 describe('gate 2 — scoped numeric containment', () => {
   it("accepts numbers present in that section's own slice", () => {
     expect(gateSection('s2', goodS2, ctx)).toBeNull();
