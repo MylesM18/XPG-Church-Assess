@@ -4,16 +4,17 @@
 //
 // Task 13 computes, on all three report routes:
 //   const reportMethodology = derived.ok ? derived.effectiveMethodology : methodology
-// and threads it into BOTH resolveReportView's methodology argument AND the prose thunk's
-// fallbackProse(d, reportMethodology) call — never the raw `methodology`. Reverting either call
-// site back to plain `methodology` is NOT output-identical: the view path reads
-// `questions.categories[].items` via buildOutreachVoices (lib/report/view.ts), which groups a
-// run's reflections by `item.id`/`item.reflection` (lib/report/derive.ts's DeriveResult doc has
-// the full rationale). A legacy run (predating the outreach questions, methodology_version
-// '0.2.0' or null) handed the CURRENT methodology would therefore surface outreach voices for
-// questions it was never asked — and this file is what catches that: the tripwire below
-// source-reads all three call sites and fails the revert immediately, rather than relying on
-// rendered output. (Task 13's own report flagged this exact gap under "Concerns" #3.)
+// and threads it into every downstream methodology argument — never the raw `methodology`.
+// Reverting a call site back to plain `methodology` is NOT output-identical: the view path reads
+// `questions.categories[].items` via buildOutreachVoices (lib/report/view.ts) / the resolver seam
+// (lib/report/resolve.ts), which group a run's reflections by `item.id`/`item.reflection`
+// (lib/report/derive.ts's DeriveResult doc has the full rationale). A legacy run (predating the
+// outreach questions, methodology_version '0.2.0' or null) handed the CURRENT methodology would
+// therefore surface outreach voices for questions it was never asked — and this file is what
+// catches that: the tripwire below source-reads all three call sites and fails the revert
+// immediately, rather than relying on rendered output. (Task 13's own report flagged this exact
+// gap under "Concerns" #3.) Task 6 moved the PDF route onto the same resolveReportSections( seam
+// the diagnosis page already uses, so its own check below now mirrors that page's shape too.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -50,57 +51,7 @@ function extractCallArgs(source: string, callName: string): string | null {
   return source.slice(openParenIdx + 1, end - 1)
 }
 
-const ROUTES = [
-  { label: 'app/api/report/[runId]/pdf/route.ts', segs: ['app', 'api', 'report', '[runId]', 'pdf', 'route.ts'] },
-] as const
-
-// Anchored on the surrounding call syntax (never a bare substring search), so a comment
-// mentioning either identifier cannot satisfy or break the match, and so the check is
-// arity-agnostic beyond this one argument position — whatever precedes `derived,` or follows the
-// captured argument does not matter here. Tolerant of the file's real multi-line call formatting
-// (one positional argument per line) via `\s*` between tokens.
-const RESOLVE_ARG_RE = /resolveReportView\(\s*derived\s*,\s*(reportMethodology|methodology)\s*,/
-const FALLBACK_ARG_RE = /fallbackProse\(\s*d\s*,\s*(reportMethodology|methodology)\s*\)/
-
 describe('report routes build the view and the prose thunk from reportMethodology, never the raw methodology (Task 13)', () => {
-  for (const { label, segs } of ROUTES) {
-    it(`${label}: resolveReportView receives reportMethodology, not methodology`, () => {
-      const source = strip(read(...segs))
-
-      const match = RESOLVE_ARG_RE.exec(source)
-      // Guard against the vacuous-on-absence trap: if the call shape itself is gone (renamed,
-      // reformatted past what the regex tolerates, or removed), fail loudly here rather than
-      // letting a `null` slip into the next assertion and read as "no bad value found".
-      expect(
-        match,
-        `${label}: expected a resolveReportView(derived, <methodology arg>, ...) call in this shape`,
-      ).not.toBeNull()
-
-      expect(
-        match![1],
-        `${label}: resolveReportView's methodology argument must be reportMethodology, not the ` +
-          `raw methodology — a legacy run would otherwise be scored against its own edition but ` +
-          `RENDERED against the current one (lib/report/derive.ts's DeriveResult doc explains why).`,
-      ).toBe('reportMethodology')
-    })
-
-    it(`${label}: the prose thunk's fallbackProse receives reportMethodology, not methodology`, () => {
-      const source = strip(read(...segs))
-
-      const match = FALLBACK_ARG_RE.exec(source)
-      expect(
-        match,
-        `${label}: expected a fallbackProse(d, <methodology arg>) call inside the prose thunk`,
-      ).not.toBeNull()
-
-      expect(
-        match![1],
-        `${label}: the fallback-prose thunk must build from reportMethodology too, or the scored ` +
-          `view and the prose describing it would silently disagree about which question set ran.`,
-      ).toBe('reportMethodology')
-    })
-  }
-
   it("app/r/[shareToken]/page.tsx: every methodology argument is reportMethodology", () => {
     const source = strip(read('app', 'r', '[shareToken]', 'page.tsx'))
 
@@ -162,6 +113,38 @@ describe('report routes build the view and the prose thunk from reportMethodolog
     expect(
       shorthand.test(resolveArgs!),
       'the diagnosis page must never pass the raw `methodology` via object shorthand',
+    ).toBe(false)
+
+    expect(
+      source,
+      'the reportMethodology assignment itself must survive',
+    ).toContain('derived.effectiveMethodology')
+  })
+
+  it('app/api/report/[runId]/pdf/route.ts: every methodology argument is reportMethodology', () => {
+    const source = strip(read('app', 'api', 'report', '[runId]', 'pdf', 'route.ts'))
+
+    // Task 6's resolver seam: resolveReportSections (lib/report/resolve.ts) is now the PDF
+    // route's one call site — the invariant did not change, only where it is enforced.
+    const passed = [...source.matchAll(/methodology:\s*([A-Za-z_$][\w$]*)/g)].map((m) => m[1]!)
+    expect(
+      passed.length,
+      'expected exactly one methodology: <arg> call site (resolveReportSections)',
+    ).toBe(1)
+    expect(new Set(passed)).toEqual(new Set(['reportMethodology']))
+
+    // Shorthand `{ methodology }` would pass the RAW methodology while matching no
+    // `methodology:` key at all — the fail-open hole the regex above cannot see. Scoped to
+    // resolveReportSections's own argument text (not the whole file): a whole-file scan for
+    // `[{,]\s*methodology\s*[,}]` also matches deriveDiagnosisForRun's ordinary positional
+    // `(responses, methodology, {...})` argument above, which legitimately passes the CURRENT
+    // methodology and is not an object literal at all.
+    const resolveArgs = extractCallArgs(source, 'resolveReportSections')
+    expect(resolveArgs, 'expected a resolveReportSections( call').not.toBeNull()
+    const shorthand = /[{,]\s*methodology\s*[,}]/
+    expect(
+      shorthand.test(resolveArgs!),
+      'the PDF route must never pass the raw `methodology` via object shorthand',
     ).toBe(false)
 
     expect(

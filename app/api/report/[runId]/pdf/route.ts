@@ -1,10 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
-import { fallbackProse, type ReportBlocks } from '@/lib/ai/fallback'
-import { resolveReportView } from '@/lib/report/view'
+import { resolveScoreability } from '@/lib/report/view'
 import { deriveDiagnosisForRun } from '@/lib/report/derive'
 import { renderReportDocument } from '@/lib/report/pdf/render'
+import { resolveReportSections } from '@/lib/report/resolve'
+import { readPersistedReport } from '@/lib/data/reports'
+import { knownLabels } from '@/lib/report/anonymity'
+import { churchFactsFrom, reflectionRowsFor } from '@/lib/report/inputs-hash'
+import { responseHash } from '@/lib/report/response-hash'
+import { loadChurchProfile } from '@/lib/data/churches'
+import type { ChurchProfile } from '@/lib/data/churches'
 import type { Response } from '@/lib/engine/types'
 
 // renderReportDocument (renderToBuffer) is Node-only (Yoga WASM + Buffer). Edge would fail at runtime.
@@ -65,7 +71,7 @@ export async function GET(
 
   const { data: run, error: runError } = await supabase
     .from('assessment_runs')
-    .select('church_id, churches(name, brand_color, attendance_band), methodology_version')
+    .select('church_id, churches(name, brand_color, attendance_band), methodology_version, completed_at')
     .eq('id', runId)
     .maybeSingle()
 
@@ -116,38 +122,60 @@ export async function GET(
     // not-ok arm — that path 409s below without building a view.
     const reportMethodology = derived.ok ? derived.effectiveMethodology : methodology
 
-    // `blocks` stays a lazy thunk taking the fresh diagnosis, evaluated only on the scoreable
-    // path (resolveReportView, lib/report/view.ts).
-    const PROSE_MODE = process.env.PROSE_MODE ?? 'fallback'
-    const resolution = resolveReportView(
-      derived,
-      reportMethodology,
-      (d) =>
-        PROSE_MODE !== 'fallback' && diag.prose
-          ? (diag.prose as ReportBlocks)
-          : fallbackProse(d, reportMethodology),
-      { audience: 'pdf', reflections },
-    )
+    // D-P4-5: catch to null so this route degrades EXACTLY as generation and the page do. An
+    // asymmetric degradation would make the surfaces disagree about `profile` precisely when the
+    // database is flaky — permanent silent staleness under the one condition nobody smoke-tests.
+    let churchProfile: ChurchProfile | null = null
+    try {
+      churchProfile = await loadChurchProfile(supabase, run!.church_id)
+    } catch {
+      churchProfile = null
+    }
 
+    // The same export both pages use (D-P4-6). A run that cannot be scored under the current
+    // methodology cannot be exported — distinct 409, not the generic 500.
+    const resolution = resolveScoreability(derived)
     if (!resolution.scoreable) {
-      // A run that cannot be scored under the current methodology (incomplete area, or an
-      // unset/unknown attendance band) cannot be exported. Distinct 409, not the generic 500.
       return new Response(
         'This report cannot be scored under the current methodology and cannot be exported until the assessment is completed.',
         { status: 409 },
       )
     }
 
-    const view = resolution.view
+    // Mirrors actions.ts and the diagnosis page argument-for-argument: `.methodology_version` off
+    // the diagnosis object itself, never run.methodology_version. Hash parity across all three
+    // sites depends on this, or the persisted report is judged stale forever.
+    const hash = responseHash(responses, resolution.diagnosis.methodology_version)
+
+    // ONE label source per request, threaded to BOTH the resolver and the document props. The
+    // fail-closed guard in render.ts checks the sections against exactly this list; a second,
+    // separately-computed label source that could disagree is the labelSource finding class.
+    const labelSource = knownLabels(responses)
+
+    const { sections, stale } = await resolveReportSections({
+      diagnosis: resolution.diagnosis,
+      methodology: reportMethodology,
+      responses,
+      church: churchFactsFrom(churchProfile, church.name),
+      completedAt: run!.completed_at,
+      labelSource,
+      responseHash: hash,
+      reflections, // the KEYLESS array
+      hashReflections: reflectionRowsFor(rawResponses ?? []), // the KEYED array
+      readPersisted: (inputsHash) => readPersistedReport(supabase, runId, inputsHash),
+    })
+
     const brand = resolveBrand(church.name)
     const generatedAt = new Date()
 
     const buffer = await renderReportDocument({
-      view,
+      sections,
       churchName: church.name,
       brandColor: church.brand_color,
       monogram: brand.monogram,
       generatedAt,
+      labels: labelSource.kind === 'known' ? labelSource.labels : [],
+      stale,
     })
 
     const filename = `xpg-diagnosis-${slugify(church.name)}-${generatedAt.toISOString().slice(0, 10)}.pdf`

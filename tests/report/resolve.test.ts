@@ -253,3 +253,36 @@ describe('the stale notice is pulled forward from Task 8 (eslint flagged `stale`
     expect(page).toMatch(/\{stale\s*&&[\s\S]{0,200}This report predates your latest settings change\./)
   })
 })
+
+describe('the PDF route is the second and last seam call site', () => {
+  const route = readFileSync('app/api/report/[runId]/pdf/route.ts', 'utf8')
+  const page = readFileSync('app/app/[churchId]/diagnosis/page.tsx', 'utf8')
+
+  it('the route calls resolveReportSections exactly once', () => {
+    expect(route.match(/resolveReportSections\(/g)?.length).toBe(1)
+  })
+
+  it('resolveReportSections has exactly two call sites in total', () => {
+    const total =
+      (route.match(/resolveReportSections\(/g)?.length ?? 0) +
+      (page.match(/resolveReportSections\(/g)?.length ?? 0)
+    // The seam's whole purpose is that exactly two surfaces share one pipeline. A bare
+    // presence check would be satisfied by one site and survive a regression at the other.
+    expect(total).toBe(2)
+  })
+
+  it('neither caller calls buildFacts directly', () => {
+    expect(route.match(/buildFacts\(/g)?.length ?? 0).toBe(0)
+    expect(page.match(/buildFacts\(/g)?.length ?? 0).toBe(0)
+  })
+
+  it('the route calls knownLabels exactly once', () => {
+    expect(route.match(/knownLabels\(/g)?.length).toBe(1)
+  })
+
+  it('the route no longer uses the dying view model', () => {
+    expect(route).not.toContain('resolveReportView')
+    expect(route).not.toContain('fallbackProse')
+    expect(route).not.toContain('ReportBlocks')
+  })
+})

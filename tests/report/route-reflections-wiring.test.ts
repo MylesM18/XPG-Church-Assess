@@ -12,7 +12,9 @@
 //     plan 4's web swap, so a total omission is now tsc-caught too; this test still pins it
 //     directly on the source, and additionally pins that the KEYED sibling (hashReflections)
 //     never leaks past its one consumer, reportInputs;
-//   - the PDF route (app/api/report/[runId]/pdf/route.ts, Task 17) must pass reflections;
+//   - the PDF route (app/api/report/[runId]/pdf/route.ts) must pass reflections — Task 6 moved
+//     this route onto resolveReportSections( too, so the check below is now scoped to that
+//     call's own argument text rather than a resolveReportView opts literal;
 //   - the public share route (app/r/[shareToken]/page.tsx) must NEVER pass reflections — private
 //     free-text is excluded from the public share surface at four independent layers (the RPC
 //     never selects the reflection column; the row type doesn't name it; this call site never
@@ -33,19 +35,31 @@ const read = (...p: string[]) => fs.readFileSync(path.join(REPO_ROOT, ...p), 'ut
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
 
 /**
- * Locates the resolveReportView opts object literal via its distinctive `audience: '<value>'`
- * key (unique per route — confirmed exactly one `audience:` occurrence per file) and returns
- * everything between that key's value and the object's closing brace — e.g. `, reflections ` or
- * just ` `. Returns null if the literal isn't found in this shape, so callers can fail loudly on
- * absence instead of treating "not found" the same as "found and empty" (the vacuous-on-absence
- * trap: a bare `/reflections/.test(entireFileSource)` would not distinguish "inside the opts
- * object" from "somewhere else in the file", e.g. the `const reflections = ...` array literal a
- * few lines above the call).
+ * Extracts the balanced-parenthesis argument text of the first `callName(...)` call in
+ * `source`, or null if the call isn't present. Local copy of the helper in
+ * tests/report/route-methodology-wiring.test.ts / tests/report/route-sections-wiring.test.ts —
+ * per this test suite's existing no-shared-fixture-module convention, each consumer keeps its
+ * own rather than importing across test files. Scoping to the call's own argument text (rather
+ * than a whole-file scan) is what makes the check below immune to the vacuous-on-absence trap: a
+ * bare `/reflections/.test(entireFileSource)` would not distinguish "inside the resolver's
+ * arguments" from "somewhere else in the file", e.g. the `const reflections = ...` array literal
+ * a few lines above the call.
  */
-function optsTail(source: string, audience: string): string | null {
-  const re = new RegExp(`\\{\\s*audience:\\s*'${audience}'([^}]*)\\}`)
-  const match = re.exec(source)
-  return match ? match[1]! : null
+function extractCallArgs(source: string, callName: string): string | null {
+  const marker = `${callName}(`
+  const start = source.indexOf(marker)
+  if (start === -1) return null
+  const openParenIdx = start + marker.length - 1
+  let depth = 0
+  let end = openParenIdx
+  for (; end < source.length; end++) {
+    if (source[end] === '(') depth++
+    else if (source[end] === ')') {
+      depth--
+      if (depth === 0) { end++; break }
+    }
+  }
+  return source.slice(openParenIdx + 1, end - 1)
 }
 
 describe('report routes wire reflections into resolveReportView only on the authenticated surfaces, never on the shared surface', () => {
@@ -73,16 +87,27 @@ describe('report routes wire reflections into resolveReportView only on the auth
     ).toBe(2)
   })
 
-  it('PDF route (pdf/route.ts, Task 17) passes reflections', () => {
+  it('PDF route (pdf/route.ts, Task 6) passes the KEYLESS reflections to resolveReportSections', () => {
     const source = strip(read('app', 'api', 'report', '[runId]', 'pdf', 'route.ts'))
-    const tail = optsTail(source, 'pdf')
+    const args = extractCallArgs(source, 'resolveReportSections')
 
-    expect(tail, "expected a resolveReportView opts literal shaped { audience: 'pdf', ... }").not.toBeNull()
+    expect(args, 'expected a resolveReportSections( call').not.toBeNull()
     expect(
-      /\breflections\b/.test(tail!),
-      'the PDF route must pass reflections into the opts, or outreach voices silently disappear ' +
-        'from the exported PDF while every current test stays green.',
+      /\breflections\b/.test(args!),
+      'the PDF route must pass reflections into resolveReportSections, or outreach voices ' +
+        'silently disappear from the exported PDF while every current test stays green.',
     ).toBe(true)
+
+    // The keyed sibling carries respondent identity and must reach resolveReportSections (which
+    // threads it into reportInputs, lib/report/resolve.ts) and NOTHING else. Occurrence-count
+    // equality, not substring absence: the identifier is legitimately present in the file, so
+    // what matters is how many places consume it.
+    const uses = [...source.matchAll(/\bhashReflections\b/g)].length
+    expect(
+      uses,
+      'hashReflections must appear exactly once — its single consumer, resolveReportSections. ' +
+        'A second use is a respondent-identity leak into a renderer.',
+    ).toBe(1)
   })
 
   it('shared route (r/[shareToken]/page.tsx) never passes a populated reflections array', () => {
