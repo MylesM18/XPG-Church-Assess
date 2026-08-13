@@ -15,6 +15,7 @@ import { composeReport, isUsableCachedReport } from '@/lib/report/compose'
 import { loadChurchProfile } from '@/lib/data/churches'
 import type { ChurchProfile } from '@/lib/data/churches'
 import { churchFactsFrom, reflectionRowsFor, reportInputs } from '@/lib/report/inputs-hash'
+import { requireChurchAdmin } from '@/lib/auth/require-church-admin'
 
 // Raw shape of one get_run_responses row (supabase.rpc returns it untyped). respondent_user_id
 // is null for a row predating the 20260728000100 migration or a submission the RPC never
@@ -305,7 +306,11 @@ export async function regenerateReport(formData: FormData): Promise<void> {
   if ((process.env.PROSE_MODE ?? 'fallback') === 'fallback') return
 
   try {
-    const supabase = await createClient()
+    const { supabase, error: authErr } = await requireChurchAdmin(churchId)
+    if (authErr) {
+      console.warn('[report] regenerate blocked:', authErr)
+      return
+    }
     const methodology = loadMethodology()
 
     const { data: raw } = await supabase.rpc('get_completed_run_responses', {

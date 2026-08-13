@@ -35,4 +35,20 @@ describe('regenerateReport wiring', () => {
     // Same backstop shape as generation: the catch logs a reason and returns.
     expect(src).toContain("console.warn('[report] regenerate failed:")
   })
+
+  it('checks admin auth before clustering themes', () => {
+    // Any authenticated church member could invoke this action directly and drive real AI
+    // model spend — it has no cache-check skip. Scope to regenerateReport's own source span so
+    // this can't vacuously pass by anchoring on the sibling generateDiagnosis block, which also
+    // mentions requireChurchAdmin-adjacent auth. Guard the slice before using it: a missing
+    // needle must not let indexOf(-1) satisfy the ordering assertion below.
+    const start = src.indexOf('export async function regenerateReport')
+    expect(start).not.toBe(-1)
+    const regenerateSrc = src.slice(start)
+
+    expect(regenerateSrc).toContain('requireChurchAdmin')
+    expect(regenerateSrc.indexOf('requireChurchAdmin')).toBeLessThan(
+      regenerateSrc.indexOf('clusterThemes('),
+    )
+  })
 })
