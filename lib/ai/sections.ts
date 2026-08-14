@@ -110,12 +110,27 @@ import type { Methodology } from '../methodology/schema';
  * the parsed output, section text, or the facts pack — the pack carries church-specific scores
  * and admin prose.
  */
+/** Warn-once latch. A 13-section report would otherwise emit the same line seven times. */
+let missingKeyWarned = false;
+
+/**
+ * `new OpenAI()` throws on a missing key, which composeSection's catch resolves to a generic
+ * "request failed" — indistinguishable from a network blip, and the reason the fallback-only
+ * sample report read as composed prose for weeks (spec §0/§7.2). Name the actual cause once.
+ */
+function warnIfKeyAbsent(): void {
+  if (missingKeyWarned || process.env.OPENAI_API_KEY) return;
+  missingKeyWarned = true;
+  console.warn('[report] OPENAI_API_KEY absent — every AI section will fall back to the deterministic spine');
+}
+
 export async function composeSection(
   id: AiSectionId, facts: FactsPack, methodology: Methodology,
 ): Promise<unknown | null> {
   const entry = SECTION_REGISTRY[id];
   const copy = methodology.report.sections[id];
   try {
+    warnIfKeyAbsent();
     const client = new OpenAI();
     const model = process.env.OPENAI_MODEL_PROSE ?? 'gpt-5.1';
     const response = await client.responses.parse(

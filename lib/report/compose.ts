@@ -4,6 +4,8 @@ import { fallbackSections, type FallbackSectionArgs, type SectionBody } from './
 import type { FactsPack } from './facts';
 import type { Methodology, SectionId } from '../methodology/schema';
 
+export type { SectionId } from '../methodology/schema';
+
 /**
  * Both halves of the composer. Generation (composeReport) runs once per church behind
  * generateDiagnosis; assembly (assembleReport) runs per request on every render surface.
@@ -18,6 +20,19 @@ export type SectionSource = 'ai' | 'fallback';
 export interface ComposedReport {
   sections: Partial<Record<AiSectionId, unknown>>; // AI output only — persisted
   section_sources: Record<SectionId, SectionSource>; // every section, C3
+}
+
+/**
+ * One line that makes "the model is off" distinguishable from "the model ran". Before this,
+ * a 100% fallback report and a fully composed one produced identical logs, and a fallback-only
+ * PDF was mistaken for composed prose (spec §0). Ids and counts only — never a score, a church
+ * name, or any section text.
+ */
+export function summariseSectionSources(sources: Record<SectionId, SectionSource>): string {
+  const entries = Object.entries(sources) as Array<[SectionId, SectionSource]>;
+  const fellBack = entries.filter(([, source]) => source === 'fallback').map(([id]) => id);
+  const aiCount = entries.length - fellBack.length;
+  return `ai ${aiCount}/${entries.length} · fallback: ${fellBack.length > 0 ? fellBack.join(', ') : 'none'}`;
 }
 
 export async function composeReport(args: {
@@ -65,6 +80,8 @@ export async function composeReport(args: {
         : 'fallback',
     ]),
   ) as Record<SectionId, SectionSource>;
+
+  console.info(`[report] section_sources: ${summariseSectionSources(section_sources)}`);
 
   return { sections, section_sources };
 }
