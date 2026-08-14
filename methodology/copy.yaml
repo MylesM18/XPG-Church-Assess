@@ -42,3 +42,23 @@ dependency_reads:
   clear: "{fromName} is strong — so {fromName} is not what's capping your {toName}."
   at_risk: "{toName} is strong for now, but {fromName} is weak — it's running on borrowed time."
   both_strong: "Both are strong — nothing to flag here."
+# One deterministic XPG read per archetype x tier, for S3's Executive Health Dashboard.
+# S3 is not an AI section and never will be — the dashboard is the numbers layer, and it must
+# not degrade to prose when the model is unavailable (spec §3). Tier ids are rules.yaml's
+# `tiers` keys; archetypes are lib/report/tier.ts's Archetype union.
+xpg_read:
+  capacity:
+    healthy_ready: "Nothing in the chain is broken and the numbers are strong across the board. The question in front of you is not what to repair — it is what to build next."
+    healthy_stretched: "Nothing in the chain is broken, but the whole system is running near its limit. Adding load before adding capacity is how a healthy church becomes a strained one."
+    strained: "No single stage is broken, but nothing is comfortable either. This is a whole-system capacity conversation, not a repair one — spread thin is its own diagnosis."
+    at_risk: "No single stage has failed, yet every one of them is running low at once. Treat this as a capacity floor, not a list of separate problems."
+  constraint:
+    healthy_ready: "One stage is holding the rest back while everything around it is strong. Fixing it is the highest-leverage move available to you this year."
+    healthy_stretched: "One stage is broken inside an otherwise healthy system. Everything downstream of it is running on what little gets through — that is where the ceiling is."
+    strained: "One stage is broken and the system around it has no slack to absorb it. Fix the constraint before anything downstream of it gets attention or budget."
+    at_risk: "A broken stage sits inside a system that is already low everywhere. Work the constraint first — spreading effort evenly now would improve nothing measurably."
+  foundation:
+    healthy_ready: "No stage is broken, but an enabler is capping what the strong parts can reach. The ground has to hold before the building goes higher."
+    healthy_stretched: "Your stages hold; the enablers underneath them do not. Every area leaning on those enablers is capped at their level, whatever its own score says."
+    strained: "Nothing is broken outright, but the enablers underneath everything are the ceiling. Work the ground before the stages — they cannot rise above it."
+    at_risk: "The enablers holding up every other area are the binding limit. Any stage-level gain now is temporary until the ground beneath it changes."

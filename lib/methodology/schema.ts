@@ -150,6 +150,23 @@ export const DependencyReadsSchema = z.object({
   both_strong: z.string().min(1),
 });
 
+// Named keys, not z.record — the same rationale as DossierReadingBandSchema above. The four tier
+// ids (rules.yaml `tiers`) and the three archetypes (lib/report/tier.ts) are both closed sets,
+// and lib/report/fallback-sections.ts indexes them directly, so a z.record would load with any
+// subset and let a missing pair surface as `undefined` in a rendered dashboard bullet.
+const XpgReadTiersSchema = z.object({
+  healthy_ready: z.string().min(1),
+  healthy_stretched: z.string().min(1),
+  strained: z.string().min(1),
+  at_risk: z.string().min(1),
+});
+
+export const XpgReadSchema = z.object({
+  capacity: XpgReadTiersSchema,
+  constraint: XpgReadTiersSchema,
+  foundation: XpgReadTiersSchema,
+});
+
 export const CopySchema = z.object({
   version: z.string().min(1),
   blocks: z.record(z.string().min(1)),
@@ -172,6 +189,7 @@ export const CopySchema = z.object({
     }),
   }),
   dependency_reads: DependencyReadsSchema,
+  xpg_read: XpgReadSchema,
 });
 
 // Named keys, not z.record — the same rationale as DossierReadingBandSchema above. The three
@@ -249,6 +267,7 @@ export type Offer = z.infer<typeof OfferSchema>;
 export type Offers = z.infer<typeof OffersSchema>;
 export type DossierReadingBand = z.infer<typeof DossierReadingBandSchema>;
 export type DependencyReads = z.infer<typeof DependencyReadsSchema>;
+export type XpgRead = z.infer<typeof XpgReadSchema>;
 export type Copy = z.infer<typeof CopySchema>;
 export type RequiredMention = z.infer<typeof RequiredMentionSchema>;
 export type ReportSection = z.infer<typeof ReportSectionSchema>;

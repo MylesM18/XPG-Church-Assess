@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { loadMethodology } from '@/lib/methodology/load';
-import type { CategoryState, Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types';
+import type { Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types';
 import { buildFacts, type BuildFactsArgs, type ChurchFacts, type FactsPack } from '@/lib/report/facts';
 import { fallbackSection, fallbackSections } from '@/lib/report/fallback-sections';
-import { readingBand } from '@/lib/report/view';
+import { ALL_FIXTURES, CAPACITY_FACTS } from '../fixtures/facts';
 
 // No healthy-church/broken-conn/gates-only fixtures exist anywhere in the repo (recon
 // divergence #1 / controller ruling 1) — built inline here, following the local/unexported
@@ -217,38 +217,31 @@ describe('S2 profile bullets', () => {
   });
 });
 
+// Task 7: S3 dropped from eight `Name: score — bandRead` bullets (one per category, now
+// redundant beside the areaBarsModel chart wired in Task 6) to a single XPG-read line keyed off
+// archetype x tier. The two tests below replace the old eight-bullet assertions; the fuller
+// archetype x tier coverage lives in the 's3 executive dashboard' describe block below.
 describe('S3 health dashboard', () => {
-  it('renders one line per category, strongest first, as `${name}: ${score} out of 100 — ${band}`', () => {
+  it('renders exactly one bullet — the XPG read for this archetype and tier', () => {
     const s3 = fallbackSection('s3', { facts: capacityFacts, methodology, reflections: [] });
-    expect(s3.bullets).toHaveLength(capacityFacts.categories.length);
-    capacityFacts.categories.forEach((c, i) => {
-      // Same band-selection function view.ts uses (ruling 9's exported readingBand) — computed
-      // independently here, not copy-pasted from the implementation, so this test would catch a
-      // drift between fallback-sections.ts's bandRead() and view.ts's readingBand().
-      const band = readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds);
-      const expected = `${c.name}: ${c.score} out of 100 — ${methodology.copy.dossier.reading[c.kind][band]}`;
-      expect(s3.bullets[i], c.id).toBe(expected);
-    });
+    expect(s3.bullets).toHaveLength(1);
+    expect(s3.bullets[0]).toBe(
+      methodology.copy.xpg_read[capacityFacts.archetype][capacityFacts.overall.tier.id],
+    );
   });
 
-  it('reads a broken stage via the stage band text and a gated enabler via the enabler band text (ruling 9 narrowing)', () => {
-    // CategoryFact.state is plain `string` (facts.ts:22) but readingBand's parameter is
-    // DiagnosisCategory['state'] (the narrower CategoryState union) — this is the call site
-    // where fallback-sections.ts's bandRead() casts across that gap. Exercised here with a real
-    // 'broken' stage and a real 'gate' enabler, not just a happy-path 'ok' state.
+  it('reads the constraint-archetype line for a constraint fixture and the foundation-archetype line for a foundation fixture', () => {
     const s3c = fallbackSection('s3', { facts: constraintFacts, methodology, reflections: [] });
-    const connIdx = constraintFacts.categories.findIndex((c) => c.id === 'conn');
-    const conn = constraintFacts.categories[connIdx]!;
-    expect(conn.kind).toBe('stage');
-    expect(conn.state).toBe('broken');
-    expect(s3c.bullets[connIdx]).toContain(methodology.copy.dossier.reading.stage.broken);
+    expect(constraintFacts.archetype).toBe('constraint');
+    expect(s3c.bullets[0]).toBe(
+      methodology.copy.xpg_read.constraint[constraintFacts.overall.tier.id],
+    );
 
     const s3f = fallbackSection('s3', { facts: foundationFacts, methodology, reflections: [] });
-    const commIdx = foundationFacts.categories.findIndex((c) => c.id === 'comm');
-    const comm = foundationFacts.categories[commIdx]!;
-    expect(comm.kind).toBe('enabler');
-    expect(comm.state).toBe('gate');
-    expect(s3f.bullets[commIdx]).toContain(methodology.copy.dossier.reading.enabler.broken);
+    expect(foundationFacts.archetype).toBe('foundation');
+    expect(s3f.bullets[0]).toBe(
+      methodology.copy.xpg_read.foundation[foundationFacts.overall.tier.id],
+    );
   });
 });
 
@@ -479,5 +472,37 @@ describe('appendix', () => {
     expect(
       fallbackSection('appendix', { facts: large, methodology, reflections: [] }).bullets.some((b) => b.startsWith('Small sample:')),
     ).toBe(false);
+  });
+});
+
+describe('s3 executive dashboard', () => {
+  it('emits exactly one bullet — the XPG read — with the chart carrying the scores', () => {
+    for (const { name, facts } of ALL_FIXTURES) {
+      const s3 = fallbackSection('s3', { facts, methodology, reflections: [] });
+      expect(s3.bullets, name).toHaveLength(1);
+      expect(s3.bullets[0]!.length, name).toBeGreaterThan(0);
+    }
+  });
+
+  it('reads the XPG line off archetype x tier, not off a single flat string', () => {
+    const seen = new Set(
+      ALL_FIXTURES.map(({ facts }) => fallbackSection('s3', { facts, methodology, reflections: [] }).bullets[0]!),
+    );
+    // The fixtures span 3 archetypes and >=2 tiers, so a hardcoded line would collapse to one.
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it('matches copy.yaml exactly for a known archetype/tier pair', () => {
+    const s3 = fallbackSection('s3', { facts: CAPACITY_FACTS, methodology, reflections: [] });
+    expect(s3.bullets[0]).toBe(
+      methodology.copy.xpg_read[CAPACITY_FACTS.archetype][CAPACITY_FACTS.overall.tier.id],
+    );
+  });
+
+  it('no longer repeats the eight per-area score lines the chart now shows', () => {
+    const s3 = fallbackSection('s3', { facts: CAPACITY_FACTS, methodology, reflections: [] });
+    for (const c of CAPACITY_FACTS.categories) {
+      expect(s3.bullets.join(' ')).not.toContain(`${c.name}: ${c.score} out of 100`);
+    }
   });
 });
