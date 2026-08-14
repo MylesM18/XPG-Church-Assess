@@ -69,6 +69,7 @@ export const RulesSchema = z.object({
     gate: z.number(),
     blind_spot_gap: z.number(),
     dispersion: z.number(),
+    strong: z.number(),
   }),
   constraint_logic: z.string().min(1),
   confidence: z.object({
@@ -149,6 +150,41 @@ export const DependencyReadsSchema = z.object({
   both_strong: z.string().min(1),
 });
 
+// Named keys, not z.record — the same rationale as DossierReadingBandSchema above. The four tier
+// ids (rules.yaml `tiers`) and the three archetypes (lib/report/tier.ts) are both closed sets,
+// and lib/report/fallback-sections.ts indexes them directly, so a z.record would load with any
+// subset and let a missing pair surface as `undefined` in a rendered dashboard bullet.
+const XpgReadTiersSchema = z.object({
+  healthy_ready: z.string().min(1),
+  healthy_stretched: z.string().min(1),
+  strained: z.string().min(1),
+  at_risk: z.string().min(1),
+});
+
+export const XpgReadSchema = z.object({
+  capacity: XpgReadTiersSchema,
+  constraint: XpgReadTiersSchema,
+  foundation: XpgReadTiersSchema,
+});
+
+// pivot: named keys (the closed ReadingBand set), same rationale as DossierReadingBandSchema.
+// not_statement: named keys (the closed Theme set), same rationale.
+// trajectory: z.record ON PURPOSE — its keys are the churches.growth_trajectory column's
+// vocabulary, which lives in a migration CHECK and settings-form.tsx, not here. Naming them
+// would be a third place to keep in sync, and an unrecognised value must DROP the beat at
+// render time (spec §4's "an absent input drops its beat"), never fail methodology load for
+// every church at once.
+const BeatsSchema = z.object({
+  pivot: DossierReadingBandSchema,
+  not_statement: z.object({
+    systems: z.string().min(1),
+    culture: z.string().min(1),
+    theology: z.string().min(1),
+    relational: z.string().min(1),
+  }),
+  trajectory: z.record(z.string().min(1)),
+});
+
 export const CopySchema = z.object({
   version: z.string().min(1),
   blocks: z.record(z.string().min(1)),
@@ -171,6 +207,9 @@ export const CopySchema = z.object({
     }),
   }),
   dependency_reads: DependencyReadsSchema,
+  xpg_read: XpgReadSchema,
+  beats: BeatsSchema,
+  s8_below_threshold: z.string().min(1),
 });
 
 // Named keys, not z.record — the same rationale as DossierReadingBandSchema above. The three
@@ -248,6 +287,7 @@ export type Offer = z.infer<typeof OfferSchema>;
 export type Offers = z.infer<typeof OffersSchema>;
 export type DossierReadingBand = z.infer<typeof DossierReadingBandSchema>;
 export type DependencyReads = z.infer<typeof DependencyReadsSchema>;
+export type XpgRead = z.infer<typeof XpgReadSchema>;
 export type Copy = z.infer<typeof CopySchema>;
 export type RequiredMention = z.infer<typeof RequiredMentionSchema>;
 export type ReportSection = z.infer<typeof ReportSectionSchema>;

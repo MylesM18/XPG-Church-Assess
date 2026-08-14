@@ -3,6 +3,9 @@ import { gateSection } from '../ai/section-gates';
 import { fallbackSections, type FallbackSectionArgs, type SectionBody } from './fallback-sections';
 import type { FactsPack } from './facts';
 import type { Methodology, SectionId } from '../methodology/schema';
+import { areaBarsModel, bottomItemsModel, tierGaugeModel, type ChartModel } from './charts';
+
+export type { SectionId } from '../methodology/schema';
 
 /**
  * Both halves of the composer. Generation (composeReport) runs once per church behind
@@ -18,6 +21,19 @@ export type SectionSource = 'ai' | 'fallback';
 export interface ComposedReport {
   sections: Partial<Record<AiSectionId, unknown>>; // AI output only — persisted
   section_sources: Record<SectionId, SectionSource>; // every section, C3
+}
+
+/**
+ * One line that makes "the model is off" distinguishable from "the model ran". Before this,
+ * a 100% fallback report and a fully composed one produced identical logs, and a fallback-only
+ * PDF was mistaken for composed prose (spec §0). Ids and counts only — never a score, a church
+ * name, or any section text.
+ */
+export function summariseSectionSources(sources: Record<SectionId, SectionSource>): string {
+  const entries = Object.entries(sources) as Array<[SectionId, SectionSource]>;
+  const fellBack = entries.filter(([, source]) => source === 'fallback').map(([id]) => id);
+  const aiCount = entries.length - fellBack.length;
+  return `ai ${aiCount}/${entries.length} · fallback: ${fellBack.length > 0 ? fellBack.join(', ') : 'none'}`;
 }
 
 export async function composeReport(args: {
@@ -66,6 +82,8 @@ export async function composeReport(args: {
     ]),
   ) as Record<SectionId, SectionSource>;
 
+  console.info(`[report] section_sources: ${summariseSectionSources(section_sources)}`);
+
   return { sections, section_sources };
 }
 
@@ -87,6 +105,30 @@ export interface AssembledSection {
   source: SectionSource;
   ai: unknown | null;
   fallback: SectionBody;
+  /** Derived chart geometry (lib/report/charts.ts). Usually empty. Never source-dependent. */
+  charts: ChartModel[];
+}
+
+/**
+ * Which charts a section carries. `charts`, not a single `chart`, because s3 needs two (the tier
+ * gauge over the overall capacity, then the eight area bars). An empty array is the common case.
+ *
+ * Called by BOTH assemblers, so the public share page — permanently fallback-only by design —
+ * gets the identical models the authenticated page does. Charts deliberately never read
+ * `section.source`: they are the one part of the report that cannot degrade when the model is
+ * unavailable, which is the whole reason s3 stayed out of AI_SECTION_IDS (spec §3).
+ */
+export function chartsForSection(
+  id: SectionId,
+  facts: FactsPack,
+  methodology: Methodology,
+): ChartModel[] {
+  if (id === 's3') return [tierGaugeModel(facts, methodology), areaBarsModel(facts, methodology)];
+  if (id === 's7') {
+    const model = bottomItemsModel(facts);
+    return model ? [model] : [];
+  }
+  return [];
 }
 
 /**
@@ -99,7 +141,8 @@ export function assembleFallbackOnly(args: FallbackSectionArgs): AssembledSectio
   const fallbacks = fallbackSections(args);
   return (Object.keys(args.methodology.report.sections) as SectionId[]).map((id) => {
     const fallback = fallbacks[id];
-    return { id, source: 'fallback' as const, ai: null, fallback };
+    const charts = chartsForSection(id, args.facts, args.methodology);
+    return { id, source: 'fallback' as const, ai: null, fallback, charts };
   });
 }
 
@@ -121,14 +164,15 @@ export function assembleReport(args: {
 
   return (Object.keys(args.methodology.report.sections) as SectionId[]).map((id) => {
     const fallback = fallbacks[id];
-    if (!(AI_SECTION_IDS as readonly string[]).includes(id)) return { id, source: 'fallback' as const, ai: null, fallback };
+    const charts = chartsForSection(id, args.facts, args.methodology);
+    if (!(AI_SECTION_IDS as readonly string[]).includes(id)) return { id, source: 'fallback' as const, ai: null, fallback, charts };
     const raw = stored[id];
-    if (raw === undefined) return { id, source: 'fallback' as const, ai: null, fallback };
+    if (raw === undefined) return { id, source: 'fallback' as const, ai: null, fallback, charts };
     // Re-validate. A reports row outlives the code that wrote it and `sections` is untyped
     // jsonb, so a shape mismatch is this section's fallback, never a crash.
     const check = SECTION_REGISTRY[id as AiSectionId].schema.safeParse(raw);
     return check.success
-      ? { id, source: 'ai' as const, ai: check.data, fallback }
-      : { id, source: 'fallback' as const, ai: null, fallback };
+      ? { id, source: 'ai' as const, ai: check.data, fallback, charts }
+      : { id, source: 'fallback' as const, ai: null, fallback, charts };
   });
 }

@@ -27,17 +27,38 @@ export const S4Schema = z.object({ thesis_word: z.string(), narrative: z.string(
 export const S5Schema = z.object({
   strengths: z.array(z.object({ category_id: z.string(), heading: z.string(), body: z.string() })),
 });
-// THREE beats, not six. report.yaml's s6 prose speaks of six micro-template beats, but only
-// affirm/evidence/reframe were ever given a concrete data source (see s6Bullet in
-// lib/report/fallback-sections.ts) — pivot, not_statement and trajectory have no lookup in the
-// facts pack or copy.yaml and were ruled aspirational. Every field here is required and
-// non-nullable under zodTextFormat's strict structured outputs, and gate 1 rejects any blank
-// among them, so listing a beat here COMPELS the model to invent text for it — text that then
-// counts against length_ceiling, numeric containment and banned phrases, each an extra chance to
-// lose the section to fallback. Do not re-add a beat here before it has a data source.
+// SIX beats, as report.yaml's s6 prose always described. This was three for as long as pivot,
+// not_statement and trajectory had no data source anywhere in the facts pack or copy.yaml:
+// every field here is required and non-nullable under zodTextFormat's strict structured outputs
+// and gate 1 rejects any blank among them, so listing a sourceless beat COMPELS the model to
+// invent text for it — text that then counts against length_ceiling, numeric containment and
+// banned phrases, each an extra chance to lose the section to fallback.
+//
+// All three now have deterministic sources (copy.beats.* plus, respectively, the facts.categories
+// ranking, this area's facts.bottom_items themes, and facts.profile.growth_trajectory — see
+// pivotBeat / notStatementBeat / trajectoryBeat in lib/report/fallback-sections.ts) on the
+// FALLBACK path. composeSection (below) does not reword that fallback draft at all — it sends the
+// model exactly two messages: a system prompt built from methodology/report.yaml's style_spine
+// and per-archetype template, and a user message carrying only the facts slice
+// (SECTION_REGISTRY.s6.slice). No fallback draft is ever part of the AI request; the reword-a-draft
+// pipeline is a different, unrelated path in lib/ai/prose.ts.
+//
+// On this AI-path slice, two of the three newer sources are conditionally null: growth_trajectory
+// is forwarded as `f.profile.growth_trajectory ?? null`, and an area with no entry in the global
+// bottom-6 (facts.bottom_items) has no not-statement source to key off of — yet every S6Schema
+// field below, not_statement and trajectory included, is a required non-nullable z.string(). So
+// unlike the fallback path, an absent source here does NOT drop its beat: the model is compelled
+// to produce text for it regardless. THE RULE IS UNCHANGED: do not add a seventh beat here before
+// it has a data source.
 export const S6Schema = z.object({
   areas: z.array(z.object({
-    category_id: z.string(), affirm: z.string(), evidence: z.string(), reframe: z.string(),
+    category_id: z.string(),
+    affirm: z.string(),
+    pivot: z.string(),
+    evidence: z.string(),
+    not_statement: z.string(),
+    reframe: z.string(),
+    trajectory: z.string(),
   })),
 });
 export const S7Schema = z.object({ narrative: z.string(), pattern_claim: z.string().nullable() });
@@ -91,7 +112,7 @@ export const SECTION_REGISTRY: Record<AiSectionId, SectionRegistryEntry> = {
   s2:  { schema: S2Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), cover: f.cover, profile: f.profile }) },
   s4:  { schema: S4Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories, gating: f.gating }) },
   s5:  { schema: S5Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories.slice(0, 3) }) },
-  s6:  { schema: S6Schema,  maxOutputTokens: 8000, slice: (f) => ({ ...head(f), categories: f.categories.slice(3), blind_spots: f.blind_spots, dispersion: f.dispersion }) },
+  s6:  { schema: S6Schema,  maxOutputTokens: 8000, slice: (f) => ({ ...head(f), categories: f.categories.slice(3), blind_spots: f.blind_spots, dispersion: f.dispersion, top_three: f.categories.slice(0, 3), bottom_items: f.bottom_items, growth_trajectory: f.profile.growth_trajectory ?? null }) },
   s7:  { schema: S7Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), bottom_items: f.bottom_items, pattern_counts: f.pattern_counts }) },
   s9:  { schema: S9Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), dependencies: f.dependencies, gating: f.gating, themes: themeDigest(f) }) },
   s12: { schema: S12Schema, maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories }) },
@@ -100,6 +121,20 @@ export const SECTION_REGISTRY: Record<AiSectionId, SectionRegistryEntry> = {
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import type { Methodology } from '../methodology/schema';
+
+/** Warn-once latch. A 13-section report would otherwise emit the same line seven times. */
+let missingKeyWarned = false;
+
+/**
+ * `new OpenAI()` throws on a missing key, which composeSection's catch resolves to a generic
+ * "request failed" — indistinguishable from a network blip, and the reason the fallback-only
+ * sample report read as composed prose for weeks (spec §0/§7.2). Name the actual cause once.
+ */
+function warnIfKeyAbsent(): void {
+  if (missingKeyWarned || process.env.OPENAI_API_KEY) return;
+  missingKeyWarned = true;
+  console.warn('[report] OPENAI_API_KEY absent — every AI section will fall back to the deterministic spine');
+}
 
 /**
  * One section call. NEVER throws — incomplete, unparseable and request failure all resolve to
@@ -116,6 +151,7 @@ export async function composeSection(
   const entry = SECTION_REGISTRY[id];
   const copy = methodology.report.sections[id];
   try {
+    warnIfKeyAbsent();
     const client = new OpenAI();
     const model = process.env.OPENAI_MODEL_PROSE ?? 'gpt-5.1';
     const response = await client.responses.parse(

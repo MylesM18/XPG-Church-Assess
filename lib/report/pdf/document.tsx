@@ -5,6 +5,7 @@ import type { AssembledSection } from '../compose';
 import type { SectionBody } from '../fallback-sections';
 import { bookingCta } from '../cta';
 import { registerReportFonts, FONT_DISPLAY, FONT_BODY } from './fonts';
+import { PdfChart } from './charts';
 
 registerReportFonts();
 
@@ -27,6 +28,7 @@ const s = StyleSheet.create({
   aiHeading: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 11, marginBottom: 2 },
   block: { marginBottom: 8 },
   caveat: { fontSize: 9, color: INK_SOFT, marginTop: 8 },
+  chart: { marginTop: 6, marginBottom: 6 },
   ctaButton: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: INK, color: '#FFFFFF', fontFamily: FONT_DISPLAY, fontSize: 10, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 4, textDecoration: 'none' },
   footer: { position: 'absolute', bottom: 24, left: 48, right: 48, flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: INK_SOFT },
 });
@@ -125,8 +127,11 @@ function S6View({ ai, fallback }: AiRendererProps) {
       {parsed.data.areas.map((area) => (
         <View key={area.category_id} style={s.block}>
           <Text style={s.body}>{area.affirm}</Text>
+          <Text style={s.body}>{area.pivot}</Text>
           <Text style={s.body}>{area.evidence}</Text>
+          <Text style={s.body}>{area.not_statement}</Text>
           <Text style={s.body}>{area.reframe}</Text>
+          <Text style={s.body}>{area.trajectory}</Text>
         </View>
       ))}
     </>
@@ -242,6 +247,11 @@ export function ReportDocument({
         {sections.map((section, index) => (
           <View key={section.id} style={s.section}>
             <Text style={index === 0 ? s.h1 : s.h2}>{section.fallback.title}</Text>
+            {section.charts.map((chart) => (
+              <View key={chart.kind} style={s.chart}>
+                <PdfChart model={chart} />
+              </View>
+            ))}
             <SectionContent section={section} />
             {stale && section.id === 'appendix' && <Text style={s.caveat}>{STALE_CAVEAT}</Text>}
           </View>

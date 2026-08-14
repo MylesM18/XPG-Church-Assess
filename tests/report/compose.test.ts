@@ -16,11 +16,12 @@ vi.mock('@/lib/ai/sections', async (importOriginal) => {
 
 // Imported AFTER the mock is declared (vitest hoists vi.mock above imports regardless) — same
 // convention as tests/ai/sections.test.ts's own comment.
-import { composeReport, assembleReport, isUsableCachedReport } from '../../lib/report/compose';
+import { composeReport, assembleReport, assembleFallbackOnly, chartsForSection, isUsableCachedReport } from '../../lib/report/compose';
 import { AI_SECTION_IDS, type AiSectionId } from '../../lib/ai/sections';
 import { loadMethodology } from '../../lib/methodology/load';
 import type { Diagnosis, DiagnosisCategory, Response } from '../../lib/engine/types';
 import { buildFacts, type BuildFactsArgs, type ChurchFacts, type FactsPack } from '../../lib/report/facts';
+import { ALL_FIXTURES, CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
 
 // Fixture Construction Kit — copied verbatim from task-8-recon.md §1 (itself copied from
 // tests/ai/section-gates.test.ts:1-153), per controller ruling R8: gateSection stays REAL in
@@ -155,37 +156,56 @@ const good = (id: AiSectionId): unknown => {
       // changes, both lists move together. The `conn` entry is kept verbatim because it is the
       // gate-proven one (its 70/100 are in-slice for gate 2); the other four are deliberately
       // digit-free so they cannot introduce a numeric-containment failure of their own.
+      // pivot/not_statement/trajectory are deliberately digit-free, same reasoning as the other
+      // four (below) — this mock predates Task 9's three new beats but must still clear gate 2
+      // (numeric containment, scoped to s6's own widened slice) with no new invented numbers, and
+      // clear the constraint archetype's banned_phrases list.
       return {
         areas: [
           {
             category_id: 'conn',
             affirm: 'Community / Connection has real strengths worth naming.',
+            pivot: 'It sits well behind the areas already carrying this church forward.',
             evidence: 'The connection pathway from guest to committed member is inconsistent.',
+            not_statement: 'This is not a sign people do not care — the path itself is not built yet.',
             reframe: 'Overall health still sits at 70 out of 100, so this is one fixable link, not a collapse.',
+            trajectory: 'Left as is, that gap will keep widening rather than closing.',
           },
           {
             category_id: 'sys',
             affirm: 'Systems work is further along here than most teams expect.',
+            pivot: 'It trails the strongest areas, but not by a wide margin.',
             evidence: 'Process lives with a few people rather than in anything written down.',
+            not_statement: 'This is not a motivation problem — the documentation has not caught up.',
             reframe: 'Read this as knowledge worth capturing, not as a failure to organise.',
+            trajectory: 'The current trend will not close that gap without a deliberate push.',
           },
           {
             category_id: 'vol',
             affirm: 'Volunteers are willing and turn up when they are asked.',
+            pivot: 'It sits behind the areas already carrying the most weight.',
             evidence: 'Recruitment leans on personal invitation from the same handful of leaders.',
+            not_statement: 'This is not a willingness problem — the invitation itself is too narrow.',
             reframe: 'The willingness is already there; what is missing is a repeatable path into it.',
+            trajectory: 'That reliance on a few leaders will not resolve on its own.',
           },
           {
             category_id: 'gen',
             affirm: 'Generosity is steady and quietly carries more than it is credited for.',
+            pivot: 'It falls short of the areas leading the rest of the chain.',
             evidence: 'Giving is concentrated among long-tenured members rather than broadly shared.',
+            not_statement: 'This is not a scarcity problem — the base of givers is simply narrow.',
             reframe: 'This is a breadth question, not a commitment question.',
+            trajectory: 'Without broadening that base, the concentration will only deepen.',
           },
           {
             category_id: 'comm',
             affirm: 'Communication reaches the people already close to the centre.',
+            pivot: 'It lags behind the areas already carrying real weight.',
             evidence: 'Announcements repeat across channels without a clear primary one.',
+            not_statement: 'This is not an effort problem — the channels simply compete with each other.',
             reframe: 'Treat this as a focus problem rather than an effort problem.',
+            trajectory: 'That channel sprawl will not resolve without a clear primary one.',
           },
         ],
       };
@@ -376,5 +396,51 @@ describe('isUsableCachedReport (I9)', () => {
     expect(isUsableCachedReport(null)).toBe(false);
     expect(isUsableCachedReport(undefined)).toBe(false);
     expect(isUsableCachedReport('ai')).toBe(false);
+  });
+});
+
+describe('chart models on AssembledSection', () => {
+  // Reuses the module-level `methodology` (loadMethodology(), declared above at :31) rather
+  // than redeclaring it here — task-5-brief.md's snippet shadowed it locally, but the outer
+  // const is the same value and there is no reason to load the methodology twice in one file.
+
+  it('gives s3 the tier gauge then the area bars, in that order', () => {
+    const charts = chartsForSection('s3', CAPACITY_FACTS, methodology);
+    expect(charts.map((c) => c.kind)).toEqual(['tier_gauge', 'area_bars']);
+  });
+
+  it('gives s7 the bottom-items chart', () => {
+    expect(chartsForSection('s7', CAPACITY_FACTS, methodology).map((c) => c.kind)).toEqual(['bottom_items']);
+  });
+
+  it('gives s7 no chart when there are no bottom items', () => {
+    const empty = makeFacts({ bottom_items: [], pattern_counts: { systems: 0, culture: 0, theology: 0, relational: 0 } });
+    expect(chartsForSection('s7', empty, methodology)).toEqual([]);
+  });
+
+  it('gives every other section no charts', () => {
+    for (const id of ['s1', 's2', 's4', 's5', 's6', 's8', 's9', 's10', 's11', 's12', 'appendix'] as const) {
+      expect(chartsForSection(id, CAPACITY_FACTS, methodology), id).toEqual([]);
+    }
+  });
+
+  it('attaches charts on the fallback-only path too — the share page is permanently fallback', () => {
+    for (const { name, facts } of ALL_FIXTURES) {
+      const sections = assembleFallbackOnly({ facts, methodology, reflections: [] });
+      const s3 = sections.find((s) => s.id === 's3')!;
+      expect(s3.source, name).toBe('fallback');
+      expect(s3.charts.map((c) => c.kind), name).toEqual(['tier_gauge', 'area_bars']);
+    }
+  });
+
+  it('attaches identical charts whether the section is ai or fallback', () => {
+    const viaAssemble = assembleReport({
+      facts: CAPACITY_FACTS, methodology, reflections: [], persisted: null, liveInputsHash: 'x',
+    });
+    const viaFallbackOnly = assembleFallbackOnly({ facts: CAPACITY_FACTS, methodology, reflections: [] });
+    for (const id of ['s3', 's7'] as const) {
+      expect(viaAssemble.find((s) => s.id === id)!.charts)
+        .toEqual(viaFallbackOnly.find((s) => s.id === id)!.charts);
+    }
   });
 });

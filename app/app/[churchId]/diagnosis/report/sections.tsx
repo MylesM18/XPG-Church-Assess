@@ -2,6 +2,7 @@ import { AI_SECTION_IDS, S2Schema, S4Schema, S5Schema, S6Schema, S7Schema, S9Sch
 import type { AiSectionId } from '@/lib/ai/sections'
 import type { AssembledSection } from '@/lib/report/compose'
 import type { SectionBody } from '@/lib/report/fallback-sections'
+import { WebChart } from './charts'
 
 /**
  * The uniform renderer: the { body, bullets } half of a SectionBody. Used for all 13
@@ -85,8 +86,11 @@ function S6View({ ai, fallback }: AiRendererProps) {
       {parsed.data.areas.map((area) => (
         <div key={area.category_id}>
           <p className="font-body text-ink-soft">{area.affirm}</p>
+          <p className="font-body text-ink-soft">{area.pivot}</p>
           <p className="font-body text-ink-soft">{area.evidence}</p>
+          <p className="font-body text-ink-soft">{area.not_statement}</p>
           <p className="font-body text-ink-soft">{area.reframe}</p>
+          <p className="font-body text-ink-soft">{area.trajectory}</p>
         </div>
       ))}
     </div>
@@ -211,6 +215,9 @@ export function ReportSections({ sections }: { sections: AssembledSection[] }) {
           ) : (
             <h2 className="font-display text-ink">{section.fallback.title}</h2>
           )}
+          {section.charts.map((chart) => (
+            <WebChart key={chart.kind} model={chart} />
+          ))}
           <SectionContent section={section} />
         </section>
       ))}
