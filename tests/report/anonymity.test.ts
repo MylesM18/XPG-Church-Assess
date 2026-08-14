@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { containsRespondentLabel, knownLabels, respondentLabels } from '@/lib/report/anonymity';
+import { MIN_SUPPORT } from '@/lib/ai/theme-gates';
+import { fallbackSection } from '@/lib/report/fallback-sections';
+import { loadMethodology } from '@/lib/methodology/load';
+import { makeFacts, THEMES_N3_FACTS } from '../fixtures/facts';
 
 describe('respondentLabels', () => {
   it('returns distinct labels', () => {
@@ -71,5 +75,49 @@ describe('knownLabels', () => {
       kind: 'known',
       labels: [],
     });
+  });
+});
+
+describe('s8 fallback path enforces a k threshold', () => {
+  const methodology = loadMethodology();
+  // CONCERN (deviates from the brief's literal Step 1 code — see task-10-report.md): the brief
+  // used item_id 'G1', but 'G1' (category guest) carries no `reflection:` field in production
+  // questions.yaml, so buildOutreachVoices would NEVER surface it regardless of respondent
+  // count — this test could not pass as written. 'G6' is the real reflection-prompted item
+  // (category guest) tests/report/fallback-sections.test.ts:77-80 already established for the
+  // identical reason ("the brief's `reflectionItemId` is not itself a defined fixture").
+  const REFLECTIONS = [
+    { item_id: 'G6', reflection: 'I greeted the guest and walked them to the coffee table.' },
+    { item_id: 'G6', reflection: 'Nobody followed up with the family who visited in June.' },
+  ];
+  const s8 = (facts: ReturnType<typeof makeFacts>, reflections = REFLECTIONS) =>
+    fallbackSection('s8', { facts, methodology, reflections }).bullets;
+
+  it('suppresses verbatim reflections below the threshold', () => {
+    const tooFew = makeFacts({ cover: { church_name: 'T', completed_at: null, respondent_count: MIN_SUPPORT - 1 } });
+    const bullets = s8(tooFew);
+    for (const r of REFLECTIONS) expect(bullets.join(' ')).not.toContain(r.reflection);
+  });
+
+  it('emits the neutral copy line instead of nothing at all', () => {
+    const tooFew = makeFacts({ cover: { church_name: 'T', completed_at: null, respondent_count: 1 } });
+    expect(s8(tooFew)).toEqual([methodology.copy.s8_below_threshold]);
+  });
+
+  it('still prints reflections at or above the threshold', () => {
+    const enough = makeFacts({ cover: { church_name: 'T', completed_at: null, respondent_count: MIN_SUPPORT } });
+    const bullets = s8(enough).join(' ');
+    for (const r of REFLECTIONS) expect(bullets).toContain(r.reflection);
+  });
+
+  it('never suppresses the THEME path — it already enforces k>=3 itself', () => {
+    const bullets = s8(THEMES_N3_FACTS);
+    expect(bullets.join(' ')).toContain(THEMES_N3_FACTS.themes[0]!.label);
+    expect(bullets).not.toEqual([methodology.copy.s8_below_threshold]);
+  });
+
+  it('emits the neutral line, not an empty section, when there are no reflections at all', () => {
+    const enough = makeFacts({ cover: { church_name: 'T', completed_at: null, respondent_count: 9 } });
+    expect(s8(enough, [])).toEqual([methodology.copy.s8_below_threshold]);
   });
 });

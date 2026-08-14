@@ -91,3 +91,7 @@ beats:
     plateaued: "Against a flat trajectory, this is one of the places the plateau is being held in place."
     growing_steadily: "Against steady growth, this is the area that growth will find first."
     growing_rapidly: "Against rapid growth, this is the area most likely to be overrun before it is ready."
+# S8's below-threshold line. Shown instead of verbatim reflections when too few people responded
+# for a quote to be unattributable — including on the public share page, which renders the
+# fallback path permanently.
+s8_below_threshold: "Not enough responses yet to report what leaders are saying without identifying who said it. This section fills in as more of your team completes the assessment."

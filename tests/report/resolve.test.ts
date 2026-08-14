@@ -173,14 +173,18 @@ describe('resolveReportSections', () => {
   ])('drops persisted themes on %s', async (_label, facts) => {
     const r = await resolveReportSections({ ...baseArgs(), readPersisted: lookupWith(facts) })
     const s8 = r.sections.find((s) => s.id === 's8')
-    // Non-vacuous: with reflections: [] in baseArgs, s8Bullets (fallback-sections.ts:106-112)
-    // produces bullets from facts.themes ONLY when facts.themes.length > 0 — the reflections
-    // fallback path yields [] on an empty reflections array (buildOutreachVoices drops every
-    // item with no matching entries). A non-empty bullets array here is only possible if the
-    // malformed themes above were wrongly accepted by isThemeClusterFact and reached buildFacts
-    // — this is the discriminator a bare `.fallback).toBeDefined()` could never provide, since
-    // fallbackSections always returns a defined SectionBody regardless of which branch ran.
-    expect(s8?.fallback.bullets).toEqual([])
+    // Non-vacuous: with reflections: [] in baseArgs, s8Bullets (fallback-sections.ts) produces
+    // bullets from facts.themes ONLY when facts.themes.length > 0 — the reflections fallback
+    // path yields the neutral copy.s8_below_threshold line (Task 10's k>=3 anonymity guard,
+    // fallback-sections.ts) rather than [], both because baseArgs' responses: [] puts
+    // facts.cover.respondent_count at 0 (below MIN_SUPPORT) and because an empty reflections
+    // array produces no voices lines regardless (buildOutreachVoices drops every item with no
+    // matching entries). A bullets array other than that single neutral line here is only
+    // possible if the malformed themes above were wrongly accepted by isThemeClusterFact and
+    // reached buildFacts — this is the discriminator a bare `.fallback).toBeDefined()` could
+    // never provide, since fallbackSections always returns a defined SectionBody regardless of
+    // which branch ran.
+    expect(s8?.fallback.bullets).toEqual([methodology.copy.s8_below_threshold])
     expect(r.stale).toBe(false)
   })
 

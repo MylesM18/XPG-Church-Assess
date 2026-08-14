@@ -1,3 +1,4 @@
+import { MIN_SUPPORT } from '../ai/theme-gates';
 import type { CategoryState } from '../engine/types';
 import type { Methodology, Offer, SectionId, Theme } from '../methodology/schema';
 import type { CategoryFact, FactsPack } from './facts';
@@ -170,6 +171,23 @@ function s7Bullets(facts: FactsPack): string[] {
   return [...itemLines, ...patternLines];
 }
 
+/**
+ * S8's bullets, with the SAME k>=3 philosophy on both paths.
+ *
+ * The theme path already enforces it: clusterThemes -> theme-gates drops any cluster under
+ * MIN_SUPPORT distinct supporting respondents, so facts.themes is k-safe by construction.
+ *
+ * The fallback path did NOT. It printed every reflection verbatim with its prompt and no
+ * threshold at all — and this is the path the PUBLIC SHARE PAGE always renders
+ * (assembleFallbackOnly). At one respondent that is one person's answers, fully attributable, on
+ * a link anyone can forward.
+ *
+ * ⚠️ KNOWN LIMITATION, deliberate: `reflections` here is the KEYLESS array (item_id + text, no
+ * respondent id — resolve.ts:24-28), so this cannot count distinct WRITERS the way theme-gates
+ * does. It uses the run's distinct respondent count instead. That is a weaker k, but threading
+ * respondent identity into a renderer to strengthen it is exactly what the keyless array exists
+ * to prevent. Strictly better than no threshold; not as strong as the theme path's.
+ */
 function s8Bullets(
   facts: FactsPack,
   methodology: Methodology,
@@ -178,13 +196,17 @@ function s8Bullets(
   if (facts.themes.length > 0) {
     return facts.themes.map((t) => `${t.label}: ${t.gloss} (${t.support_count} people).`);
   }
+  if (facts.cover.respondent_count < MIN_SUPPORT) return [methodology.copy.s8_below_threshold];
   // buildOutreachVoices groups per category_id (Map<string, OutreachVoicesGroup[]>) — flatten
   // across the Map's values before producing lines (ruling 10). Verbatims never enter a
   // bullet: only group.entries (respondent free text), never facts.themes[].verbatims.
   const voices = buildOutreachVoices(methodology, [...reflections]);
-  return [...voices.values()]
+  const lines = [...voices.values()]
     .flat()
     .flatMap((group) => group.entries.map((entry) => `${group.reflectionPrompt}: ${entry}`));
+  // An empty section under a "What Leaders Are Saying" heading reads as a rendering bug. Say why
+  // it is empty instead.
+  return lines.length > 0 ? lines : [methodology.copy.s8_below_threshold];
 }
 
 function s9Bullets(facts: FactsPack): string[] {

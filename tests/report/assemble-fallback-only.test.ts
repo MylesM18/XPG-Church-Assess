@@ -143,7 +143,50 @@ const SCOREABLE_FIXTURE: DeriveResult = {
 // tests/report/audience-parity.test.ts:51 and stale-payload.test.ts's thunk both make.
 const FIXTURE_BLOCKS: ReportBlocks = fallbackProse(SCOREABLE_DIAGNOSIS, FIXTURE_METHODOLOGY);
 
+// Task 10: a 1-respondent facts pack, built the same way FIXTURE_FACTS above is but with every
+// response keyed to a single respondent_id — the exact surface the s8 anonymity gap lived on
+// (task-10-brief.md: "the public share page always renders" the fallback path via
+// assembleFallbackOnly, and at one respondent that was one person's answers, fully
+// attributable, on a link anyone can forward).
+const ONE_RESPONDENT_RESPONSES: Response[] = [
+  resp('G1', 'guest', 7, 'solo'),
+  resp('C1', 'conn', 7, 'solo'),
+  resp('D1', 'disc', 6, 'solo'),
+  resp('V1', 'vol', 6, 'solo'),
+  resp('GEN1', 'gen', 6, 'solo'),
+];
+
+const ONE_RESPONDENT_FACTS: FactsPack = buildFacts({
+  methodology: FIXTURE_METHODOLOGY,
+  responses: ONE_RESPONDENT_RESPONSES,
+  church: CHURCH,
+  completedAt: '2026-08-10T00:00:00Z',
+  labelSource: { kind: 'known', labels: [] },
+  diagnosis: makeDiagnosis({ primary_constraint: null, gating_conditions: [], generosity_mode: null }),
+});
+
 describe('assembleFallbackOnly', () => {
+  // Task 10: the s8 fallback anonymity gap. G6 is a real reflection-prompted item (category
+  // guest, methodology/questions.yaml) — the same one tests/report/fallback-sections.test.ts's
+  // reflectionItemId already established, so buildOutreachVoices would surface these entries if
+  // the k-threshold guard were not in place, proving the guard is what suppresses them here.
+  it('suppresses verbatim reflections in s8 at one respondent — the surface the public share page always renders', () => {
+    const reflections = [
+      { item_id: 'G6', reflection: 'I greeted the guest and walked them to the coffee table.' },
+      { item_id: 'G6', reflection: 'Nobody followed up with the family who visited in June.' },
+    ];
+    const sections = assembleFallbackOnly({
+      facts: ONE_RESPONDENT_FACTS,
+      methodology: FIXTURE_METHODOLOGY,
+      reflections,
+    });
+    const s8 = sections.find((s) => s.id === 's8')!;
+    for (const r of reflections) {
+      expect(s8.fallback.bullets.join(' ')).not.toContain(r.reflection);
+    }
+  });
+
+
   it('returns every report.yaml section, in report.yaml order, all source fallback', () => {
     const sections = assembleFallbackOnly({
       facts: FIXTURE_FACTS,
