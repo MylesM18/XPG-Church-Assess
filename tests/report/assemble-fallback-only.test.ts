@@ -186,7 +186,6 @@ describe('assembleFallbackOnly', () => {
     }
   });
 
-
   it('returns every report.yaml section, in report.yaml order, all source fallback', () => {
     const sections = assembleFallbackOnly({
       facts: FIXTURE_FACTS,

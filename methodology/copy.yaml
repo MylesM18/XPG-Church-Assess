@@ -94,4 +94,4 @@ beats:
 # S8's below-threshold line. Shown instead of verbatim reflections when too few people responded
 # for a quote to be unattributable — including on the public share page, which renders the
 # fallback path permanently.
-s8_below_threshold: "Not enough responses yet to report what leaders are saying without identifying who said it. This section fills in as more of your team completes the assessment."
+s8_below_threshold: "Individual reflections are not shown in this report to protect respondent anonymity."
