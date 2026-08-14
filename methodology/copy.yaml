@@ -62,3 +62,32 @@ xpg_read:
     healthy_stretched: "Your stages hold; the enablers underneath them do not. Every area leaning on those enablers is capped at their level, whatever its own score says."
     strained: "Nothing is broken outright, but the enablers underneath everything are the ceiling. Work the ground before the stages — they cannot rise above it."
     at_risk: "The enablers holding up every other area are the binding limit. Any stage-level gain now is temporary until the ground beneath it changes."
+# The three s6 micro-template beats that had no data source until now (spec §4). The full beat
+# order is affirm -> pivot -> evidence -> not_statement -> reframe -> trajectory; affirm /
+# evidence / reframe already read from dossier.reading, blocks.blind_spot and inserts.dispersion.
+#
+# An absent input DROPS its beat. Never write a line here that only makes sense when some other
+# beat is also present.
+beats:
+  # Keyed by the same reading band as dossier.reading. {rank} is this area's position among the
+  # eight (1 = highest score); {delta} is how many points it sits below the mean of the top three,
+  # always a non-negative integer (the top three themselves emit no pivot beat).
+  pivot:
+    severe: "It ranks {rank} of eight and sits {delta} points below your strongest three — this is not a gap to close, it is a floor to build."
+    broken: "It ranks {rank} of eight, {delta} points below your strongest three, and that distance is the finding."
+    watch: "It ranks {rank} of eight, {delta} points behind your strongest three — close enough to look fine, far enough to matter."
+    holding: "It ranks {rank} of eight and trails your strongest three by {delta} points, which is a difference in degree, not in kind."
+  # Keyed by the dominant theme among THIS area's lowest-scoring indicators. Says what the
+  # weakness is not, so a leader does not reach for the wrong instrument.
+  not_statement:
+    systems: "What is weak here is process, not conviction — nobody needs persuading, something needs writing down."
+    culture: "What is weak here is habit, not capability — the people can do this; it is not yet what they do."
+    theology: "What is weak here is understanding, not effort — people are working hard without a clear reason why."
+    relational: "What is weak here is connection, not competence — the work happens, it just does not happen between people."
+  # Keyed by the church's growth_trajectory profile value (settings-form.tsx GROWTH_OPTIONS).
+  # An unset or unrecognised value drops the beat entirely.
+  trajectory:
+    declining: "Against a declining trajectory, this is the area where decline shows up first."
+    plateaued: "Against a flat trajectory, this is one of the places the plateau is being held in place."
+    growing_steadily: "Against steady growth, this is the area that growth will find first."
+    growing_rapidly: "Against rapid growth, this is the area most likely to be overrun before it is ready."
