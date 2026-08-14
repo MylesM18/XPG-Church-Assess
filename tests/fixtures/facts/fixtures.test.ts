@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { loadMethodology } from '@/lib/methodology/load';
 import { fallbackSections } from '@/lib/report/fallback-sections';
+import { throughput } from '@/lib/engine/throughput';
+import { structuralEdges, readDependencies } from '@/lib/engine/dependencies';
+import { interp } from '@/lib/report/view';
 import { ALL_FIXTURES } from './index';
 
 const methodology = loadMethodology();
@@ -66,5 +69,69 @@ describe('facts fixtures', () => {
     expect(by['high-dispersion']!.blind_spots.length).toBeGreaterThan(0);
     expect(by['themes-n3']!.themes.length).toBeGreaterThan(0);
     for (const t of by['themes-n3']!.themes) expect(t.support_count).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// Fix round 1: producibility assertions. Each of these recomputes an expected value from the
+// SAME production functions the fixtures module now calls, independently of that module's own
+// internals, so a fixture that regresses to a hand-typed, production-impossible value (a
+// throughput below min(chain), a dependency edge structuralEdges could never emit, a
+// contradicted from_score/to_score, a read_sentence built from the wrong template, or a
+// non-existent attendance-band slug) fails here even if every other assertion above still
+// passes.
+describe('facts fixtures are producible — never a value production could not emit', () => {
+  it("overall.throughput/gap match the production throughput()/gap() functions over each fixture's own categories", () => {
+    for (const { name, facts } of ALL_FIXTURES) {
+      const scoreById = new Map(facts.categories.map((c) => [c.id, c.score]));
+      const chainScores = methodology.rules.chain.map((id) => scoreById.get(id)!);
+      const expectedThroughput = throughput(chainScores, methodology.rules.throughput.min_weight);
+      expect(facts.overall.throughput, name).toBe(expectedThroughput);
+      expect(facts.overall.gap, name).toBe(facts.overall.capacity - facts.overall.throughput);
+    }
+  });
+
+  it('every dependency edge is one structuralEdges emits for the real rules, with matching kind', () => {
+    const structural = new Set(
+      structuralEdges(methodology.rules).map((e) => `${e.from}->${e.to}:${e.kind}`),
+    );
+    for (const { name, facts } of ALL_FIXTURES) {
+      for (const d of facts.dependencies) {
+        expect(structural.has(`${d.from}->${d.to}:${d.kind}`), `${name}: ${d.from}->${d.to}:${d.kind}`).toBe(true);
+      }
+    }
+  });
+
+  it("each edge's from_score/to_score equal the scores of those same categories in that fixture", () => {
+    for (const { name, facts } of ALL_FIXTURES) {
+      const scoreById = new Map(facts.categories.map((c) => [c.id, c.score]));
+      for (const d of facts.dependencies) {
+        expect(d.from_score, `${name}: ${d.from}`).toBe(scoreById.get(d.from));
+        expect(d.to_score, `${name}: ${d.to}`).toBe(scoreById.get(d.to));
+      }
+    }
+  });
+
+  it("each edge's read_sentence equals the copy.dependency_reads template for the read its own two scores produce", () => {
+    for (const { name, facts } of ALL_FIXTURES) {
+      const scoreById = new Map(facts.categories.map((c) => [c.id, c.score]));
+      const canonical = readDependencies(methodology.rules, scoreById, methodology.rules.thresholds.break);
+      const canonicalByKey = new Map(canonical.map((e) => [`${e.from}->${e.to}`, e]));
+      for (const d of facts.dependencies) {
+        const e = canonicalByKey.get(`${d.from}->${d.to}`)!;
+        const expected = interp(methodology.copy.dependency_reads[e.read], {
+          fromName: d.from_name,
+          toName: d.to_name,
+        });
+        expect(d.read_sentence, `${name}: ${d.from}->${d.to}`).toBe(expected);
+      }
+    }
+  });
+
+  it('profile.attendance_band, when present, is a member of the real benchmark bands', () => {
+    const realBands = new Set(Object.keys(methodology.benchmarks.bands));
+    for (const { name, facts } of ALL_FIXTURES) {
+      const band = facts.profile.attendance_band;
+      if (band !== undefined) expect(realBands.has(band), name).toBe(true);
+    }
   });
 });
