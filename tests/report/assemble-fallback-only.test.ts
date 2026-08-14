@@ -166,6 +166,31 @@ describe('assembleFallbackOnly', () => {
     const untitled = sections.filter((s) => !s.fallback.title);
     expect(untitled.map((s) => s.id)).toEqual([]);
   });
+
+  // Task 5: charts are attached on this permanently-fallback path — the public share page
+  // never goes through assembleReport, so if the attach point lived only there, the share page
+  // would silently render s3/s7 without their charts.
+  it('attaches the tier gauge then area bars charts to s3, and the bottom-items chart to s7', () => {
+    const sections = assembleFallbackOnly({
+      facts: FIXTURE_FACTS,
+      methodology: FIXTURE_METHODOLOGY,
+      reflections: [],
+    });
+    const s3 = sections.find((s) => s.id === 's3')!;
+    const s7 = sections.find((s) => s.id === 's7')!;
+    expect(s3.charts.map((c) => c.kind)).toEqual(['tier_gauge', 'area_bars']);
+    expect(s7.charts.map((c) => c.kind)).toEqual(['bottom_items']);
+  });
+
+  it('gives every non-s3/s7 section no charts', () => {
+    const sections = assembleFallbackOnly({
+      facts: FIXTURE_FACTS,
+      methodology: FIXTURE_METHODOLOGY,
+      reflections: [],
+    });
+    const withCharts = sections.filter((s) => s.id !== 's3' && s.id !== 's7' && s.charts.length > 0);
+    expect(withCharts.map((s) => s.id)).toEqual([]);
+  });
 });
 
 describe('resolveScoreability (D-P4-6)', () => {

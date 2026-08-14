@@ -16,11 +16,12 @@ vi.mock('@/lib/ai/sections', async (importOriginal) => {
 
 // Imported AFTER the mock is declared (vitest hoists vi.mock above imports regardless) — same
 // convention as tests/ai/sections.test.ts's own comment.
-import { composeReport, assembleReport, isUsableCachedReport } from '../../lib/report/compose';
+import { composeReport, assembleReport, assembleFallbackOnly, chartsForSection, isUsableCachedReport } from '../../lib/report/compose';
 import { AI_SECTION_IDS, type AiSectionId } from '../../lib/ai/sections';
 import { loadMethodology } from '../../lib/methodology/load';
 import type { Diagnosis, DiagnosisCategory, Response } from '../../lib/engine/types';
 import { buildFacts, type BuildFactsArgs, type ChurchFacts, type FactsPack } from '../../lib/report/facts';
+import { ALL_FIXTURES, CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
 
 // Fixture Construction Kit — copied verbatim from task-8-recon.md §1 (itself copied from
 // tests/ai/section-gates.test.ts:1-153), per controller ruling R8: gateSection stays REAL in
@@ -376,5 +377,51 @@ describe('isUsableCachedReport (I9)', () => {
     expect(isUsableCachedReport(null)).toBe(false);
     expect(isUsableCachedReport(undefined)).toBe(false);
     expect(isUsableCachedReport('ai')).toBe(false);
+  });
+});
+
+describe('chart models on AssembledSection', () => {
+  // Reuses the module-level `methodology` (loadMethodology(), declared above at :31) rather
+  // than redeclaring it here — task-5-brief.md's snippet shadowed it locally, but the outer
+  // const is the same value and there is no reason to load the methodology twice in one file.
+
+  it('gives s3 the tier gauge then the area bars, in that order', () => {
+    const charts = chartsForSection('s3', CAPACITY_FACTS, methodology);
+    expect(charts.map((c) => c.kind)).toEqual(['tier_gauge', 'area_bars']);
+  });
+
+  it('gives s7 the bottom-items chart', () => {
+    expect(chartsForSection('s7', CAPACITY_FACTS, methodology).map((c) => c.kind)).toEqual(['bottom_items']);
+  });
+
+  it('gives s7 no chart when there are no bottom items', () => {
+    const empty = makeFacts({ bottom_items: [], pattern_counts: { systems: 0, culture: 0, theology: 0, relational: 0 } });
+    expect(chartsForSection('s7', empty, methodology)).toEqual([]);
+  });
+
+  it('gives every other section no charts', () => {
+    for (const id of ['s1', 's2', 's4', 's5', 's6', 's8', 's9', 's10', 's11', 's12', 'appendix'] as const) {
+      expect(chartsForSection(id, CAPACITY_FACTS, methodology), id).toEqual([]);
+    }
+  });
+
+  it('attaches charts on the fallback-only path too — the share page is permanently fallback', () => {
+    for (const { name, facts } of ALL_FIXTURES) {
+      const sections = assembleFallbackOnly({ facts, methodology, reflections: [] });
+      const s3 = sections.find((s) => s.id === 's3')!;
+      expect(s3.source, name).toBe('fallback');
+      expect(s3.charts.map((c) => c.kind), name).toEqual(['tier_gauge', 'area_bars']);
+    }
+  });
+
+  it('attaches identical charts whether the section is ai or fallback', () => {
+    const viaAssemble = assembleReport({
+      facts: CAPACITY_FACTS, methodology, reflections: [], persisted: null, liveInputsHash: 'x',
+    });
+    const viaFallbackOnly = assembleFallbackOnly({ facts: CAPACITY_FACTS, methodology, reflections: [] });
+    for (const id of ['s3', 's7'] as const) {
+      expect(viaAssemble.find((s) => s.id === id)!.charts)
+        .toEqual(viaFallbackOnly.find((s) => s.id === id)!.charts);
+    }
   });
 });
