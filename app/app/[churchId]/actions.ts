@@ -292,9 +292,12 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
  * get_run_responses filters status='in_progress' and returns nothing once the run is complete,
  * so using it here would persist a report built from zero responses.
  *
- * No migration: save_report has no status filter, resolves the run via current_run(), is
- * require_church_admin-gated, and ends `on conflict (run_id, inputs_hash) do nothing` — so this
- * is idempotent for free and a double-click is a no-op.
+ * save_report has no status filter, resolves the run via current_run(), and is
+ * require_church_admin-gated. Since 20260814000100_rpc_save_report_upsert.sql it ends
+ * `on conflict (run_id, inputs_hash) do update set ... generated_at = now()`, so a regenerate at
+ * an UNCHANGED inputs hash now actually replaces the stored row instead of being silently
+ * dropped. A double-click remains safe: the second write stores identical content and only moves
+ * generated_at.
  *
  * Never throws to the user. A failed regenerate leaves the existing row and the existing notice
  * untouched, and logs a reason only — never payloads, church data, or respondent data.
@@ -374,7 +377,9 @@ export async function regenerateReport(formData: FormData): Promise<void> {
       reflections: reflectionRows,
     })
 
-    // No cache check. Regenerating is the point; save_report's on-conflict makes it safe.
+    // No cache check. Regenerating is the point; save_report's on-conflict UPSERT (migration
+    // 20260814000100) makes it both safe and effective — an unchanged inputs hash overwrites the
+    // stored row rather than being discarded.
     const themes = await clusterThemes(reflectionRows, derived.effectiveMethodology, labelSource)
     const facts = themes === null
       ? baseFacts

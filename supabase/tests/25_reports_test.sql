@@ -10,7 +10,7 @@
 -- execute grant (anon denied), that authenticated cannot insert into reports directly, and that
 -- a non-admin member calling save_report is rejected.
 begin;
-select plan(28);
+select plan(31);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
  ('e1111111-1111-1111-1111-111111111111','authenticated','authenticated','reportadmin@test.com','x',now(),now()),
@@ -139,6 +139,43 @@ select throws_ok(
       '{"archetype":"capacity","tier":"healthy_ready"}'::jsonb)$$,
   '42501', 'must be an admin of this church', 'a non-admin member cannot save a report');
 reset role;
+
+-- ── (11) the on-conflict UPSERT replaces stored content and bumps generated_at ──────────────
+-- Regression cover for 20260814000100_rpc_save_report_upsert.sql. Under the original
+-- `on conflict ... do nothing` all three assertions below failed: the row kept its FIRST
+-- composition forever, which is exactly what pinned a fallback-only report to fallback
+-- permanently and made generation's I9 recompose (actions.ts:220-233) a silent waste.
+--
+-- Note (3) above already proved a byte-identical re-save does not duplicate the row. This block
+-- is the complementary case it cannot see: a re-save carrying DIFFERENT content.
+--
+-- Age the row first so the generated_at bump is observable — now() is frozen within a txn, so a
+-- freshly inserted row and an upserted row would otherwise share a timestamp (idiom lifted from
+-- 15_save_prose_test.sql:28-29).
+update reports set generated_at = '2000-01-01T00:00:00Z'
+ where inputs_hash = 'hash-report-1';
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"e1111111-1111-1111-1111-111111111111","email":"reportadmin@test.com","role":"authenticated"}';
+select save_report(
+  (select id from churches where name = 'Report Test Church'),
+  'hash-report-1', '0.2.0',
+  '{"archetype":"constraint","tier":"strained","facts":{"a":2},"sections":{"s2":"REPLACED"},"section_sources":{"s2":"fallback"}}'::jsonb);
+reset role;
+
+select is((select count(*)::int from reports where inputs_hash = 'hash-report-1'), 1,
+          'a re-save with different content still leaves exactly one (run_id, inputs_hash) row');
+
+-- One assertion over all six mutable columns, keyed so no two values can collide in the merge.
+select is((select jsonb_build_object(
+             'archetype', archetype, 'tier', tier, 'mv', methodology_version,
+             'facts', facts, 'sections', sections, 'sources', section_sources)
+           from reports where inputs_hash = 'hash-report-1'),
+          '{"archetype":"constraint","tier":"strained","mv":"0.2.0","facts":{"a":2},"sections":{"s2":"REPLACED"},"sources":{"s2":"fallback"}}'::jsonb,
+          'the re-save REPLACES every payload column (do nothing would have kept the originals)');
+
+select ok((select generated_at from reports where inputs_hash = 'hash-report-1') > '2001-01-01T00:00:00Z',
+          'generated_at is bumped to now() on re-save');
 
 select * from finish();
 rollback;
