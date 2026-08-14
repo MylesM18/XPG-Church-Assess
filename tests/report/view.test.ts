@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildReportView } from '@/lib/report/view';
+import { buildReportView, readingBand } from '@/lib/report/view';
 import { loadMethodology } from '@/lib/methodology/load';
 import type { Diagnosis } from '@/lib/engine/types';
 import type { ReportBlocks } from '@/lib/ai/fallback';
@@ -544,5 +544,40 @@ describe('outreachVoices', () => {
     const area = view.areas.find((a) => a.category_id === m.questions.categories[0]!.id)!;
     expect(area.outreachVoices).toHaveLength(1);
     expect(area.outreachVoices![0]!.entries).toEqual(['valid story']);
+  });
+});
+
+describe('readingBand is score-aware', () => {
+  const thresholds = loadMethodology().rules.thresholds;
+
+  it('does not call a mid-range ok area strong', () => {
+    // The sample report's Governance: state 'ok', score 53. Before this change it read
+    // 'holding' -> "This is strong." at 53/100.
+    expect(readingBand('ok', 53, thresholds)).toBe('watch');
+  });
+
+  it('calls an ok area at or above the strong threshold holding', () => {
+    expect(readingBand('ok', thresholds.strong, thresholds)).toBe('holding');
+    expect(readingBand('ok', 72, thresholds)).toBe('holding');
+    expect(readingBand('ok', 100, thresholds)).toBe('holding');
+  });
+
+  it('keeps the existing broken/severe split', () => {
+    expect(readingBand('broken', 24, thresholds)).toBe('severe');
+    expect(readingBand('broken', 25, thresholds)).toBe('broken');
+    expect(readingBand('gate', 24, thresholds)).toBe('severe');
+    expect(readingBand('gate', 44, thresholds)).toBe('broken');
+  });
+
+  it('passes an explicit watch state straight through', () => {
+    expect(readingBand('watch', 95, thresholds)).toBe('watch');
+  });
+
+  it('never returns holding below the strong threshold, for any state', () => {
+    for (let score = 0; score < thresholds.strong; score += 1) {
+      for (const state of ['ok', 'watch', 'broken', 'gate'] as const) {
+        expect(readingBand(state, score, thresholds)).not.toBe('holding');
+      }
+    }
   });
 });

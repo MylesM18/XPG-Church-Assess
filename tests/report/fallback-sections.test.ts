@@ -225,7 +225,7 @@ describe('S3 health dashboard', () => {
       // Same band-selection function view.ts uses (ruling 9's exported readingBand) — computed
       // independently here, not copy-pasted from the implementation, so this test would catch a
       // drift between fallback-sections.ts's bandRead() and view.ts's readingBand().
-      const band = readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds.severe);
+      const band = readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds);
       const expected = `${c.name}: ${c.score} out of 100 — ${methodology.copy.dossier.reading[c.kind][band]}`;
       expect(s3.bullets[i], c.id).toBe(expected);
     });

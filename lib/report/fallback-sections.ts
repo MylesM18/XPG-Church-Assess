@@ -49,7 +49,7 @@ const DAY_LABELS: Record<Phase, string> = { align: '30 days', build: '60 days', 
 /** S3's dashboard line + S6's "affirm" beat: the same band-thresholds view.ts already applies,
  *  via the now-exported readingBand (ruling 9) rather than a second, drift-prone copy. */
 function bandRead(c: CategoryFact, methodology: Methodology): string {
-  const band = readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds.severe);
+  const band = readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds);
   return methodology.copy.dossier.reading[c.kind][band];
 }
 

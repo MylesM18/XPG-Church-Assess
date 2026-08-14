@@ -69,6 +69,7 @@ export const RulesSchema = z.object({
     gate: z.number(),
     blind_spot_gap: z.number(),
     dispersion: z.number(),
+    strong: z.number(),
   }),
   constraint_logic: z.string().min(1),
   confidence: z.object({

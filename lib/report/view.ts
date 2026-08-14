@@ -102,12 +102,23 @@ type ReadingBand = 'severe' | 'broken' | 'watch' | 'holding';
  * Reading band from score + state (spec §7.2 table). `state` is 'broken' (stage)
  * or 'gate' (enabler) for every "not holding" category — thresholds.severe splits
  * that single state into the finer severe/broken bands the copy needs. 'watch'
- * and 'ok' pass straight through to 'watch'/'holding'.
+ * passes straight through.
+ *
+ * The final arm is SCORE-AWARE, not state-only: a category can be 'ok' (nothing in the
+ * engine flagged it) and still be nowhere near strong. Before this, every non-broken
+ * non-watch area got 'holding' -> "This is strong.", so a 53/100 area and a 100/100 area
+ * read identically. Anything below thresholds.strong now reads 'watch' instead. This also
+ * keys the chart bar fills (lib/report/charts.ts), so a wrong band here is a wrong colour
+ * there too — one function, one fix, both surfaces, both media.
  */
-export function readingBand(state: DiagnosisCategory['state'], score: number, severeThreshold: number): ReadingBand {
-  if (state === 'broken' || state === 'gate') return score < severeThreshold ? 'severe' : 'broken';
+export function readingBand(
+  state: DiagnosisCategory['state'],
+  score: number,
+  thresholds: Methodology['rules']['thresholds'],
+): ReadingBand {
+  if (state === 'broken' || state === 'gate') return score < thresholds.severe ? 'severe' : 'broken';
   if (state === 'watch') return 'watch';
-  return 'holding';
+  return score < thresholds.strong ? 'watch' : 'holding';
 }
 
 /** Short, capitalized label for the Layer 1 AreaTable "Band" column — the SAME
@@ -295,7 +306,7 @@ function buildAreas(
     const score = cat?.score ?? 0;
     const n = cat?.respondent_count ?? 0;
     const state = cat?.state ?? 'ok';
-    const band = readingBand(state, score, thresholds.severe);
+    const band = readingBand(state, score, thresholds);
     const v = voices.get(categoryId);
 
     return {

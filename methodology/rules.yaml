@@ -29,6 +29,11 @@ thresholds:
   gate: 45
   blind_spot_gap: 20
   dispersion: 2.0
+  # An `ok`-state area only reads "This is strong" once it clears this. Below it the area
+  # reads 'watch' instead — a 53/100 area is not strong, and readingBand used to say it was
+  # because it was state-driven only. Set to the healthy_stretched tier floor so the per-area
+  # register and the overall tier register agree on where "strong" begins.
+  strong: 70
 constraint_logic: |
   1. score all categories 0-100
   2. walk `chain` in order; a stage is BROKEN if score < thresholds.break
