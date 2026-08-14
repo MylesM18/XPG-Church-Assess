@@ -86,8 +86,11 @@ function S6View({ ai, fallback }: AiRendererProps) {
       {parsed.data.areas.map((area) => (
         <div key={area.category_id}>
           <p className="font-body text-ink-soft">{area.affirm}</p>
+          <p className="font-body text-ink-soft">{area.pivot}</p>
           <p className="font-body text-ink-soft">{area.evidence}</p>
+          <p className="font-body text-ink-soft">{area.not_statement}</p>
           <p className="font-body text-ink-soft">{area.reframe}</p>
+          <p className="font-body text-ink-soft">{area.trajectory}</p>
         </div>
       ))}
     </div>

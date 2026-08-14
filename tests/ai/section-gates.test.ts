@@ -3,6 +3,8 @@ import { loadMethodology } from '../../lib/methodology/load';
 import type { Diagnosis, DiagnosisCategory, Response } from '../../lib/engine/types';
 import { buildFacts, type BuildFactsArgs, type ChurchFacts, type FactsPack } from '../../lib/report/facts';
 import { gateSection } from '../../lib/ai/section-gates';
+import { S6Schema } from '../../lib/ai/sections';
+import { CAPACITY_FACTS } from '../fixtures/facts';
 
 // No importable constraintFacts/shared FactsPack fixture exists anywhere in tests/ or lib/
 // (task-7-recon.md §A1, controller ruling R2) — built inline here, copying the house idiom
@@ -205,8 +207,11 @@ describe('gate 1b — s5/s6 category coverage', () => {
     areas: s6Ids.map((id) => ({
       category_id: id,
       affirm: 'There is real work happening here already.',
+      pivot: 'It sits behind the areas already carrying the church forward.',
       evidence: 'Responses point to steady but uneven practice across the team.',
+      not_statement: 'This is not a sign nobody cares — the practice has not caught up yet.',
       reframe: 'Read this as room to grow rather than a failure to fix.',
+      trajectory: 'Left alone, that gap will not close on its own.',
     })),
   };
 
@@ -455,5 +460,48 @@ describe('gate 6 — length ceilings', () => {
   it('rejects a section over its ceiling', () => {
     const ceiling = methodology.report.sections.s2.length_ceiling;
     expect(gateSection('s2', { ...goodS2, summary: goodS2.summary + 'x'.repeat(ceiling) }, ctx)).toBe('length ceiling');
+  });
+});
+
+describe('S6Schema carries all six beats', () => {
+  const capacityCtx = { facts: CAPACITY_FACTS, methodology, labels: [] as readonly string[] };
+  const slice = CAPACITY_FACTS.categories.slice(3);
+
+  const area = (over: Record<string, string> = {}) => ({
+    category_id: 'x', affirm: 'A.', pivot: 'B.', evidence: 'C.',
+    not_statement: 'D.', reframe: 'E.', trajectory: 'F.', ...over,
+  });
+  const full = () => ({ areas: slice.map((c) => area({ category_id: c.id })) });
+
+  it('requires all six beat fields', () => {
+    expect(S6Schema.safeParse({ areas: [{ category_id: 'x', affirm: 'a', evidence: 'b', reframe: 'c' }] }).success)
+      .toBe(false);
+    expect(S6Schema.safeParse({ areas: [area()] }).success).toBe(true);
+  });
+
+  it('passes the gate on a well-formed six-beat payload covering the slice', () => {
+    expect(gateSection('s6', full(), capacityCtx)).toBeNull();
+  });
+
+  it('gate 1 rejects a blank in ANY of the three new fields, not just the old three', () => {
+    for (const field of ['pivot', 'not_statement', 'trajectory']) {
+      const payload = { areas: slice.map((c) => area({ category_id: c.id, [field]: '   ' })) };
+      expect(gateSection('s6', payload, capacityCtx), field).toBe('field parity');
+    }
+  });
+
+  it('gate 2 rejects an invented number in a new field, same as in an old one', () => {
+    const payload = { areas: slice.map((c) => area({ category_id: c.id, pivot: 'It sits 9999 points behind.' })) };
+    expect(gateSection('s6', payload, capacityCtx)).toBe('numeric containment');
+  });
+
+  it('gate 4 rejects a respondent label in a new field', () => {
+    const payload = { areas: slice.map((c) => area({ category_id: c.id, trajectory: 'Dana said growth is fine.' })) };
+    expect(gateSection('s6', payload, { ...capacityCtx, labels: ['Dana'] })).toBe('anonymity');
+  });
+
+  it('gate 1b still requires full slice coverage with the wider schema', () => {
+    const partial = { areas: [area({ category_id: slice[0]!.id })] };
+    expect(gateSection('s6', partial, capacityCtx)).toBe('category coverage');
   });
 });

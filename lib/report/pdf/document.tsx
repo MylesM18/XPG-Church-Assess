@@ -127,8 +127,11 @@ function S6View({ ai, fallback }: AiRendererProps) {
       {parsed.data.areas.map((area) => (
         <View key={area.category_id} style={s.block}>
           <Text style={s.body}>{area.affirm}</Text>
+          <Text style={s.body}>{area.pivot}</Text>
           <Text style={s.body}>{area.evidence}</Text>
+          <Text style={s.body}>{area.not_statement}</Text>
           <Text style={s.body}>{area.reframe}</Text>
+          <Text style={s.body}>{area.trajectory}</Text>
         </View>
       ))}
     </>

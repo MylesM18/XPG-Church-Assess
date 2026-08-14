@@ -156,37 +156,56 @@ const good = (id: AiSectionId): unknown => {
       // changes, both lists move together. The `conn` entry is kept verbatim because it is the
       // gate-proven one (its 70/100 are in-slice for gate 2); the other four are deliberately
       // digit-free so they cannot introduce a numeric-containment failure of their own.
+      // pivot/not_statement/trajectory are deliberately digit-free, same reasoning as the other
+      // four (below) — this mock predates Task 9's three new beats but must still clear gate 2
+      // (numeric containment, scoped to s6's own widened slice) with no new invented numbers, and
+      // clear the constraint archetype's banned_phrases list.
       return {
         areas: [
           {
             category_id: 'conn',
             affirm: 'Community / Connection has real strengths worth naming.',
+            pivot: 'It sits well behind the areas already carrying this church forward.',
             evidence: 'The connection pathway from guest to committed member is inconsistent.',
+            not_statement: 'This is not a sign people do not care — the path itself is not built yet.',
             reframe: 'Overall health still sits at 70 out of 100, so this is one fixable link, not a collapse.',
+            trajectory: 'Left as is, that gap will keep widening rather than closing.',
           },
           {
             category_id: 'sys',
             affirm: 'Systems work is further along here than most teams expect.',
+            pivot: 'It trails the strongest areas, but not by a wide margin.',
             evidence: 'Process lives with a few people rather than in anything written down.',
+            not_statement: 'This is not a motivation problem — the documentation has not caught up.',
             reframe: 'Read this as knowledge worth capturing, not as a failure to organise.',
+            trajectory: 'The current trend will not close that gap without a deliberate push.',
           },
           {
             category_id: 'vol',
             affirm: 'Volunteers are willing and turn up when they are asked.',
+            pivot: 'It sits behind the areas already carrying the most weight.',
             evidence: 'Recruitment leans on personal invitation from the same handful of leaders.',
+            not_statement: 'This is not a willingness problem — the invitation itself is too narrow.',
             reframe: 'The willingness is already there; what is missing is a repeatable path into it.',
+            trajectory: 'That reliance on a few leaders will not resolve on its own.',
           },
           {
             category_id: 'gen',
             affirm: 'Generosity is steady and quietly carries more than it is credited for.',
+            pivot: 'It falls short of the areas leading the rest of the chain.',
             evidence: 'Giving is concentrated among long-tenured members rather than broadly shared.',
+            not_statement: 'This is not a scarcity problem — the base of givers is simply narrow.',
             reframe: 'This is a breadth question, not a commitment question.',
+            trajectory: 'Without broadening that base, the concentration will only deepen.',
           },
           {
             category_id: 'comm',
             affirm: 'Communication reaches the people already close to the centre.',
+            pivot: 'It lags behind the areas already carrying real weight.',
             evidence: 'Announcements repeat across channels without a clear primary one.',
+            not_statement: 'This is not an effort problem — the channels simply compete with each other.',
             reframe: 'Treat this as a focus problem rather than an effort problem.',
+            trajectory: 'That channel sprawl will not resolve without a clear primary one.',
           },
         ],
       };

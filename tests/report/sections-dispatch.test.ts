@@ -95,7 +95,17 @@ const VALID_AI: Record<string, unknown> = {
   s2: { summary: 'AI summary text', what_this_is_not: 'AI not-this text', context_bullets: ['ctx one', 'ctx two'] },
   s4: { thesis_word: 'Alignment', narrative: 'AI s4 narrative' },
   s5: { strengths: [{ category_id: 'c1', heading: 'Strength head', body: 'Strength body' }] },
-  s6: { areas: [{ category_id: 'c2', affirm: 'affirm text', evidence: 'evidence text', reframe: 'reframe text' }] },
+  s6: {
+    areas: [{
+      category_id: 'c2',
+      affirm: 'affirm text',
+      pivot: 'pivot text',
+      evidence: 'evidence text',
+      not_statement: 'not statement text',
+      reframe: 'reframe text',
+      trajectory: 'trajectory text',
+    }],
+  },
   s7: { narrative: 'AI s7 narrative', pattern_claim: 'the pattern claim' },
   s9: { narrative: 'AI s9 narrative', working_model: 'the working model' },
   s12: { assessment: 'AI s12 assessment', overall_percent: 62, tier_name: 'Developing', primary_objective: 'the objective' },
@@ -119,7 +129,7 @@ describe('AI renderers', () => {
       s2: ['AI summary text', 'AI not-this text', 'ctx one', 'ctx two'],
       s4: ['Alignment', 'AI s4 narrative'],
       s5: ['Strength head', 'Strength body'],
-      s6: ['affirm text', 'evidence text', 'reframe text'],
+      s6: ['affirm text', 'pivot text', 'evidence text', 'not statement text', 'reframe text', 'trajectory text'],
       s7: ['AI s7 narrative', 'the pattern claim'],
       s9: ['AI s9 narrative', 'the working model'],
       s12: ['AI s12 assessment', '62', 'Developing', 'the objective'],
@@ -134,11 +144,13 @@ describe('AI renderers', () => {
     expect(missing).toEqual([])
   })
 
-  it('renders the three s6 beats in order: affirm, evidence, reframe', () => {
+  it('renders the six s6 beats in order: affirm, pivot, evidence, not_statement, reframe, trajectory', () => {
     const html = renderToStaticMarkup(
       createElement(ReportSections, { sections: [aiSection('s6', 'Areas', VALID_AI.s6)] }),
     )
-    const positions = ['affirm text', 'evidence text', 'reframe text'].map((t) => html.indexOf(t))
+    const positions = [
+      'affirm text', 'pivot text', 'evidence text', 'not statement text', 'reframe text', 'trajectory text',
+    ].map((t) => html.indexOf(t))
     // Strengthening beyond the brief: an indexOf-ordering assertion over needles that are ABSENT
     // degenerates to [-1, -1, -1], which is trivially "sorted" and would pass even if s6 never
     // rendered its AI content at all. Assert presence first so the order check below cannot pass

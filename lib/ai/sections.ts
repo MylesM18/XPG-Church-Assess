@@ -27,17 +27,27 @@ export const S4Schema = z.object({ thesis_word: z.string(), narrative: z.string(
 export const S5Schema = z.object({
   strengths: z.array(z.object({ category_id: z.string(), heading: z.string(), body: z.string() })),
 });
-// THREE beats, not six. report.yaml's s6 prose speaks of six micro-template beats, but only
-// affirm/evidence/reframe were ever given a concrete data source (see s6Bullet in
-// lib/report/fallback-sections.ts) — pivot, not_statement and trajectory have no lookup in the
-// facts pack or copy.yaml and were ruled aspirational. Every field here is required and
-// non-nullable under zodTextFormat's strict structured outputs, and gate 1 rejects any blank
-// among them, so listing a beat here COMPELS the model to invent text for it — text that then
-// counts against length_ceiling, numeric containment and banned phrases, each an extra chance to
-// lose the section to fallback. Do not re-add a beat here before it has a data source.
+// SIX beats, as report.yaml's s6 prose always described. This was three for as long as pivot,
+// not_statement and trajectory had no data source anywhere in the facts pack or copy.yaml:
+// every field here is required and non-nullable under zodTextFormat's strict structured outputs
+// and gate 1 rejects any blank among them, so listing a sourceless beat COMPELS the model to
+// invent text for it — text that then counts against length_ceiling, numeric containment and
+// banned phrases, each an extra chance to lose the section to fallback.
+//
+// All three now have deterministic sources (copy.beats.* plus, respectively, the facts.categories
+// ranking, this area's facts.bottom_items themes, and facts.profile.growth_trajectory — see
+// pivotBeat / notStatementBeat / trajectoryBeat in lib/report/fallback-sections.ts), and the
+// fallback draft the model rewords already carries all six. THE RULE IS UNCHANGED: do not add a
+// seventh beat here before it has a data source.
 export const S6Schema = z.object({
   areas: z.array(z.object({
-    category_id: z.string(), affirm: z.string(), evidence: z.string(), reframe: z.string(),
+    category_id: z.string(),
+    affirm: z.string(),
+    pivot: z.string(),
+    evidence: z.string(),
+    not_statement: z.string(),
+    reframe: z.string(),
+    trajectory: z.string(),
   })),
 });
 export const S7Schema = z.object({ narrative: z.string(), pattern_claim: z.string().nullable() });
@@ -91,7 +101,7 @@ export const SECTION_REGISTRY: Record<AiSectionId, SectionRegistryEntry> = {
   s2:  { schema: S2Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), cover: f.cover, profile: f.profile }) },
   s4:  { schema: S4Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories, gating: f.gating }) },
   s5:  { schema: S5Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories.slice(0, 3) }) },
-  s6:  { schema: S6Schema,  maxOutputTokens: 8000, slice: (f) => ({ ...head(f), categories: f.categories.slice(3), blind_spots: f.blind_spots, dispersion: f.dispersion }) },
+  s6:  { schema: S6Schema,  maxOutputTokens: 8000, slice: (f) => ({ ...head(f), categories: f.categories.slice(3), blind_spots: f.blind_spots, dispersion: f.dispersion, top_three: f.categories.slice(0, 3), bottom_items: f.bottom_items, growth_trajectory: f.profile.growth_trajectory ?? null }) },
   s7:  { schema: S7Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), bottom_items: f.bottom_items, pattern_counts: f.pattern_counts }) },
   s9:  { schema: S9Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), dependencies: f.dependencies, gating: f.gating, themes: themeDigest(f) }) },
   s12: { schema: S12Schema, maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories }) },
@@ -101,15 +111,6 @@ import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import type { Methodology } from '../methodology/schema';
 
-/**
- * One section call. NEVER throws — incomplete, unparseable and request failure all resolve to
- * null, and the caller renders that section's deterministic fallback.
- *
- * Every failure path logs `[report] section <id>: <reason>` so "AI is broken" stays
- * distinguishable from "AI is off", which logs nothing at all. Reasons only: never the payload,
- * the parsed output, section text, or the facts pack — the pack carries church-specific scores
- * and admin prose.
- */
 /** Warn-once latch. A 13-section report would otherwise emit the same line seven times. */
 let missingKeyWarned = false;
 
@@ -124,6 +125,15 @@ function warnIfKeyAbsent(): void {
   console.warn('[report] OPENAI_API_KEY absent — every AI section will fall back to the deterministic spine');
 }
 
+/**
+ * One section call. NEVER throws — incomplete, unparseable and request failure all resolve to
+ * null, and the caller renders that section's deterministic fallback.
+ *
+ * Every failure path logs `[report] section <id>: <reason>` so "AI is broken" stays
+ * distinguishable from "AI is off", which logs nothing at all. Reasons only: never the payload,
+ * the parsed output, section text, or the facts pack — the pack carries church-specific scores
+ * and admin prose.
+ */
 export async function composeSection(
   id: AiSectionId, facts: FactsPack, methodology: Methodology,
 ): Promise<unknown | null> {

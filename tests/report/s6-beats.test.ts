@@ -75,4 +75,16 @@ describe('s6 six-beat bullet', () => {
     expect(affirmIdx).toBeGreaterThanOrEqual(0);
     expect(trajectoryIdx).toBeGreaterThan(affirmIdx);
   });
+
+  // Task 9: doubling the beats per area (three -> six) roughly doubles s6's rendered length, and
+  // gate 6 rejects the whole section past report.yaml's s6.length_ceiling. The observed max across
+  // every fixture (high-dispersion, 2183 chars — verified by running this suite) sits well under
+  // the 6000 ceiling, so no ceiling change was needed for Task 9.
+  it('the six-beat fallback fits inside the s6 length ceiling on every fixture', () => {
+    const ceiling = methodology.report.sections.s6.length_ceiling;
+    for (const { name, facts } of ALL_FIXTURES) {
+      const joined = fallbackSection('s6', { facts, methodology, reflections: [] }).bullets.join(' ');
+      expect(joined.length, `${name} (ceiling ${ceiling})`).toBeLessThanOrEqual(ceiling);
+    }
+  });
 });
