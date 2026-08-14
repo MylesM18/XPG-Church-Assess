@@ -36,9 +36,20 @@ export const S5Schema = z.object({
 //
 // All three now have deterministic sources (copy.beats.* plus, respectively, the facts.categories
 // ranking, this area's facts.bottom_items themes, and facts.profile.growth_trajectory — see
-// pivotBeat / notStatementBeat / trajectoryBeat in lib/report/fallback-sections.ts), and the
-// fallback draft the model rewords already carries all six. THE RULE IS UNCHANGED: do not add a
-// seventh beat here before it has a data source.
+// pivotBeat / notStatementBeat / trajectoryBeat in lib/report/fallback-sections.ts) on the
+// FALLBACK path. composeSection (below) does not reword that fallback draft at all — it sends the
+// model exactly two messages: a system prompt built from methodology/report.yaml's style_spine
+// and per-archetype template, and a user message carrying only the facts slice
+// (SECTION_REGISTRY.s6.slice). No fallback draft is ever part of the AI request; the reword-a-draft
+// pipeline is a different, unrelated path in lib/ai/prose.ts.
+//
+// On this AI-path slice, two of the three newer sources are conditionally null: growth_trajectory
+// is forwarded as `f.profile.growth_trajectory ?? null`, and an area with no entry in the global
+// bottom-6 (facts.bottom_items) has no not-statement source to key off of — yet every S6Schema
+// field below, not_statement and trajectory included, is a required non-nullable z.string(). So
+// unlike the fallback path, an absent source here does NOT drop its beat: the model is compelled
+// to produce text for it regardless. THE RULE IS UNCHANGED: do not add a seventh beat here before
+// it has a data source.
 export const S6Schema = z.object({
   areas: z.array(z.object({
     category_id: z.string(),

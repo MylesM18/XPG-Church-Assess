@@ -40,7 +40,11 @@ describe('s8 theme path', () => {
   });
 
   it('takes the theme branch over the reflection branch when both are available', () => {
-    const reflections = [{ item_id: 'G1', reflection: 'A raw reflection nobody clustered.' }];
+    // G1 carries no `reflection:` field in methodology/questions.yaml, so buildOutreachVoices
+    // could never surface it regardless of branch order (see tests/report/anonymity.test.ts's
+    // identical note). G6 is a genuine reflection-prompted item — the only way this test can
+    // actually fail if the branch order in s8Bullets (lib/report/fallback-sections.ts) inverts.
+    const reflections = [{ item_id: 'G6', reflection: 'A raw reflection nobody clustered.' }];
     const bullets = fallbackSection('s8', { facts: THEMES_N3_FACTS, methodology, reflections }).bullets;
     expect(bullets.join(' ')).not.toContain('A raw reflection nobody clustered');
   });

@@ -197,6 +197,38 @@ describe('the re-homed fail-closed anonymity guard', () => {
     ).rejects.toThrow(/respondent/i)
   })
 
+  // Task 12 fix 3: section.charts (lib/report/charts.ts's ChartModel[]) reaches the PDF renderer
+  // too, and until now the guard's scan list (lib/report/pdf/render.ts) never walked it. Chart
+  // strings are always methodology-derived in production (category names, item text, theme keys,
+  // tier names) and never respondent-supplied — but this test proves the SCAN itself covers that
+  // shape, by forcing a label into a chart bar's name the way the guard would only ever see one if
+  // its own invariant were violated. Fails (silently — no throw, no rejection) if `...
+  // collectStrings(section.charts)` is ever removed from render.ts's texts array again.
+  it('throws when a respondent label appears inside a chart model', async () => {
+    const sections = fallbackSectionsFixture().map((s, i) =>
+      i === 0
+        ? {
+            ...s,
+            charts: [
+              {
+                kind: 'area_bars' as const,
+                bars: [
+                  { id: 'guest', name: 'Marcus mentioned parking', score: 50, band: 'watch' as const, x: 0, y: 0, w: 0, h: 0 },
+                ],
+                ticks: [],
+                labelWidth: 0,
+                w: 0,
+                h: 0,
+              },
+            ],
+          }
+        : s,
+    )
+    await expect(
+      (async () => renderReportDocument({ ...baseProps(), sections, labels: ['Marcus'] }))(),
+    ).rejects.toThrow(/respondent/i)
+  })
+
   it('does not throw when no label is present', async () => {
     const buffer = await renderReportDocument({ ...baseProps(), labels: ['Marcus'] })
     expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
