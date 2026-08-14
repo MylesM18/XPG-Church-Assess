@@ -1,0 +1,240 @@
+# Presentation layer for the 12-section executive report. Copy ONLY — the section registry
+# (Zod schemas, facts-slice selectors, token budgets, which sections are AI) lives in
+# lib/ai/sections.ts, because a compiler must check those. Natalie edits this file without a
+# code change; a section cannot be declared AI here with no schema there.
+#
+# This version feeds the report cache key (lib/report/report-hash.ts): bumping it regenerates
+# every report without staling any run.
+version: "0.1.0"
+
+style_spine: >-
+  Write for a lead pastor reading a consultant's report. Plain words, warm but precise. No
+  em-dashes. No churchy clichés. Sentence case. Active voice. Name things the way a church
+  leader would. Never invent a number, a category, or a finding. If a fact is absent from the
+  facts you were given, do not supply it. Return only the JSON.
+
+sections:
+  s1:
+    title: "Church Health Assessment"
+    templates:
+      capacity: "{church_name} — assessed {completed_at}, {respondent_count} respondents."
+      constraint: "{church_name} — assessed {completed_at}, {respondent_count} respondents."
+      foundation: "{church_name} — assessed {completed_at}, {respondent_count} respondents."
+    length_ceiling: 200
+    required_mentions: []
+
+  s2:
+    title: "Executive summary"
+    templates:
+      capacity: >-
+        Overall health sits at {overall_percent} out of 100, which places {church_name} in the
+        {tier_name} band. Nothing in the chain is broken. The question in front of you is
+        capacity, not repair.
+      constraint: >-
+        Overall health sits at {overall_percent} out of 100, which places {church_name} in the
+        {tier_name} band. One stage is holding the rest back: {primary_name}. Everything
+        downstream will read weak until that is addressed.
+      foundation: >-
+        Overall health sits at {overall_percent} out of 100, which places {church_name} in the
+        {tier_name} band. No stage is broken, but the ground underneath is not ready to carry
+        what is built on it.
+    length_ceiling: 1400
+    required_mentions: [tier_name]
+
+  s3:
+    title: "Health dashboard"
+    templates:
+      capacity: "Eight areas, strongest first. Overall {overall_percent} out of 100 — {tier_name}."
+      constraint: "Eight areas, strongest first. Overall {overall_percent} out of 100 — {tier_name}."
+      foundation: "Eight areas, strongest first. Overall {overall_percent} out of 100 — {tier_name}."
+    length_ceiling: 300
+    required_mentions: [tier_name, overall_percent]
+
+  s4:
+    title: "What the assessment revealed"
+    templates:
+      capacity: "Capacity. Every stage is working; what you have is a growth question."
+      constraint: "{primary_name}. It scored {primary_score} out of 100, below the point where a stage is working."
+      foundation: "Foundation. The stages hold, but the enablers underneath them do not yet."
+    length_ceiling: 1200
+    required_mentions: []
+
+  s5:
+    title: "Organizational strengths"
+    templates:
+      capacity: "Three areas are carrying real weight. Name them before you change anything."
+      constraint: "Three areas are carrying real weight. They are what you build the repair on."
+      foundation: "Three areas are carrying real weight. They are not the problem."
+    length_ceiling: 2200
+    required_mentions: []
+
+  s6:
+    title: "Areas requiring investment"
+    templates:
+      capacity: "Each area below is working but has room. Affirm, then pivot to what is missing."
+      constraint: "Each area below sits downstream of {primary_name} or alongside it. Read them in that light."
+      foundation: "Each area below rests on ground that is not ready. Read them in that light."
+    length_ceiling: 6000
+    required_mentions: []
+
+  s7:
+    title: "Lowest scoring indicators"
+    templates:
+      capacity: "The six lowest indicators, and what they have in common."
+      constraint: "The six lowest indicators, and what they have in common."
+      foundation: "The six lowest indicators, and what they have in common."
+    length_ceiling: 1200
+    required_mentions: []
+
+  s8:
+    title: "What leaders are saying"
+    templates:
+      capacity: "Themes that recurred across the written reflections."
+      constraint: "Themes that recurred across the written reflections."
+      foundation: "Themes that recurred across the written reflections."
+    length_ceiling: 400
+    required_mentions: []
+
+  s9:
+    title: "Strategic diagnosis"
+    templates:
+      capacity: >-
+        Nothing is capping you. The working model below shows which areas compound into which,
+        so growth investment lands where it multiplies.
+      constraint: >-
+        {primary_name} is the constraint. The working model below shows what it caps, and why
+        spending downstream of it raises numbers once and changes nothing.
+      foundation: >-
+        The enablers below gate the stages above them. Until they hold, work on the stages will
+        not stick.
+    length_ceiling: 2000
+    required_mentions: [primary_name]
+
+  s10:
+    title: "30/60/90 roadmap"
+    templates:
+      capacity: "Ninety days, three phases: align, build, scale."
+      constraint: "Ninety days, three phases: align, build, scale. Everything points at {primary_name}."
+      foundation: "Ninety days, three phases: align, build, scale. The enablers go first."
+    length_ceiling: 2400
+    required_mentions: []
+
+  s11:
+    title: "Where XPG can partner"
+    templates:
+      capacity: "Each phase above has a matching engagement."
+      constraint: "Each phase above has a matching engagement."
+      foundation: "Each phase above has a matching engagement."
+    length_ceiling: 1200
+    required_mentions: []
+
+  s12:
+    title: "Final executive assessment"
+    templates:
+      capacity: >-
+        {church_name} is at {overall_percent} out of 100, in the {tier_name} band, with no broken
+        stage. The objective for the next ninety days is capacity, not repair.
+      constraint: >-
+        {church_name} is at {overall_percent} out of 100, in the {tier_name} band. The objective
+        for the next ninety days is {primary_name}.
+      foundation: >-
+        {church_name} is at {overall_percent} out of 100, in the {tier_name} band. The objective
+        for the next ninety days is the ground underneath.
+    length_ceiling: 900
+    required_mentions: [tier_name, overall_percent]
+
+  appendix:
+    title: "Methodology and caveats"
+    templates:
+      capacity: "How these numbers were produced, and what they do and do not claim."
+      constraint: "How these numbers were produced, and what they do and do not claim."
+      foundation: "How these numbers were produced, and what they do and do not claim."
+    length_ceiling: 1200
+    required_mentions: []
+
+# Gate family 3. Each list captures the OTHER archetypes' thesis FRAMINGS — multi-word phrases,
+# never single generic words and never stage names, which are shared vocabulary and would
+# false-positive on every report. Matched case-insensitively as substrings.
+banned_phrases:
+  capacity:
+    - "your primary constraint"
+    - "is the constraint"
+    - "capping everything downstream"
+    - "before this can hold"
+  constraint:
+    - "healthy and ready to grow"
+    - "nothing in your chain is broken"
+    - "this is a capacity conversation"
+    - "every stage is strong"
+  foundation:
+    - "healthy and ready to grow"
+    - "your primary constraint"
+    - "is the constraint"
+    - "this is a capacity conversation"
+
+# S10/S11 are fully deterministic in v1 (P4). Selection is keyed by archetype, primary
+# constraint, gated enablers and bottom items; the text is used verbatim.
+#
+# Category keys match methodology/questions.yaml's category ids exactly (guest, conn, disc,
+# vol, gen, gov, comm, sys) — verified against tests/methodology/report-yaml.test.ts's
+# "covers every category and enabler" coverage check.
+action_library:
+  categories:
+    guest:
+      align: "Agree on one definition of a first-time guest and count them the same way every week."
+      build: "Assign a named owner to first-contact follow-up within 48 hours."
+      scale: "Review the follow-up log monthly and staff to the volume you actually see."
+    conn:
+      align: "Name the point at which someone stops being a guest and starts belonging."
+      build: "Build one repeatable path from second visit to a group, and walk ten people down it."
+      scale: "Track that path's completion rate and staff the step that leaks most."
+    disc:
+      align: "Agree what spiritual growth looks like here, in language your people would use."
+      build: "Give every group leader one shared next step to point people toward."
+      scale: "Measure movement along that step, not attendance at the meeting."
+    vol:
+      align: "List every volunteer role and who owns it. Delete the ones nobody owns."
+      build: "Create one on-ramp conversation for new volunteers and run it monthly."
+      scale: "Set a ratio of volunteers to attenders and staff recruitment to hold it."
+    gen:
+      align: "Agree what generosity means here beyond the budget line, and who speaks for it."
+      build: "Give one person ownership of the giving journey from first gift to second."
+      scale: "Track giving participation as a rate, not a total, and review it quarterly."
+    gov:
+      align: "Write down who decides what. Circulate it to staff and board."
+      build: "Set a standing decision rhythm and hold it for a quarter."
+      scale: "Review the decision log annually against the written authority map."
+    comm:
+      align: "Agree the one message every channel is carrying this season."
+      build: "Cut your channels to the ones you can maintain weekly."
+      scale: "Test whether people can repeat the message back, and adjust."
+    sys:
+      align: "List the systems you depend on and who administers each."
+      build: "Fix the one system whose failure would stop a weekend."
+      scale: "Document the two processes that only live in one person's head."
+  enablers:
+    gov:
+      align: "Clarify decision rights before adding any new initiative."
+      build: "Put the authority map in front of the board and get it ratified."
+      scale: "Audit decisions made outside the map each quarter."
+    comm:
+      align: "Pick one message and retire the competing ones."
+      build: "Build a weekly rhythm you can actually sustain."
+      scale: "Measure message recall, not reach."
+    sys:
+      align: "Name an owner for every system you rely on."
+      build: "Close the single point of failure you would feel first."
+      scale: "Document and cross-train the two riskiest processes."
+  generosity:
+    breadth:
+      align: "Name giving as discipleship from the platform once this quarter."
+      build: "Make first-time giving frictionless and acknowledged within a week."
+      scale: "Grow the number of households who give at all, not the size of the top gifts."
+    depth:
+      align: "Thank your consistent givers personally and specifically."
+      build: "Show one clear line from a gift to an outcome, every month."
+      scale: "Invite your most committed givers into a next step, not a bigger ask."
+    both:
+      align: "Say plainly what money does here, and how decisions about it are made."
+      build: "Fix the giving experience end to end before you ask for more."
+      scale: "Grow participation first, then depth, and report on both."

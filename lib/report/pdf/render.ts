@@ -1,32 +1,56 @@
 import { createElement, type ReactElement } from 'react';
 import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer';
+import { containsRespondentLabel } from '../anonymity';
 import { ReportDocument, type ReportDocumentProps } from './document';
 
 /**
- * Renders the report PDF to a Buffer. The single home for the type cast this
- * requires: renderToBuffer expects a ReactElement<DocumentProps> — i.e. a
- * literal <Document>. ReportDocument is a wrapper component that renders one,
- * so the element shape at runtime is correct but the prop types
- * (ReportDocumentProps vs DocumentProps) don't structurally overlap, and no
- * single `as` bridges them. Both the production route and the test suite
- * call this instead of `renderToBuffer` directly, so the cast lives in
- * exactly one place.
+ * Every string reachable inside an untyped AI payload. `ai` is `unknown` — a reports row outlives
+ * the code that wrote it — so the guard cannot enumerate fields per section id without going
+ * silently blind the moment a schema gains one. Walking the value finds them all.
+ */
+function collectStrings(value: unknown, out: string[] = []): string[] {
+  if (typeof value === 'string') out.push(value);
+  else if (Array.isArray(value)) for (const v of value) collectStrings(v, out);
+  else if (value && typeof value === 'object') for (const v of Object.values(value)) collectStrings(v, out);
+  return out;
+}
+
+/**
+ * Renders the report PDF to a Buffer. The single home for the type cast this requires:
+ * renderToBuffer expects a ReactElement<DocumentProps> — i.e. a literal <Document>.
+ * ReportDocument is a wrapper component that renders one, so the element shape at runtime is
+ * correct but the prop types (ReportDocumentProps vs DocumentProps) don't structurally overlap,
+ * and no single `as` bridges them. Both the production route and the test suite call this instead
+ * of renderToBuffer directly, so the cast lives in exactly one place.
  */
 export function renderReportDocument(props: ReportDocumentProps): Promise<Buffer> {
   // Fail-closed invariant: this function must never print respondent names.
-  // view.ts alone decides what gets stripped for the 'pdf' audience — this
-  // only asserts that decision was actually applied to whatever view we were
-  // handed, so a stray caller or a typo'd audience literal can't ship names
-  // past the permission wall.
   //
-  // Two independent fields carry the same names today (lib/report/view.ts: `dispersion` at
-  // :54, `system.disagreement` at :40), stripped by two independent sites (:256-257 and
-  // :320-326) — legacy and current source-of-truth respectively (Task 16). document.tsx
-  // renders from `system.disagreement`, not `dispersion`; checking only `dispersion` here would
-  // let this guard silently stop watching the field the renderer actually reads the moment the
-  // two fields' strip logic ever diverges, or `dispersion` is retired. Check both.
-  if (props.view.dispersion?.respondents.length || props.view.system?.disagreement?.respondents.length) {
-    throw new Error('renderReportDocument: view carries respondent names; expected audience "pdf"');
+  // Re-homed from the old ReportView model (plan 5 phase 2). The previous version asserted on
+  // `view.dispersion.respondents` and `view.system.disagreement.respondents`; both fields died
+  // with ReportView. The contract is unchanged in spirit: whatever reaches the PDF renderer
+  // carries no respondent label.
+  //
+  // ⚠️ `props.labels` MUST be the same value the resolver was handed as `labelSource` — one
+  // knownLabels(responses) call per request, threaded through. A guard checking a DIFFERENT label
+  // list than the one the facts pack was built from is a guard that fails open.
+  //
+  // Checks fallback body/bullets and every string inside the AI payload. Deliberately NOT
+  // fallback.title: titles come from report.yaml, never from respondent data, and a label that
+  // happens to be a common word would 500 every export.
+  //
+  // Reuses containsRespondentLabel (../anonymity) rather than a second matcher — it is
+  // case-insensitive and skips empty needles, so an empty label list is a no-op.
+  for (const section of props.sections) {
+    const texts = [section.fallback.body, ...section.fallback.bullets, ...collectStrings(section.ai)];
+    for (const text of texts) {
+      if (containsRespondentLabel(text, props.labels)) {
+        // Reason only — never the offending text, the section, or the label.
+        throw new Error(
+          `renderReportDocument: section ${section.id} carries a respondent label; refusing to render`,
+        );
+      }
+    }
   }
 
   const element = createElement(ReportDocument, props) as unknown as ReactElement<DocumentProps>;

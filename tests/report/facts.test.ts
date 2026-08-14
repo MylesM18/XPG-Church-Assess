@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { loadMethodology } from '../../lib/methodology/load';
 import type { Diagnosis, DiagnosisCategory, Response } from '../../lib/engine/types';
-import { buildFacts, type ChurchFacts } from '../../lib/report/facts';
+import { buildFacts, type BuildFactsArgs, type ChurchFacts } from '../../lib/report/facts';
+import { knownLabels } from '../../lib/report/anonymity';
 
 const methodology = loadMethodology();
 const CAT_IDS = ['guest', 'conn', 'disc', 'vol', 'gen', 'gov', 'comm', 'sys'] as const;
@@ -72,27 +73,29 @@ function resp(item_id: string, category_id: string, value: number, who: string):
   return { category_id, item_id, value, respondent_label: who, respondent_id: who };
 }
 
-// denomination + growth_trajectory deliberately avoid the letters a/b/c: RESPONSES below
-// labels its respondents 'a' / 'b' / 'c', and Task 3's profile anonymity guard treats any
-// of those as a substring match. 'Non-denominational' and 'plateaued' both contain 'a', so
-// once the guard is live it drops them from every profile fixture in this file for a reason
-// unrelated to what this describe block is testing (null-field omission). RESPONSES itself
-// can't change here — the new anonymity-guard tests below key their NAMES map off the exact
-// strings 'a'/'b'/'c'.
+// All 12 profile columns are populated (not left null) so that a guard test asserting
+// omission — e.g. "every free-text field disappears when the label source is redacted" —
+// is proof the guard did the dropping, not a vacuous check against a field that was already
+// absent. RESPONSES below labels its respondents 'a' / 'b' / 'c', which is why baseArgs'
+// default labelSource (below) is an EMPTY known list rather than one derived from RESPONSES:
+// a single-character label is a substring of nearly any word, so deriving from RESPONSES
+// would make ordinary prose fields vanish for a reason unrelated to whatever a given test is
+// checking. Tests that mean to exercise the guard build their own labelSource — see
+// `profileOf` below and the `LabelSource controls the profile guard` describe block.
 const CHURCH: ChurchFacts = {
   name: 'Grace Chapel',
   denomination: 'Independent',
-  context: null,
+  context: 'suburban',
   attendance_band: '250_499',
-  adults_band: null,
-  staff_fte_band: null,
-  budget_band: null,
-  church_age_band: null,
-  growth_trajectory: 'holding',
-  campuses_band: null,
+  adults_band: '310',
+  staff_fte_band: '4.5',
+  budget_band: '$750k',
+  church_age_band: '42 years',
+  growth_trajectory: 'plateaued',
+  campuses_band: '2',
   facility_status: 'owned',
-  leadership_history: null,
-  consultant_notes: null,
+  leadership_history: 'Senior pastor since 2014; associate pastor hired in 2021.',
+  consultant_notes: 'No major changes since the last assessment.',
 };
 
 // G1 mean 2.5 → 25; G2 mean 3 → 30; C1 mean 3 → 30 (ties with G2, C1 < G2 lexicographically);
@@ -107,13 +110,17 @@ const RESPONSES: Response[] = [
   resp('V2', 'vol', 8, 'c'), resp('V2', 'vol', 9, 'a'),
 ];
 
-const facts = buildFacts({
+const baseArgs: BuildFactsArgs = {
   diagnosis: makeDiagnosis(),
   methodology,
   responses: RESPONSES,
   church: CHURCH,
   completedAt: '2026-08-10T00:00:00Z',
-});
+  // Empty on purpose — see the comment above CHURCH.
+  labelSource: { kind: 'known', labels: [] },
+};
+
+const facts = buildFacts(baseArgs);
 
 describe('buildFacts — cover + overall', () => {
   it('counts DISTINCT respondents and carries church name + completion time', () => {
@@ -212,25 +219,31 @@ describe('buildFacts — dossier absorptions', () => {
 
 describe('buildFacts — profile subset (locked decision 6: omit gracefully)', () => {
   it('keeps only non-null fields, name excluded (it lives on cover)', () => {
-    expect(facts.profile).toEqual({
-      denomination: 'Independent',
-      attendance_band: '250_499',
-      growth_trajectory: 'holding',
-      facility_status: 'owned',
+    // CHURCH has all 12 columns populated (see the comment above it), so nulling two here —
+    // one free-text, one closed-vocab — is what actually exercises "omit gracefully" rather
+    // than trivially observing fields that were never set.
+    const pack = buildFacts({
+      ...baseArgs,
+      church: { ...baseArgs.church, adults_band: null, context: null },
     });
+    expect(pack.profile.adults_band).toBeUndefined();
+    expect(pack.profile.context).toBeUndefined();
+    expect(pack.profile.denomination).toBe('Independent');
+    expect(pack.profile.attendance_band).toBe('250_499');
+    expect(pack.profile.growth_trajectory).toBe('plateaued');
+    expect(pack.profile.facility_status).toBe('owned');
+    expect(pack.profile.name).toBeUndefined(); // name lives on cover, never in profile
   });
 });
 
 describe('buildFacts — gating + themes defaults', () => {
   it('foundation-shaped diagnosis surfaces gating with enabler names and scores', () => {
     const f = buildFacts({
+      ...baseArgs,
       diagnosis: makeDiagnosis({
         primary_constraint: null,
         gating_conditions: [{ enabler_id: 'gov', note: 'Governance gates all stages' }],
       }),
-      methodology,
-      responses: RESPONSES,
-      church: CHURCH,
       completedAt: null,
     });
     expect(f.archetype).toBe('foundation');
@@ -273,11 +286,11 @@ describe('buildFacts — profile anonymity guard', () => {
 
   const profileOf = (church: Partial<ChurchFacts>, responses: Response[] = NAMED) =>
     buildFacts({
-      diagnosis: makeDiagnosis(),
-      methodology,
+      ...baseArgs,
       responses,
       church: { ...CHURCH, ...church },
       completedAt: null,
+      labelSource: knownLabels(responses),
     }).profile;
 
   it('keeps a profile field that names nobody', () => {
@@ -313,5 +326,39 @@ describe('buildFacts — profile anonymity guard', () => {
     expect(
       profileOf({ consultant_notes: 'Two campuses merged last year.' }, UNLABELLED).consultant_notes,
     ).toBe('Two campuses merged last year.');
+  });
+});
+
+const FREE_TEXT_KEYS = [
+  'denomination', 'adults_band', 'staff_fte_band', 'budget_band',
+  'church_age_band', 'campuses_band', 'leadership_history', 'consultant_notes',
+] as const;
+const CLOSED_VOCAB_KEYS = ['context', 'attendance_band', 'growth_trajectory', 'facility_status'] as const;
+
+describe('LabelSource controls the profile guard', () => {
+  it('omits every free-text profile field and keeps the four closed-vocabulary ones when redacted', () => {
+    const pack = buildFacts({ ...baseArgs, labelSource: { kind: 'redacted' } });
+    for (const k of FREE_TEXT_KEYS) expect(pack.profile[k]).toBeUndefined();
+    for (const k of CLOSED_VOCAB_KEYS) expect(pack.profile[k]).toBeDefined();
+  });
+
+  it('keeps the closed-vocabulary fields when a respondent label collides with an option value', () => {
+    // Today a respondent named 'Li' silently costs growth_trajectory: 'declining'.
+    const pack = buildFacts({
+      ...baseArgs,
+      church: { ...baseArgs.church, growth_trajectory: 'declining', facility_status: 'owned' },
+      labelSource: { kind: 'known', labels: ['Li', 'Ow'] },
+    });
+    expect(pack.profile.growth_trajectory).toBe('declining');
+    expect(pack.profile.facility_status).toBe('owned');
+  });
+
+  it('still drops a free-text field that contains a respondent label', () => {
+    const pack = buildFacts({
+      ...baseArgs,
+      church: { ...baseArgs.church, consultant_notes: 'Priscilla Vandermeer raised this in April.' },
+      labelSource: { kind: 'known', labels: ['Priscilla Vandermeer'] },
+    });
+    expect(pack.profile.consultant_notes).toBeUndefined();
   });
 });

@@ -7,6 +7,7 @@ import {
   BenchmarksSchema,
   OffersSchema,
   CopySchema,
+  ReportSchema,
   type Methodology,
 } from './schema';
 
@@ -38,5 +39,6 @@ export function loadMethodology(dir: string = DEFAULT_DIR): Methodology {
     benchmarks: parse(BenchmarksSchema, 'benchmarks.yaml'),
     offers: parse(OffersSchema, 'offers.yaml'),
     copy: parse(CopySchema, 'copy.yaml'),
+    report: parse(ReportSchema, 'report.yaml'),
   };
 }

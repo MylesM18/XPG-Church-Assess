@@ -104,7 +104,7 @@ type ReadingBand = 'severe' | 'broken' | 'watch' | 'holding';
  * that single state into the finer severe/broken bands the copy needs. 'watch'
  * and 'ok' pass straight through to 'watch'/'holding'.
  */
-function readingBand(state: DiagnosisCategory['state'], score: number, severeThreshold: number): ReadingBand {
+export function readingBand(state: DiagnosisCategory['state'], score: number, severeThreshold: number): ReadingBand {
   if (state === 'broken' || state === 'gate') return score < severeThreshold ? 'severe' : 'broken';
   if (state === 'watch') return 'watch';
   return 'holding';
@@ -241,7 +241,7 @@ function buildCover(d: Diagnosis, methodology: Methodology): CoverView {
  * with a PLAIN lexicographic compare — never localeCompare, which is locale- and
  * ICU-version-dependent and would make report output non-deterministic across machines.
  */
-function buildOutreachVoices(
+export function buildOutreachVoices(
   methodology: Methodology,
   reflections: Array<{ item_id: string; reflection: string | null }>,
 ): Map<string, OutreachVoicesGroup[]> {
@@ -457,6 +457,32 @@ export type ReportViewResolution =
   | { scoreable: true; view: ReportView };
 
 /**
+ * The scoreability gate, without building a view (D-P4-6).
+ *
+ * resolveReportView's not-scoreable arm depends on `derived` alone — methodology, blocks
+ * and opts are used only to build the view on the success arm. After plan 4 the two web
+ * pages need the gate but not the legacy view, and calling resolveReportView purely to
+ * read a boolean would build an entire unused ReportView on every request.
+ *
+ * The success arm carries `diagnosis` so callers narrow at the guard rather than needing
+ * a second, dead `if (!derived.ok)` check.
+ */
+export type ScoreabilityResolution =
+  | Extract<ReportViewResolution, { scoreable: false }>
+  | { scoreable: true; diagnosis: Diagnosis };
+
+export function resolveScoreability(derived: DeriveResult): ScoreabilityResolution {
+  if (!derived.ok) {
+    return {
+      scoreable: false,
+      reason: derived.reason,
+      blockedAreas: derived.reason === 'incomplete_areas' ? derived.blockedAreas : [],
+    };
+  }
+  return { scoreable: true, diagnosis: derived.diagnosis };
+}
+
+/**
  * The one place all three report surfaces (the authenticated diagnosis page, the public share
  * page, and the PDF route) turn a freshly RE-DERIVED Diagnosis into a renderable view — or, when
  * the run cannot be scored under the current methodology, into a graceful not-scoreable state
@@ -476,6 +502,10 @@ export type ReportViewResolution =
  * thunk). tests/report/route-call-ordering.test.ts pins that every call site keeps this thunk
  * lazy; a caller resolving it eagerly, before this function, would reintroduce the CT-1 defect
  * this shape exists to make structurally impossible.
+ *
+ * Now delegates to resolveScoreability (D-P4-6) for the gate itself, so the two web pages that
+ * only need the gate (not this legacy view) and this function's own view-building callers can
+ * never disagree on what counts as scoreable.
  */
 export function resolveReportView(
   derived: DeriveResult,
@@ -486,15 +516,10 @@ export function resolveReportView(
     reflections?: Array<{ item_id: string; reflection: string | null }>;
   },
 ): ReportViewResolution {
-  if (!derived.ok) {
-    return {
-      scoreable: false,
-      reason: derived.reason,
-      blockedAreas: derived.reason === 'incomplete_areas' ? derived.blockedAreas : [],
-    };
-  }
+  const resolution = resolveScoreability(derived);
+  if (!resolution.scoreable) return resolution;
   return {
     scoreable: true,
-    view: buildReportView(derived.diagnosis, blocks(derived.diagnosis), methodology, opts),
+    view: buildReportView(resolution.diagnosis, blocks(resolution.diagnosis), methodology, opts),
   };
 }

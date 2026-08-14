@@ -4,17 +4,29 @@ import { describe, expect, it } from 'vitest';
 const stripTs = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*$/gm, '');
 
 /**
- * The clustering task (plan 2) and its gate are the ONLY files under lib/ai/** allowed to
- * touch reflection text or verbatims. Everything else in the tree is still forbidden from
- * both, and that half of the rule is what keeps this test non-vacuous: it constrains every
- * file that exists today, and it fires the moment plan 3's lib/ai/sections.ts lands with a
- * reference to either concept.
+ * The clustering task (plan 2) and its gate, plus the section composer (plan 3) and its gate,
+ * are the ONLY files under lib/ai/** allowed to touch reflection text or verbatims. Everything
+ * else in the tree is still forbidden from both, and that half of the rule is what keeps this
+ * test non-vacuous: it constrains every file that exists today.
  *
  * `verbatim` is guarded alongside `reflection` on purpose. A section composer could pull
  * theme verbatims out of the facts pack without ever writing the word "reflection" — spec
  * line 72 routes verbatims facts -> S8 renderer exclusively, never into a composer input.
  */
-const ALLOWED = ['themes.ts', 'theme-gates.ts'];
+// Basenames, NOT lib/ai-prefixed paths: readdirSync('lib/ai', {recursive:true}) yields entries
+// relative to lib/ai. That relativity is the point — a nested `sub/sections.ts` yields
+// 'sub/sections.ts' and cannot inherit the exemption from a bare 'sections.ts'.
+//
+// sections.ts and section-gates.ts join the list per the plan-3 addendum §3. Their inputs are
+// the facts pack only, and the facts-slice selectors PICK {label, gloss, support_count,
+// item_ids} rather than omitting verbatims — so neither file names the guarded concepts today.
+// The exemption therefore removes a guard without either file using it, and it does not gain a
+// replacement guard of its own yet — that arrives with sections.ts and section-gates.ts in
+// Task 6/7. What the positive assertions at the foot of this file already pin, narrower than
+// that, is that themes.ts serializes the indexed projection rather than the raw rows, that its
+// model-input block names no respondent field, and that theme-gates.ts itself never talks to
+// the model.
+const ALLOWED = ['themes.ts', 'theme-gates.ts', 'sections.ts', 'section-gates.ts'];
 
 const files = readdirSync('lib/ai', { recursive: true, encoding: 'utf8' })
   .filter((f) => f.endsWith('.ts') || f.endsWith('.tsx'));
@@ -29,7 +41,7 @@ describe('reflections and verbatims reach only the clustering task and its gate'
   it('the allowlist names only the clustering task and its gate', () => {
     // Pinned by value, not by length: widening the boundary must be a deliberate edit to
     // this line, visible in review, rather than a quiet append somewhere else in the file.
-    expect(ALLOWED).toEqual(['themes.ts', 'theme-gates.ts']);
+    expect(ALLOWED).toEqual(['themes.ts', 'theme-gates.ts', 'sections.ts', 'section-gates.ts']);
   });
 
   it('there is at least one guarded file left to check', () => {
@@ -60,38 +72,53 @@ describe('reflections and verbatims reach only the clustering task and its gate'
 const actionsSource = stripTs(readFileSync('app/app/[churchId]/actions.ts', 'utf8'));
 
 /**
- * Captures the object-literal body of `(raw ?? []).map((r: RunResponseRow) => ({ ... }))`.
- * Anchored on the map's parameter type so the RunResponseRow interface's own, legitimate
- * `reflection: string | null` field declaration (elsewhere in this file) cannot satisfy or
- * break this match — only the destination object literal actually built from `r` is inspected.
+ * Captures the object-literal body of EVERY `(raw ?? []).map((r: RunResponseRow) => ({ ... }))`
+ * call site. Anchored on the map's parameter type so the RunResponseRow interface's own,
+ * legitimate `reflection: string | null` field declaration (elsewhere in this file) cannot
+ * satisfy or break this match — only the destination object literals actually built from `r`
+ * are inspected.
+ *
+ * Global on purpose (Task 7, D-P5-4): actions.ts now has TWO such call sites — generateDiagnosis's
+ * original map and regenerateReport's own — and a non-global `re.exec` inspects only the first
+ * match it finds. That would silently stop covering regenerateReport's mapping the moment it was
+ * added, with nothing here to notice: the guard would still report green while checking only
+ * half the file.
  */
-function mapBody(source: string): string | null {
-  const re = /\.map\(\(r:\s*RunResponseRow\)\s*=>\s*\(\{([\s\S]*?)\}\)\)/;
-  const match = re.exec(source);
-  return match ? match[1]! : null;
+function mapBodies(source: string): string[] {
+  const re = /\.map\(\(r:\s*RunResponseRow\)\s*=>\s*\(\{([\s\S]*?)\}\)\)/g;
+  return [...source.matchAll(re)].map((match) => match[1]!);
 }
 
 describe('the raw-row to Response[] mapping stays an explicit allowlist that drops reflection', () => {
-  it('the map body is found', () => {
+  const bodies = mapBodies(actionsSource);
+
+  it('finds exactly two map bodies — generateDiagnosis and regenerateReport', () => {
+    // Occurrence-count equality, not a presence check: a presence check is satisfied by either
+    // call site alone and would not notice the other one going unchecked.
     expect(
-      mapBody(actionsSource),
-      'expected (raw ?? []).map((r: RunResponseRow) => ({ ... })) in app/app/[churchId]/actions.ts',
-    ).not.toBeNull();
+      bodies.length,
+      'expected two (raw ?? []).map((r: RunResponseRow) => ({ ... })) call sites in app/app/[churchId]/actions.ts',
+    ).toBe(2);
   });
 
-  it('the mapping does not spread the raw row', () => {
+  it('none of the mappings spread the raw row', () => {
     // A spread (...r) would silently carry r.reflection into Response[], and from there into
     // the Diagnosis object generateProse JSON.stringifies whole — the explicit field-by-field
     // allowlist is the only thing preventing that today. This is the "enrich the prompt with
     // member quotes" edit the whole file exists to catch, in its least conspicuous form: no
-    // occurrence of the word "reflection" anywhere near the change.
-    expect(mapBody(actionsSource)).not.toMatch(/\.\.\.\s*r\b/);
+    // occurrence of the word "reflection" anywhere near the change. Checked over EVERY body so a
+    // leak introduced in either call site fails this test, not just the first one found.
+    for (const body of bodies) {
+      expect(body).not.toMatch(/\.\.\.\s*r\b/);
+    }
   });
 
-  it('the mapping does not reference reflection', () => {
-    // Independent of the spread check: catches an explicit `reflection: r.reflection` key
-    // added to the allowlist, which a spread-only check would not.
-    expect(mapBody(actionsSource)).not.toContain('reflection');
+  it('none of the mappings reference reflection', () => {
+    // Independent of the spread check: catches an explicit `reflection: r.reflection` key added
+    // to either allowlist, which a spread-only check would not. Checked over EVERY body.
+    for (const body of bodies) {
+      expect(body).not.toContain('reflection');
+    }
   });
 });
 
@@ -144,5 +171,54 @@ describe('the clustering task transmits the projection, not the rows', () => {
     // verbatims. It must never transmit it: exactly one file in this tree calls the API.
     expect(gatesSrc.toLowerCase()).not.toContain('openai');
     expect(gatesSrc).not.toContain('responses.parse');
+  });
+});
+
+/**
+ * Task 6's positive half: what the ALLOWED exemption for sections.ts (already granted at Task
+ * 4, before this file existed) is traded for. Source-text assertions rather than behavioural
+ * ones, same rationale as the clustering block above — a reviewer reading a diff needs a
+ * tripwire on the SHAPE of an edit (a `...facts` spread, a raw `JSON.stringify(facts` call),
+ * not only on its runtime effect, which tests/ai/sections.test.ts already covers.
+ *
+ * lib/ai/section-gates.ts does not exist yet (Task 7 creates it) — its own positive block
+ * (`describe('the gates never talk to the model', ...)`) is deferred there on purpose: a
+ * describe-scope readFileSync on a missing file would crash this whole suite.
+ */
+describe('the section composer sees the facts pack and nothing quoted', () => {
+  const src = stripTs(readFileSync('lib/ai/sections.ts', 'utf8'));
+
+  it('builds every slice by picking fields, never by omitting them', () => {
+    // An omit-list silently widens the moment a field is added to FactsPack — and one of those
+    // fields is the theme structure that carries quoted text. Picking cannot leak forward.
+    expect(src).not.toMatch(/\.\.\.\s*facts\b/);
+    expect(src).not.toMatch(/\.\.\.\s*f\b/);
+  });
+
+  it('reduces themes to label, gloss, support count and item ids', () => {
+    expect(src).toContain('function themeDigest');
+    expect(src).toMatch(/themeDigest[\s\S]{0,400}support_count/);
+  });
+
+  it('serializes only a slice into the model payload', () => {
+    expect(src).toContain('entry.slice(facts)');
+    expect(src).not.toContain('JSON.stringify(facts');
+  });
+});
+
+/**
+ * Task 7's own positive block, deferred here on purpose (see the comment above): a
+ * describe-scope readFileSync on a missing file would have crashed this whole suite before
+ * lib/ai/section-gates.ts existed. It exists now.
+ *
+ * The `it` label below is corrected per controller ruling R5: "only sections.ts and themes.ts
+ * call the API" is false — three files call the OpenAI SDK (prose.ts, themes.ts, sections.ts).
+ * The assertions are byte-identical to the Task 6 brief; only the label changed.
+ */
+describe('the gates never talk to the model', () => {
+  it('the section gates never touch the SDK', () => {
+    const gates = stripTs(readFileSync('lib/ai/section-gates.ts', 'utf8')).toLowerCase();
+    expect(gates).not.toContain('openai');
+    expect(gates).not.toContain('responses.parse');
   });
 });

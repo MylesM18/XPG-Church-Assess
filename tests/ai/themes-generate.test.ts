@@ -41,13 +41,25 @@ describe('clusterThemes', () => {
   beforeEach(() => { mockParse.mockReset(); });
 
   it('returns [] without calling the model when there are no reflections', async () => {
-    expect(await clusterThemes([], m, [])).toEqual([]);
+    expect(await clusterThemes([], m, { kind: 'known', labels: [] })).toEqual([]);
     expect(mockParse).not.toHaveBeenCalled();
+  });
+
+  it('refuses to cluster and returns a determinate empty result when the label source is redacted', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await clusterThemes(rows, m, { kind: 'redacted' });
+    expect(result).toEqual([]);           // determinate, not null — no re-attempt
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('[report] themes:'));
+    // Fix round A (I6): the return value alone cannot tell "refused before calling the model"
+    // apart from "clustered everything, then returned [] anyway" — a rewrite that ships every
+    // raw reflection to OpenAI before discarding the result was invisible without this.
+    expect(mockParse).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('returns gated facts on the happy path', async () => {
     mockParse.mockResolvedValue({ status: 'completed', output_parsed: parsed() });
-    expect(await clusterThemes(rows, m, ['Priscilla Vandermeer'])).toEqual([
+    expect(await clusterThemes(rows, m, { kind: 'known', labels: ['Priscilla Vandermeer'] })).toEqual([
       {
         label: 'Communication gaps',
         gloss: 'People say decisions are not explained.',
@@ -79,7 +91,7 @@ describe('clusterThemes', () => {
     // projection helper. An edit that serializes ReflectionRow[] instead fails here, and so
     // does one that helpfully appends the label list to the prompt.
     mockParse.mockResolvedValue({ status: 'completed', output_parsed: parsed() });
-    await clusterThemes(rows, m, ['Priscilla Vandermeer']);
+    await clusterThemes(rows, m, { kind: 'known', labels: ['Priscilla Vandermeer'] });
     const payload = JSON.stringify(mockParse.mock.calls[0]![0]);
     expect(payload).not.toContain('RESPONDENT-');
     expect(payload).not.toContain('respondent_key');
@@ -97,7 +109,7 @@ describe('clusterThemes', () => {
     });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      expect(await clusterThemes(rows, m, [])).toBeNull();
+      expect(await clusterThemes(rows, m, { kind: 'known', labels: [] })).toBeNull();
       const messages = warn.mock.calls.map((c) => c.join(' '));
       expect(messages.some((msg) => msg.includes('[report] themes:') && msg.includes('max_output_tokens'))).toBe(true);
       // Reasons only, never content — the payload here is raw reflection text.
@@ -111,7 +123,7 @@ describe('clusterThemes', () => {
     mockParse.mockResolvedValue({ status: 'completed', output_parsed: null });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      expect(await clusterThemes(rows, m, [])).toBeNull();
+      expect(await clusterThemes(rows, m, { kind: 'known', labels: [] })).toBeNull();
     } finally {
       warn.mockRestore();
     }
@@ -126,7 +138,7 @@ describe('clusterThemes', () => {
     });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      expect(await clusterThemes(rows, m, [])).toEqual([]);
+      expect(await clusterThemes(rows, m, { kind: 'known', labels: [] })).toEqual([]);
     } finally {
       warn.mockRestore();
     }
@@ -136,14 +148,14 @@ describe('clusterThemes', () => {
     mockParse.mockRejectedValue(new Error('network down'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      expect(await clusterThemes(rows, m, [])).toBeNull();
+      expect(await clusterThemes(rows, m, { kind: 'known', labels: [] })).toBeNull();
     } finally {
       warn.mockRestore();
     }
   });
 
   it('gates verbatims on the real writer pool, not the row count', async () => {
-    // Kills `writerCount: reflectionWriterCount(rows)` -> `rows.length` at themes.ts:203.
+    // Kills `writerCount: reflectionWriterCount(rows)` -> `rows.length` at themes.ts:214.
     // Eight rows but only three people wrote them, so the P3 pool (MIN_WRITERS_FOR_VERBATIM
     // = 8) is NOT open and the quote must be withheld even though it verifies exactly.
     const eight: ReflectionRow[] = [
@@ -169,7 +181,7 @@ describe('clusterThemes', () => {
         affection_theme: null,
       },
     });
-    expect(await clusterThemes(eight, m, [])).toEqual([
+    expect(await clusterThemes(eight, m, { kind: 'known', labels: [] })).toEqual([
       {
         label: 'Communication gaps',
         gloss: 'People say decisions are not explained.',
@@ -181,10 +193,10 @@ describe('clusterThemes', () => {
   });
 
   it('passes the run labels and the server-side source texts into the gates', async () => {
-    // Kills `labels` -> `[]` and `sourceTexts` -> `[]` at themes.ts:200-202. BOTH candidates
-    // verify as exact substrings of real reflection text, so only the label ban separates
-    // them: a severed label list prints a respondent's name as a quote, and a severed
-    // source-text list drops the legitimate quote instead.
+    // Kills `labels: labelSource.labels` -> `[]` and `sourceTexts` -> `[]` at themes.ts:211-212.
+    // BOTH candidates verify as exact substrings of real reflection text, so only the label
+    // ban separates them: a severed label list prints a respondent's name as a quote, and a
+    // severed source-text list drops the legitimate quote instead.
     const label = 'Marguerite Oyelaran';
     const eight: ReflectionRow[] = [
       { item_id: itemId, respondent_key: 'W1', text: 'nobody explains the plan' },
@@ -209,7 +221,7 @@ describe('clusterThemes', () => {
         affection_theme: null,
       },
     });
-    expect(await clusterThemes(eight, m, [label])).toEqual([
+    expect(await clusterThemes(eight, m, { kind: 'known', labels: [label] })).toEqual([
       {
         label: 'Communication gaps',
         gloss: 'People say decisions are not explained.',

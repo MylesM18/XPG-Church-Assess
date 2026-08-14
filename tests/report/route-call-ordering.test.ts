@@ -19,11 +19,12 @@
 // resolveReportView, reintroduces the exact defect this file exists to catch: fallbackProse (or
 // buildReportView) throws on an old-shaped payload before the version check ever runs.
 //
-// This test pins, for all three report routes, that the file (a) calls resolveReportView( at
-// all, (b) never calls fallbackProse(/buildReportView( anywhere OUTSIDE that call's own
-// parentheses (i.e. nothing runs before the version check), and (c) wherever fallbackProse(/
-// buildReportView( appears INSIDE the call, it does so as the body of the lazy `() => ...`
-// thunk argument, never as a bare eagerly-evaluated positional argument.
+// Plan 5 moved the PDF route (the last resolveReportView( call site) onto the same
+// resolveScoreability(/resolveReportSections( seam the share page and the diagnosis page already
+// use — see the three ordering guards below this comment's original subjects. The historical
+// fallbackProse/buildReportView call-ordering bug (CT-1) this file exists to catch is preserved
+// in spirit by those three guards' shape: resolveScoreability must run, and be checked, before the
+// assembly pipeline is ever invoked, on every report surface.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -34,113 +35,76 @@ const read = (...p: string[]) => fs.readFileSync(path.join(REPO_ROOT, ...p), 'ut
 /** Strip comments so a doc comment mentioning these names cannot satisfy or break a match. */
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
 
-const GUARDED_CALLS = ['fallbackProse(', 'buildReportView('] as const
+describe('report routes resolve scoreability before assembling any section or view (CT-1)', () => {
+  it('app/r/[shareToken]/page.tsx resolves scoreability before assembling any section (CT-1, plan 4)', () => {
+    const source = strip(read('app', 'r', '[shareToken]', 'page.tsx'))
 
-const ROUTES = [
-  { label: 'app/app/[churchId]/diagnosis/page.tsx', segs: ['app', 'app', '[churchId]', 'diagnosis', 'page.tsx'] },
-  { label: 'app/r/[shareToken]/page.tsx', segs: ['app', 'r', '[shareToken]', 'page.tsx'] },
-  { label: 'app/api/report/[runId]/pdf/route.ts', segs: ['app', 'api', 'report', '[runId]', 'pdf', 'route.ts'] },
-] as const
+    // Plan 4's shape of the CT-1 invariant. resolveReportView's lazy thunk is gone from
+    // this page, but the harm it prevented is not: buildFacts and assembleFallbackOnly
+    // both read derived.diagnosis, which does not exist on a not-scoreable run. The gate
+    // must come first.
+    // BOTH anchors are guarded — an ordering assertion whose needle is missing yields
+    // indexOf === -1 and passes vacuously.
+    expect(source, 'the shared page must call resolveScoreability(').toContain('resolveScoreability(')
+    expect(source, 'the shared page must call assembleFallbackOnly(').toContain('assembleFallbackOnly(')
+    expect(source.indexOf('resolveScoreability(')).toBeLessThan(source.indexOf('assembleFallbackOnly('))
+    expect(
+      source,
+      'the shared page must keep the not-scoreable guard spelled `!resolution.scoreable`',
+    ).toContain('!resolution.scoreable')
+  })
 
-/**
- * Splits a call's argument-list text at top-level commas — i.e. commas not nested inside
- * (), {}, [], or a string/template literal. Not a general JS parser; good enough for this
- * repo's call-site formatting (positional args, one per line, no nested calls that themselves
- * contain top-level commas the split needs to see).
- */
-function splitTopLevelArgs(argsText: string): string[] {
-  const parts: string[] = []
-  let depth = 0
-  let current = ''
-  let quote: string | null = null
-  for (let i = 0; i < argsText.length; i++) {
-    const ch = argsText[i]!
-    if (quote) {
-      current += ch
-      if (ch === '\\') { current += argsText[++i] ?? ''; continue }
-      if (ch === quote) quote = null
-      continue
+  it('app/app/[churchId]/diagnosis/page.tsx resolves scoreability before calling the resolver seam (CT-1, plan 5)', () => {
+    const source = strip(read('app', 'app', '[churchId]', 'diagnosis', 'page.tsx'))
+
+    // Plan 5's resolver seam (lib/report/resolve.ts, resolveReportSections) collapsed this
+    // page's own `.from('reports')` read and `assembleReport(` call into one call site — the
+    // CT-1 invariant did not change, only where it is enforced: resolveScoreability must still
+    // run, and be checked, before the assembly pipeline is ever invoked.
+    // BOTH anchors guarded on every ordering assertion — a missing needle yields
+    // indexOf === -1 and would satisfy `toBeLessThan` vacuously.
+    for (const needle of ['resolveScoreability(', 'resolveReportSections(']) {
+      expect(source, `the diagnosis page must call ${needle}`).toContain(needle)
     }
-    if (ch === '"' || ch === "'" || ch === '`') { quote = ch; current += ch; continue }
-    if (ch === '(' || ch === '{' || ch === '[') depth++
-    if (ch === ')' || ch === '}' || ch === ']') depth--
-    if (ch === ',' && depth === 0) { parts.push(current); current = ''; continue }
-    current += ch
-  }
-  if (current.trim() !== '') parts.push(current)
-  return parts
-}
+    expect(source.indexOf('resolveScoreability(')).toBeLessThan(source.indexOf('resolveReportSections('))
+    expect(
+      source,
+      'the diagnosis page must keep the not-scoreable guard spelled `!resolution.scoreable`',
+    ).toContain('!resolution.scoreable')
+  })
 
-/**
- * Locates the first `resolveReportView(...)` call in `source` by counting parens from its own
- * open paren to its matching close, then splits its argument list at top-level commas. Returns
- * null when `resolveReportView(` is absent. `before`/`after` are everything outside the call's
- * own parens — anything found there runs, in source-order terms, before resolveReportView's
- * internal version check ever gets a chance to gate it.
- */
-function extractResolveReportViewCall(
-  source: string,
-): { before: string; args: string[]; after: string } | null {
-  const marker = 'resolveReportView('
-  const start = source.indexOf(marker)
-  if (start === -1) return null
+  it('app/api/report/[runId]/pdf/route.ts resolves scoreability before calling the resolver seam, with the 409 return between them (CT-1, plan 5, Task 6)', () => {
+    const source = strip(read('app', 'api', 'report', '[runId]', 'pdf', 'route.ts'))
 
-  const openParenIdx = start + marker.length - 1
-  let depth = 0
-  let end = openParenIdx
-  for (; end < source.length; end++) {
-    if (source[end] === '(') depth++
-    else if (source[end] === ')') {
-      depth--
-      if (depth === 0) { end++; break }
+    // Task 6's shape of the same seam the diagnosis page adopted above: resolveReportView( is
+    // gone from this route too, and the harm it prevented (a not-yet-scoreable run reaching the
+    // assembly pipeline) is guarded the same way — resolveScoreability must run, and be checked,
+    // before resolveReportSections is ever invoked. Unlike the other two surfaces, this route's
+    // not-scoreable arm is an early HTTP return (409), not a component branch — so beyond "both
+    // calls exist, gate before seam" this also pins that the 409 return itself sits BETWEEN the
+    // gate and the seam call. A regression that hoists resolveReportSections( above the return
+    // (but leaves resolveScoreability( first) would satisfy a two-anchor check alone; tsc happens
+    // to reject that reordering today via ScoreabilityResolution's union narrowing, but this
+    // guard's teeth should not depend on the compiler catching it.
+    // ALL THREE anchors guarded before any indexOf comparison — a missing needle yields
+    // indexOf === -1 and would satisfy `toBeLessThan`/`toBeGreaterThan` vacuously.
+    for (const needle of ['resolveScoreability(', 'status: 409', 'resolveReportSections(']) {
+      expect(source, `the PDF route must contain ${needle}`).toContain(needle)
     }
-  }
-
-  return {
-    before: source.slice(0, start),
-    args: splitTopLevelArgs(source.slice(openParenIdx + 1, end - 1)),
-    after: source.slice(end),
-  }
-}
-
-describe('report routes resolve staleness before ever touching fallbackProse/buildReportView (CT-1)', () => {
-  for (const { label, segs } of ROUTES) {
-    it(`${label} calls resolveReportView( and gates fallbackProse/buildReportView behind its lazy thunk`, () => {
-      const source = strip(read(...segs))
-
-      expect(source, `${label} must call resolveReportView(`).toContain('resolveReportView(')
-
-      const call = extractResolveReportViewCall(source)
-      if (!call) throw new Error('unreachable — resolveReportView( presence already asserted above')
-
-      for (const fn of GUARDED_CALLS) {
-        expect(
-          call.before.includes(fn) || call.after.includes(fn),
-          `${label} calls ${fn} outside the resolveReportView(...) call. That runs BEFORE ` +
-            `resolveReportView's internal version check can gate it — a stale payload would ` +
-            `throw again instead of rendering the stale-methodology notice (CT-1).`,
-        ).toBe(false)
-      }
-
-      // Inside the call, fallbackProse/buildReportView may only appear as the body of the lazy
-      // `() => ...` thunk argument — never as a bare, eagerly-evaluated positional argument
-      // (which JS evaluates before resolveReportView is even entered).
-      for (const arg of call.args) {
-        const usesGuardedCall = GUARDED_CALLS.some((fn) => arg.includes(fn))
-        if (!usesGuardedCall) continue
-        // CT-2(c) repurposed the thunk to take the freshly re-derived diagnosis, so it is now
-        // `(d) => ...` rather than the original zero-arg `() => ...`. Accept any arrow-function
-        // parameter list — the load-bearing invariant is unchanged: the argument must be an
-        // arrow (lazy), never a bare eagerly-evaluated `fallbackProse(...)` / `buildReportView(...)`
-        // call (which does not start with `(...) =>` and so still fails this assertion).
-        expect(
-          /^\s*\([^)]*\)\s*=>/.test(arg),
-          `${label}: an argument passed to resolveReportView(...) calls fallbackProse/` +
-            `buildReportView but is not itself a lazy "(...) => ..." thunk (found: ` +
-            `${JSON.stringify(arg.trim().slice(0, 160))}). A non-thunk argument is evaluated ` +
-            `eagerly, before the not-scoreable gate runs — CT-1 again.`,
-        ).toBe(true)
-      }
-    })
-  }
+    expect(source.indexOf('resolveScoreability(')).toBeLessThan(source.indexOf('resolveReportSections('))
+    expect(
+      source.indexOf('status: 409'),
+      'the 409 not-scoreable return must sit AFTER resolveScoreability( — the gate must run before ' +
+        'the route can even know whether to return it',
+    ).toBeGreaterThan(source.indexOf('resolveScoreability('))
+    expect(
+      source.indexOf('status: 409'),
+      'the 409 not-scoreable return must sit BEFORE resolveReportSections( — otherwise a ' +
+        'not-yet-scoreable run could reach the assembly pipeline before the route ever returns',
+    ).toBeLessThan(source.indexOf('resolveReportSections('))
+    expect(
+      source,
+      'the PDF route must keep the not-scoreable guard spelled `!resolution.scoreable`',
+    ).toContain('!resolution.scoreable')
+  })
 })

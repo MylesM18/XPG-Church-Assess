@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { containsRespondentLabel, respondentLabels } from '../../lib/report/anonymity';
+import { containsRespondentLabel, knownLabels, respondentLabels } from '@/lib/report/anonymity';
 
 describe('respondentLabels', () => {
   it('returns distinct labels', () => {
@@ -55,5 +55,21 @@ describe('containsRespondentLabel', () => {
     // Defense in depth: respondentLabels already strips these, but this function is
     // exported and a caller may build a list by hand.
     expect(containsRespondentLabel('nothing identifying here', ['', '  '])).toBe(false);
+  });
+});
+
+describe('knownLabels', () => {
+  it('wraps the derived labels in a known LabelSource', () => {
+    const src = knownLabels([{ respondent_label: 'Priscilla Vandermeer' }, { respondent_label: 'Tom Ng' }]);
+    expect(src).toEqual({ kind: 'known', labels: ['Priscilla Vandermeer', 'Tom Ng'] });
+  });
+
+  it('returns a known source with an empty list rather than a redacted one when every label is blank', () => {
+    // The share RPC emits ''::text. knownLabels must NOT silently promote that to 'redacted' —
+    // the caller decides which source it is holding; this function only reports what it saw.
+    expect(knownLabels([{ respondent_label: '' }, { respondent_label: '' }])).toEqual({
+      kind: 'known',
+      labels: [],
+    });
   });
 });

@@ -2,7 +2,7 @@ import type { Diagnosis, GenerosityMode, Response } from '../engine/types';
 import type { Methodology, Theme } from '../methodology/schema';
 import { archetypeFor, tierFor, type Archetype, type Tier } from './tier';
 import { interp } from './view';
-import { containsRespondentLabel, respondentLabels } from './anonymity';
+import { containsRespondentLabel, type LabelSource } from './anonymity';
 
 /**
  * The facts pack: the single deterministic source of every number, name, and theme any
@@ -98,13 +98,27 @@ export interface BuildFactsArgs {
   church: ChurchFacts;
   completedAt: string | null;
   themes?: ThemeClusterFact[];
+  labelSource: LabelSource;
 }
 
-const PROFILE_KEYS = [
-  'denomination', 'context', 'attendance_band', 'adults_band', 'staff_fte_band',
-  'budget_band', 'church_age_band', 'growth_trajectory', 'campuses_band',
-  'facility_status', 'leadership_history', 'consultant_notes',
+/**
+ * The 8 free-text profile keys. `denomination` and the five *_band text fields are typed by an
+ * admin; `leadership_history` and `consultant_notes` are admin-authored prose copied verbatim
+ * into the pack, which the composer puts into a model prompt and onto the rendered report — so
+ * a name typed here is a back door around every other anonymity control in the system.
+ */
+const FREE_TEXT_PROFILE_KEYS = [
+  'denomination', 'adults_band', 'staff_fte_band', 'budget_band',
+  'church_age_band', 'campuses_band', 'leadership_history', 'consultant_notes',
 ] as const;
+
+/**
+ * The 4 closed-vocabulary selects (settings-form.tsx:64, :76, :107, :123). These hold <select>
+ * option values, never admin prose, so a respondent label that happens to be a substring of an
+ * option value can only ever be a FALSE POSITIVE — a respondent named 'Li' silently cost
+ * `growth_trajectory: 'declining'` under the old guard. Unguarded on purpose (addendum §1.2).
+ */
+const CLOSED_VOCAB_PROFILE_KEYS = ['context', 'attendance_band', 'growth_trajectory', 'facility_status'] as const;
 
 const BOTTOM_ITEM_COUNT = 6;
 
@@ -151,26 +165,28 @@ export function buildFacts(args: BuildFactsArgs): FactsPack {
 
   const scores = new Map(d.categories.map((c) => [c.category_id, c.score]));
 
-  // Fail-closed anonymity guard applied to EVERY key in PROFILE_KEYS, not only the free-text
-  // ones. `leadership_history` and `consultant_notes` are admin-authored prose copied verbatim
-  // into the pack, and plan 3's composer puts the pack into a model prompt and onto the
-  // rendered report — so a name typed here is a back door around every other anonymity
-  // control in the system. Drop the offending FIELD rather than throwing: one over-shared
-  // note must not cost the report.
-  //
-  // Known cost of the wider scope: `context`, `attendance_band`, `growth_trajectory` and
-  // `facility_status` are closed-vocabulary selects that can never hold admin prose, so a
-  // label that happens to be a substring of an option value drops that line as a pure false
-  // positive — a respondent named 'Li' silently costs `growth_trajectory: 'declining'`.
-  // Narrowing the guard to the free-text keys is a plan-3 decision, not a change to make here.
-  // Prevention lives alongside this in the settings hint copy (settings-form.tsx).
-  const labels = respondentLabels(responses);
+  // Fail-closed anonymity guard, scoped to the free-text keys (addendum §1.2). On a redacted
+  // label source there is no label list, so the guard could never fire — the free-text fields
+  // are OMITTED outright rather than passed through unguarded. That is the whole point of the
+  // union: there is no code path that yields an unguarded pack from redacted rows, and
+  // reintroducing one means deleting an arm, which the compiler reports.
   const profile: Record<string, string> = {};
-  for (const key of PROFILE_KEYS) {
+  const putIfSet = (key: keyof ChurchFacts): string | null => {
     const value = church[key];
-    if (value === null || value.length === 0) continue;
-    if (containsRespondentLabel(value, labels)) continue;
-    profile[key] = value;
+    return value === null || value.length === 0 ? null : value;
+  };
+  for (const key of CLOSED_VOCAB_PROFILE_KEYS) {
+    const value = putIfSet(key);
+    if (value !== null) profile[key] = value;
+  }
+  if (args.labelSource.kind === 'known') {
+    const labels = args.labelSource.labels;
+    for (const key of FREE_TEXT_PROFILE_KEYS) {
+      const value = putIfSet(key);
+      if (value === null) continue;
+      if (containsRespondentLabel(value, labels)) continue;
+      profile[key] = value;
+    }
   }
 
   const primaryId = d.primary_constraint?.category_id ?? null;
