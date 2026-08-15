@@ -17,21 +17,36 @@ type AnyEl = { type?: unknown; props?: { children?: unknown } };
 
 /** Flattens react-pdf's JSX children tree (arrays, nulls, booleans) into a
  *  flat list of element-like nodes, for structural assertions (e.g. finding
- *  every <Page>). Reused by Tasks 12-13. */
+ *  every <Page>). Reused by Tasks 12-13.
+ *
+ *  react-pdf's own primitives (Document/Page/Text/View/Svg/...) are STRING
+ *  type tags, never functions — verified directly against the imported
+ *  components (`typeof Page === 'string'`), so `el.type === Page` filtering
+ *  below is unaffected. A node whose `type` IS a function is one of our own
+ *  custom components (SectionContent, S6View, PdfChart, ...); it is invoked
+ *  directly and its own returned tree is flattened in its place, so content
+ *  nested inside a custom component is reachable without a full react-pdf
+ *  render (Task 13 fix-round-1: keeps production call sites as ordinary JSX
+ *  — see document.tsx — by fixing the test helper instead). */
 function flatChildren(node: unknown): AnyEl[] {
   if (node == null || typeof node === 'boolean') return [];
   if (Array.isArray(node)) return node.flatMap(flatChildren);
-  return [node as AnyEl];
+  const el = node as AnyEl;
+  if (typeof el.type === 'function') return flatChildren((el.type as (props: unknown) => unknown)(el.props));
+  return [el];
 }
 
 /** Recursively collects every string/number leaf under a react-pdf JSX tree,
- *  in document order — the rendered text content. Reused by Tasks 12-13. */
+ *  in document order — the rendered text content. Reused by Tasks 12-13.
+ *  Descends into custom function components the same way flatChildren does
+ *  (see above), for the same reason. */
 function collectTexts(node: unknown): string[] {
   if (node == null || typeof node === 'boolean') return [];
   if (typeof node === 'string') return [node];
   if (typeof node === 'number') return [String(node)];
   if (Array.isArray(node)) return node.flatMap(collectTexts);
   const el = node as AnyEl;
+  if (typeof el.type === 'function') return collectTexts((el.type as (props: unknown) => unknown)(el.props));
   return collectTexts(el.props?.children);
 }
 

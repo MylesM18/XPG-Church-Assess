@@ -265,7 +265,7 @@ function SectionContent({
       case 's5':
         return <S5View ai={ai} fallback={fallback} />;
       case 's6':
-        return S6View({ ai, fallback, areaIndex });
+        return <S6View ai={ai} fallback={fallback} areaIndex={areaIndex} />;
       case 's7':
         return <S7View ai={ai} fallback={fallback} />;
       case 's9':
@@ -387,7 +387,7 @@ export function ReportDocument({
                   <PdfChart model={chart} />
                 </View>
               ))}
-              {SectionContent({ section, areaIndex })}
+              <SectionContent section={section} areaIndex={areaIndex} />
               {stale && section.id === 'appendix' && <Text style={s.caveat}>{STALE_CAVEAT}</Text>}
             </View>
           ))}
