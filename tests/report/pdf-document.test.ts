@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { PDFParse } from 'pdf-parse';
 import { Page } from '@react-pdf/renderer';
 import { renderReportDocument } from '@/lib/report/pdf/render';
-import { ReportDocument } from '@/lib/report/pdf/document';
+import { ReportDocument, PAGE_GROUPS } from '@/lib/report/pdf/document';
 import { assembleFallbackOnly } from '@/lib/report/compose';
 import type { AssembledSection } from '@/lib/report/compose';
 import { buildFacts, type ChurchFacts, type FactsPack } from '@/lib/report/facts';
@@ -279,6 +279,20 @@ describe('ReportDocument', () => {
     expect(appendix).toContain('Confidence: 0.85.');
     expect(appendix).toContain('Small sample: 3 respondents.');
   }, 30_000);
+
+  it('renders one page per populated group plus the cover, with the new furniture', () => {
+    const secs = sectionsFor();
+    const doc = ReportDocument({ sections: secs, ...DOC_ARGS });
+    const pages = flatChildren(doc.props.children).filter((el) => el.type === Page);
+    const ids = new Set(secs.map((sec) => sec.id));
+    const grouped = PAGE_GROUPS.filter((g) => g.some((id) => ids.has(id))).length;
+    const leftovers = secs.filter((sec) => !PAGE_GROUPS.flat().includes(sec.id)).length;
+    expect(pages).toHaveLength(1 + grouped + leftovers);
+    const texts = collectTexts(doc);
+    expect(texts.join(' ')).not.toContain('Internal leadership document');
+    expect(texts.join(' ')).not.toContain('2026-07-18');
+    expect(texts).toContain('CONFIDENTIAL');
+  });
 });
 
 // --- Booking CTA ---------------------------------------------------------------------------

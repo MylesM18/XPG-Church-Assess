@@ -16,14 +16,8 @@ const RULE = '#D8D5CE';
 const CREAM = '#FAF7F0';
 
 const s = StyleSheet.create({
-  page: { paddingTop: 56, paddingBottom: 56, paddingHorizontal: 48, fontFamily: FONT_BODY, fontSize: 10.5, color: INK, lineHeight: 1.5 },
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 24, borderBottomWidth: 1, borderBottomColor: RULE, paddingBottom: 8 },
+  page: { backgroundColor: CREAM, paddingTop: 64, paddingBottom: 56, paddingHorizontal: 48, fontFamily: FONT_BODY, fontSize: 10.5, lineHeight: 1.5, color: INK },
   monogram: { width: 28, height: 28, borderRadius: 14, color: '#FFFFFF', fontFamily: FONT_DISPLAY, fontSize: 12, textAlign: 'center', paddingTop: 7, marginRight: 8 },
-  headerText: { flexDirection: 'column' },
-  churchName: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14 },
-  headerMeta: { fontSize: 9, color: INK_SOFT },
-  h1: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 18, marginBottom: 8 },
-  h2: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 13, marginBottom: 6 },
   section: { marginBottom: 18 },
   body: { marginBottom: 6 },
   bullet: { marginBottom: 2, paddingLeft: 10 },
@@ -31,8 +25,14 @@ const s = StyleSheet.create({
   block: { marginBottom: 8 },
   caveat: { fontSize: 9, color: INK_SOFT, marginTop: 8 },
   chart: { marginTop: 6, marginBottom: 6 },
+  ctaHeading: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: INK },
   ctaButton: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: INK, color: '#FFFFFF', fontFamily: FONT_DISPLAY, fontSize: 10, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 4, textDecoration: 'none' },
-  footer: { position: 'absolute', bottom: 24, left: 48, right: 48, flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: INK_SOFT },
+  runhead: { position: 'absolute', top: 24, left: 48, right: 48, flexDirection: 'row', justifyContent: 'space-between' },
+  opener: { paddingVertical: 12, paddingHorizontal: 16, marginBottom: 18 },
+  openerNumber: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1 },
+  openerTitle: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 26 },
+  footer: { position: 'absolute', bottom: 24, left: 48, right: 48, borderTopWidth: 0.75, borderTopColor: RULE, paddingTop: 6, flexDirection: 'row', justifyContent: 'space-between' },
+  capsLabel: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1, color: INK_SOFT },
 });
 
 const cs = StyleSheet.create({
@@ -260,6 +260,50 @@ function SectionContent({ section }: { section: AssembledSection }) {
 }
 
 /**
+ * Groups the 13 sections into content pages (spec §2.7): each group becomes one `<Page>` with a
+ * fixed runhead/footer and a verdict-tint opener per section inside it. A section id missing from
+ * this list still gets its own single-section page (see the defensive loop in pageGroupsFor) so a
+ * future report.yaml id can't silently vanish from the PDF.
+ */
+export const PAGE_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
+  ['s1', 's2'],
+  ['s3', 's4'],
+  ['s5'],
+  ['s6'],
+  ['s7', 's8'],
+  ['s9', 's10'],
+  ['s11', 's12'],
+  ['appendix'],
+];
+
+type PageGroup = { key: string; sections: Array<{ section: AssembledSection; number: string; title: string }> };
+
+/**
+ * Reads each section's fallback title exactly once, here — the opener and the footer's running
+ * head both consume the precomputed `title` field below rather than re-deriving it from the
+ * section's fallback themselves, preserving the "one title source" invariant pdf-sections.test.ts
+ * asserts.
+ */
+function toGroupEntry(section: AssembledSection, numberFor: Map<string, string>) {
+  return { section, number: numberFor.get(section.id) ?? '00', title: section.fallback.title };
+}
+
+function pageGroupsFor(sections: AssembledSection[]): PageGroup[] {
+  const numberFor = new Map(sections.map((sec, i) => [sec.id, String(i + 1).padStart(2, '0')]));
+  const grouped = new Set(PAGE_GROUPS.flat());
+  const groups: PageGroup[] = PAGE_GROUPS.map((ids) => ({
+    key: ids.join('-'),
+    sections: sections.filter((sec) => ids.includes(sec.id)).map((sec) => toGroupEntry(sec, numberFor)),
+  })).filter((g) => g.sections.length > 0);
+  // Defensive: a section id missing from PAGE_GROUPS still gets its own page,
+  // so a future report.yaml id can't vanish from the PDF silently.
+  for (const sec of sections) {
+    if (!grouped.has(sec.id)) groups.push({ key: sec.id, sections: [toGroupEntry(sec, numberFor)] });
+  }
+  return groups;
+}
+
+/**
  * The PDF mirror of app/app/[churchId]/diagnosis/report/sections.tsx. Same 13 sections, same
  * order, same one-title-source rule — different primitives, because @react-pdf/renderer cannot
  * render DOM components and never could.
@@ -270,8 +314,6 @@ function SectionContent({ section }: { section: AssembledSection }) {
 export function ReportDocument({
   sections, churchName, brandColor, monogram, generatedAt, stale, cover,
 }: ReportDocumentProps) {
-  const dateLabel = generatedAt.toISOString().slice(0, 10);
-
   return (
     <Document title={`${churchName} — Church Health Diagnosis`}>
       <Page size="A4" style={cs.coverPage}>
@@ -294,39 +336,46 @@ export function ReportDocument({
         <Text style={cs.coverRunline}>XPG · CHURCH HEALTH ASSESSMENT</Text>
       </Page>
 
-      <Page size="A4" style={s.page}>
-        <View style={s.header} fixed>
-          <Text style={[s.monogram, { backgroundColor: brandColor }]}>{monogram}</Text>
-          <View style={s.headerText}>
-            <Text style={s.churchName}>{churchName}</Text>
-            <Text style={s.headerMeta}>Church Health Diagnosis · {dateLabel}</Text>
+      {pageGroupsFor(sections).map((group) => (
+        <Page key={group.key} size="A4" style={s.page} wrap>
+          <View fixed style={s.runhead}>
+            <Text style={s.capsLabel}>{churchName.toUpperCase()}</Text>
+            <Text style={s.capsLabel}>CHURCH HEALTH ASSESSMENT</Text>
           </View>
-        </View>
 
-        {sections.map((section, index) => (
-          <View key={section.id} style={s.section}>
-            <Text style={index === 0 ? s.h1 : s.h2}>{section.fallback.title}</Text>
-            {section.charts.map((chart) => (
-              <View key={chart.kind} style={s.chart}>
-                <PdfChart model={chart} />
+          {group.sections.map(({ section, number, title }) => (
+            <View key={section.id}>
+              <View style={[s.opener, { backgroundColor: BAND_FILL[cover.band] }]}>
+                <Text style={[s.openerNumber, { color: textOnBand(cover.band) }]}>{number}</Text>
+                <Text style={[s.openerTitle, { color: textOnBand(cover.band) }]}>{title}</Text>
               </View>
-            ))}
-            <SectionContent section={section} />
-            {stale && section.id === 'appendix' && <Text style={s.caveat}>{STALE_CAVEAT}</Text>}
+              {section.charts.map((chart) => (
+                <View key={chart.kind} style={s.chart}>
+                  <PdfChart model={chart} />
+                </View>
+              ))}
+              <SectionContent section={section} />
+              {stale && section.id === 'appendix' && <Text style={s.caveat}>{STALE_CAVEAT}</Text>}
+            </View>
+          ))}
+
+          {group.sections.some(({ section }) => section.id === 's12') ? (
+            <View style={s.section}>
+              <Text style={s.ctaHeading}>{bookingCta.heading}</Text>
+              <Text style={s.body}>{bookingCta.body}</Text>
+              <Link src={bookingCta.url} style={s.ctaButton}>{bookingCta.buttonLabel}</Link>
+            </View>
+          ) : null}
+
+          <View fixed style={s.footer}>
+            <Text
+              style={s.capsLabel}
+              render={({ pageNumber }) => `${pageNumber} · ${group.sections[0]?.title ?? ''}`}
+            />
+            <Text style={s.capsLabel}>CONFIDENTIAL</Text>
           </View>
-        ))}
-
-        <View style={s.section}>
-          <Text style={s.h2}>{bookingCta.heading}</Text>
-          <Text style={s.body}>{bookingCta.body}</Text>
-          <Link src={bookingCta.url} style={s.ctaButton}>{bookingCta.buttonLabel}</Link>
-        </View>
-
-        <View style={s.footer} fixed>
-          <Text>Internal leadership document</Text>
-          <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
-        </View>
-      </Page>
+        </Page>
+      ))}
     </Document>
   );
 }
