@@ -60,3 +60,35 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
     expect(page).toContain('className="flex flex-col gap-10"')
   })
 })
+
+describe('public share page: cover derived like the resolver, band threaded, no duplicate CTA', () => {
+  const page = read('app', 'r', '[shareToken]', 'page.tsx')
+
+  it('derives the cover with coverModel(facts, reportMethodology) — no new data access', () => {
+    expect(page).toContain("import { coverModel } from '@/lib/report/charts'")
+    expect(count(page, /coverModel\(/g)).toBe(1)
+    expect(page).toContain('const cover = coverModel(facts, reportMethodology)')
+  })
+
+  it('renders ReportCover (no date) before ReportSections with band={cover.band}', () => {
+    expect(page).toContain("import { ReportCover } from '@/app/app/[churchId]/diagnosis/report/report-cover'")
+    expect(page).toContain('<ReportCover')
+    expect(page).toContain('dateLabel={null}')
+    expect(page).toContain('churchName={row.church_name}')
+    expect(page).toContain('brandColor={row.brand_color}')
+    expect(page).toContain('band={cover.band}')
+    expect(page.indexOf('<ReportCover')).toBeLessThan(page.indexOf('<ReportSections'))
+    expect(page).toContain('className="flex flex-col gap-10"')
+  })
+
+  it('no longer renders its own page-chrome BookingCta (ReportSections carries the s12 CTA)', () => {
+    expect(page).not.toContain('<BookingCta')
+    expect(page).not.toMatch(/import \{[^}]*\bBookingCta\b[^}]*\}/)
+    expect(page).toContain('SharedStaleMethodologyNotice')
+  })
+
+  it('keeps the shared read-only footer after the sections', () => {
+    // lastIndexOf: the not-scoreable branch (earlier in the file) carries the same footer copy.
+    expect(page.lastIndexOf('Shared read-only view.')).toBeGreaterThan(page.indexOf('<ReportSections'))
+  })
+})
