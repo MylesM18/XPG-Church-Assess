@@ -5,7 +5,7 @@ import type { CategoryState } from '@/lib/engine/types';
 import {
   areaBarsModel, tierGaugeModel, bottomItemsModel, BAND_FILL, THEME_FILL,
   BAND_TEXT, BAND_NAME, verdictBandFor, textOnBand,
-  statGridModel, type StatGridModel,
+  statGridModel, type StatGridModel, rankListModel,
 } from '@/lib/report/charts';
 import { ALL_FIXTURES, CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
 
@@ -213,5 +213,56 @@ describe('statGridModel', () => {
 
   it('is pure', () => {
     expect(statGridModel(CAPACITY_FACTS, methodology)).toEqual(statGridModel(CAPACITY_FACTS, methodology));
+  });
+});
+
+describe('rankListModel', () => {
+  it('returns null when there are no bottom items', () => {
+    const empty = makeFacts({
+      bottom_items: [],
+      pattern_counts: { systems: 0, culture: 0, theology: 0, relational: 0 },
+    });
+    expect(rankListModel(empty)).toBeNull();
+  });
+
+  it('ranks rows 01..NN in facts order with in-viewBox geometry', () => {
+    for (const { facts } of ALL_FIXTURES) {
+      const model = rankListModel(facts);
+      if (facts.bottom_items.length === 0) {
+        expect(model).toBeNull();
+        continue;
+      }
+      expect(model).not.toBeNull();
+      if (!model) continue;
+      expect(model.rows).toHaveLength(facts.bottom_items.length);
+      for (const [i, row] of model.rows.entries()) {
+        const item = facts.bottom_items[i]!;
+        expect(row.rank).toBe(String(i + 1).padStart(2, '0'));
+        expect(row.itemId).toBe(item.item_id);
+        expect(row.mean).toBe(item.mean);
+        expect(row.theme).toBe(item.theme);
+        expect(row.themeLabel).toBe(String(item.theme).toUpperCase());
+        expect(row.y + row.h).toBeLessThanOrEqual(model.height + 1e-9);
+        expect(row.scoreBlock.x + row.scoreBlock.w).toBeCloseTo(model.width, 5);
+        expect(row.scoreBlock.y).toBeGreaterThanOrEqual(row.y);
+        expect(row.scoreBlock.y + row.scoreBlock.h).toBeLessThanOrEqual(row.y + row.h + 1e-9);
+      }
+    }
+  });
+
+  it('truncates very long item text with ASCII ellipsis (font subset has no …)', () => {
+    const long = 'x'.repeat(200);
+    const facts = makeFacts({
+      bottom_items: [{ item_id: 'SYS3', text: long, mean: 10, theme: 'systems' }],
+    });
+    const model = rankListModel(facts);
+    expect(model).not.toBeNull();
+    if (!model) return;
+    expect(model.rows[0]!.text.length).toBeLessThanOrEqual(93);
+    expect(model.rows[0]!.text.endsWith('...')).toBe(true);
+  });
+
+  it('is pure', () => {
+    expect(rankListModel(CAPACITY_FACTS)).toEqual(rankListModel(CAPACITY_FACTS));
   });
 });

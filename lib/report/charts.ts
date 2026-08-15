@@ -128,6 +128,12 @@ const CELL_H = 72;
 const CELL_PAD = 12;
 const MINI_BAR_H = 4;
 
+const RANK_ROW_H = 44;
+const RANK_ROW_GAP = 10;
+const SCORE_BLOCK_W = 56;
+const SCORE_BLOCK_H = 32;
+const RANK_TEXT_MAX = 90;
+
 export type StatCell = {
   id: string;
   name: string;
@@ -180,6 +186,64 @@ export function statGridModel(facts: FactsPack, methodology: Methodology): StatG
     width: CHART_W_V2,
     height: Math.ceil(facts.categories.length / GRID_COLS) * CELL_H,
     cells,
+  };
+}
+
+export type RankRow = {
+  rank: string;
+  itemId: string;
+  text: string;
+  mean: number;
+  theme: Theme;
+  /** Caps theme label; renderers color it THEME_FILL[theme] (spec §2.6.2). */
+  themeLabel: string;
+  y: number;
+  h: number;
+  scoreBlock: { x: number; y: number; w: number; h: number };
+};
+
+export type RankListModel = {
+  kind: 'rank_list';
+  width: number;
+  height: number;
+  rows: RankRow[];
+};
+
+/** Spec §2.6.2 — numbered ranked punch list of the six weakest questions.
+ * Truncation is a shared-seam display format (both surfaces see the same
+ * string), so it does not violate the §5 prose-parity rule. ASCII '...'
+ * because the font subset lacks the ellipsis glyph. */
+export function rankListModel(facts: FactsPack): RankListModel | null {
+  if (facts.bottom_items.length === 0) return null;
+  const rows = facts.bottom_items.map((item, i): RankRow => {
+    const y = i * (RANK_ROW_H + RANK_ROW_GAP);
+    const text =
+      item.text.length > RANK_TEXT_MAX
+        ? `${item.text.slice(0, RANK_TEXT_MAX).trimEnd()}...`
+        : item.text;
+    return {
+      rank: String(i + 1).padStart(2, '0'),
+      itemId: item.item_id,
+      text,
+      mean: item.mean,
+      theme: item.theme,
+      themeLabel: String(item.theme).toUpperCase(),
+      y,
+      h: RANK_ROW_H,
+      scoreBlock: {
+        x: CHART_W_V2 - SCORE_BLOCK_W,
+        y: y + (RANK_ROW_H - SCORE_BLOCK_H) / 2,
+        w: SCORE_BLOCK_W,
+        h: SCORE_BLOCK_H,
+      },
+    };
+  });
+  const n = rows.length;
+  return {
+    kind: 'rank_list',
+    width: CHART_W_V2,
+    height: n * RANK_ROW_H + (n - 1) * RANK_ROW_GAP,
+    rows,
   };
 }
 
