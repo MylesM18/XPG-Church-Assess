@@ -5,7 +5,7 @@ import type { CategoryState } from '@/lib/engine/types';
 import {
   areaBarsModel, tierGaugeModel, bottomItemsModel, BAND_FILL, THEME_FILL,
   BAND_TEXT, BAND_NAME, verdictBandFor, textOnBand,
-  statGridModel, type StatGridModel, rankListModel, verdictBlockModel,
+  statGridModel, type StatGridModel, rankListModel, verdictBlockModel, coverModel,
 } from '@/lib/report/charts';
 import { ALL_FIXTURES, CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
 
@@ -311,5 +311,45 @@ describe('verdictBlockModel', () => {
 
   it('is pure', () => {
     expect(verdictBlockModel(CAPACITY_FACTS, methodology)).toEqual(verdictBlockModel(CAPACITY_FACTS, methodology));
+  });
+});
+
+describe('coverModel', () => {
+  const methodology = loadMethodology();
+
+  it('builds a 4-segment band strip with a score marker', () => {
+    for (const { facts } of ALL_FIXTURES) {
+      const model = coverModel(facts, methodology);
+      expect(model.strip.width).toBe(500);
+      expect(model.strip.segments).toHaveLength(4);
+      expect(model.strip.segments.map((s) => s.band)).toEqual(['severe', 'broken', 'watch', 'holding']);
+      for (const [i, seg] of model.strip.segments.entries()) {
+        expect(seg.w).toBeCloseTo(125, 5);
+        expect(seg.x).toBeCloseTo(i * 125, 5);
+        expect(seg.name).toBe(BAND_NAME[seg.band]);
+      }
+      expect(model.strip.marker.x).toBeCloseTo((facts.overall.capacity / 100) * 500, 5);
+    }
+  });
+
+  // NOTE: the marker can land visually inside a segment that is NOT the
+  // church's verdict band (e.g. a score of 59 puts the marker in the Watch
+  // segment while the verdict band is Broken). This is the APPROVED mock —
+  // the caption disambiguates. Do NOT "fix" by clamping the marker into the
+  // verdict band's segment.
+
+  it('mirrors the verdict and reuses the s3 xpg_read line as headline', () => {
+    for (const { facts } of ALL_FIXTURES) {
+      const model = coverModel(facts, methodology);
+      expect(model.score).toBe(facts.overall.capacity);
+      expect(model.tierName).toBe(facts.overall.tier.name);
+      expect(model.band).toBe(verdictBandFor(facts.overall.tier.id));
+      expect(model.headline).toBe(methodology.copy.xpg_read[facts.archetype][facts.overall.tier.id]);
+      expect(model.caption).toEqual({ tierName: facts.overall.tier.name, score: facts.overall.capacity });
+    }
+  });
+
+  it('is pure', () => {
+    expect(coverModel(CAPACITY_FACTS, methodology)).toEqual(coverModel(CAPACITY_FACTS, methodology));
   });
 });

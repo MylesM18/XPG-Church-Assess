@@ -307,6 +307,47 @@ export function verdictBlockModel(facts: FactsPack, methodology: Methodology): V
   };
 }
 
+export type CoverStripSeg = {
+  band: BandKey;
+  name: 'Severe' | 'Broken' | 'Watch' | 'Holding';
+  x: number;
+  w: number;
+};
+
+export type CoverModel = {
+  score: number;
+  tierName: string;
+  band: BandKey;
+  /** The s3 xpg_read line — the SAME string fallback-sections.ts:361 renders
+   * as s3's first bullet (§5-sanctioned reuse; no new prose is created). */
+  headline: string;
+  strip: { width: number; segments: CoverStripSeg[]; marker: { x: number } };
+  caption: { tierName: string; score: number };
+};
+
+const STRIP_BANDS: BandKey[] = ['severe', 'broken', 'watch', 'holding'];
+
+/** Spec §2.5 — cover verdict: giant score, 4-segment band strip with an ink
+ * marker at the score position, tier caption, and the xpg_read headline.
+ * NOT part of the ChartModel union: the cover flows through
+ * ResolvedReportSections.cover, never through section charts. */
+export function coverModel(facts: FactsPack, methodology: Methodology): CoverModel {
+  const segW = CHART_W_V2 / STRIP_BANDS.length;
+  const band = verdictBandFor(facts.overall.tier.id);
+  return {
+    score: facts.overall.capacity,
+    tierName: facts.overall.tier.name,
+    band,
+    headline: methodology.copy.xpg_read[facts.archetype][facts.overall.tier.id],
+    strip: {
+      width: CHART_W_V2,
+      segments: STRIP_BANDS.map((b, i) => ({ band: b, name: BAND_NAME[b], x: i * segW, w: segW })),
+      marker: { x: plotWidth(facts.overall.capacity, CHART_W_V2) },
+    },
+    caption: { tierName: facts.overall.tier.name, score: facts.overall.capacity },
+  };
+}
+
 const CHART_W = 320;
 const AREA_LABEL_W = 104;
 const ITEM_LABEL_W = 150;
