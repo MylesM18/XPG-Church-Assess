@@ -6,7 +6,7 @@ import type { SectionBody } from '../fallback-sections';
 import { bookingCta } from '../cta';
 import { registerReportFonts, FONT_DISPLAY, FONT_BODY } from './fonts';
 import { PdfChart } from './charts';
-import { BAND_FILL, BAND_TEXT, textOnBand, type CoverModel } from '../charts';
+import { BAND_FILL, BAND_TEXT, BAND_NAME, textOnBand, type CoverModel, type ChartModel, type BandKey } from '../charts';
 
 registerReportFonts();
 
@@ -33,6 +33,11 @@ const s = StyleSheet.create({
   openerTitle: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 26 },
   footer: { position: 'absolute', bottom: 24, left: 48, right: 48, borderTopWidth: 0.75, borderTopColor: RULE, paddingTop: 6, flexDirection: 'row', justifyContent: 'space-between' },
   capsLabel: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1, color: INK_SOFT },
+  dossierHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  dossierTab: { paddingVertical: 2, paddingHorizontal: 6, marginRight: 8 },
+  dossierTabText: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1 },
+  dossierName: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: INK, flexGrow: 1 },
+  dossierScore: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 24 },
 });
 
 const cs = StyleSheet.create({
@@ -158,21 +163,33 @@ function S5View({ ai, fallback }: AiRendererProps) {
   );
 }
 
-function S6View({ ai, fallback }: AiRendererProps) {
+function S6View({ ai, fallback, areaIndex }: AiRendererProps & { areaIndex: Map<string, { name: string; score: number; band: BandKey }> }) {
   const parsed = S6Schema.safeParse(ai);
   if (!parsed.success) return <AiFallback fallback={fallback} />;
   return (
     <>
-      {parsed.data.areas.map((area) => (
-        <View key={area.category_id} style={s.block}>
-          <Text style={s.body}>{area.affirm}</Text>
-          <Text style={s.body}>{area.pivot}</Text>
-          <Text style={s.body}>{area.evidence}</Text>
-          <Text style={s.body}>{area.not_statement}</Text>
-          <Text style={s.body}>{area.reframe}</Text>
-          <Text style={s.body}>{area.trajectory}</Text>
-        </View>
-      ))}
+      {parsed.data.areas.map((area) => {
+        const meta = areaIndex.get(area.category_id);
+        return (
+          <View key={area.category_id} style={s.block}>
+            {meta && (
+              <View style={s.dossierHead}>
+                <View style={[s.dossierTab, { backgroundColor: BAND_FILL[meta.band] }]}>
+                  <Text style={[s.dossierTabText, { color: textOnBand(meta.band) }]}>{BAND_NAME[meta.band].toUpperCase()}</Text>
+                </View>
+                <Text style={s.dossierName}>{meta.name}</Text>
+                <Text style={[s.dossierScore, { color: BAND_TEXT[meta.band] }]}>{String(meta.score)}</Text>
+              </View>
+            )}
+            <Text style={s.body}>{area.affirm}</Text>
+            <Text style={s.body}>{area.pivot}</Text>
+            <Text style={s.body}>{area.evidence}</Text>
+            <Text style={s.body}>{area.not_statement}</Text>
+            <Text style={s.body}>{area.reframe}</Text>
+            <Text style={s.body}>{area.trajectory}</Text>
+          </View>
+        );
+      })}
     </>
   );
 }
@@ -232,7 +249,12 @@ function isAiSectionId(id: AssembledSection['id']): id is AiSectionId {
  * AiSectionId without a case here, and tsc — not a human — fails the build. Keep the switch;
  * a Record/Map lookup is what the web renderer avoided for eslint's react-hooks/static-components.
  */
-function SectionContent({ section }: { section: AssembledSection }) {
+function SectionContent({
+  section, areaIndex,
+}: {
+  section: AssembledSection;
+  areaIndex: Map<string, { name: string; score: number; band: BandKey }>;
+}) {
   if (section.source === 'ai' && isAiSectionId(section.id)) {
     const { id, ai, fallback } = section;
     switch (id) {
@@ -243,7 +265,7 @@ function SectionContent({ section }: { section: AssembledSection }) {
       case 's5':
         return <S5View ai={ai} fallback={fallback} />;
       case 's6':
-        return <S6View ai={ai} fallback={fallback} />;
+        return S6View({ ai, fallback, areaIndex });
       case 's7':
         return <S7View ai={ai} fallback={fallback} />;
       case 's9':
@@ -303,6 +325,16 @@ function pageGroupsFor(sections: AssembledSection[]): PageGroup[] {
   return groups;
 }
 
+/** Index the s3 stat grid by category id so s6 dossiers can reuse the SAME
+ * name/score/band the dashboard shows — one source of truth, no recompute. */
+export function areaIndexFrom(sections: AssembledSection[]): Map<string, { name: string; score: number; band: BandKey }> {
+  const index = new Map<string, { name: string; score: number; band: BandKey }>();
+  const s3 = sections.find((sec) => sec.id === 's3');
+  const grid = s3?.charts.find((c): c is Extract<ChartModel, { kind: 'stat_grid' }> => c.kind === 'stat_grid');
+  if (grid) for (const cell of grid.cells) index.set(cell.id, { name: cell.name, score: cell.score, band: cell.band });
+  return index;
+}
+
 /**
  * The PDF mirror of app/app/[churchId]/diagnosis/report/sections.tsx. Same 13 sections, same
  * order, same one-title-source rule — different primitives, because @react-pdf/renderer cannot
@@ -314,6 +346,7 @@ function pageGroupsFor(sections: AssembledSection[]): PageGroup[] {
 export function ReportDocument({
   sections, churchName, brandColor, monogram, generatedAt, stale, cover,
 }: ReportDocumentProps) {
+  const areaIndex = areaIndexFrom(sections);
   return (
     <Document title={`${churchName} — Church Health Diagnosis`}>
       <Page size="A4" style={cs.coverPage}>
@@ -354,7 +387,7 @@ export function ReportDocument({
                   <PdfChart model={chart} />
                 </View>
               ))}
-              <SectionContent section={section} />
+              {SectionContent({ section, areaIndex })}
               {stale && section.id === 'appendix' && <Text style={s.caveat}>{STALE_CAVEAT}</Text>}
             </View>
           ))}

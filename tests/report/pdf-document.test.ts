@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { PDFParse } from 'pdf-parse';
 import { Page } from '@react-pdf/renderer';
 import { renderReportDocument } from '@/lib/report/pdf/render';
-import { ReportDocument, PAGE_GROUPS } from '@/lib/report/pdf/document';
+import { ReportDocument, PAGE_GROUPS, areaIndexFrom } from '@/lib/report/pdf/document';
 import { assembleFallbackOnly } from '@/lib/report/compose';
 import type { AssembledSection } from '@/lib/report/compose';
 import { buildFacts, type ChurchFacts, type FactsPack } from '@/lib/report/facts';
 import { loadMethodology } from '@/lib/methodology/load';
-import { coverModel } from '@/lib/report/charts';
+import { coverModel, statGridModel, type ChartModel } from '@/lib/report/charts';
+import { CAPACITY_FACTS } from '../fixtures/facts';
 import type { Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types';
 
 const methodology = loadMethodology();
@@ -292,6 +293,65 @@ describe('ReportDocument', () => {
     expect(texts.join(' ')).not.toContain('Internal leadership document');
     expect(texts.join(' ')).not.toContain('2026-07-18');
     expect(texts).toContain('CONFIDENTIAL');
+  });
+});
+
+describe('areaIndexFrom', () => {
+  it('indexes every stat grid cell by category id', () => {
+    const grid = statGridModel(CAPACITY_FACTS, methodology);
+    const sections: AssembledSection[] = [
+      {
+        id: 's3' as const,
+        source: 'fallback' as const,
+        ai: null,
+        fallback: { title: 'Health dashboard', body: '', bullets: [] },
+        charts: [grid],
+      },
+    ];
+    const index = areaIndexFrom(sections);
+    expect(index.size).toBe(grid.cells.length);
+    const first = grid.cells[0]!;
+    expect(index.get(first.id)).toEqual({ name: first.name, score: first.score, band: first.band });
+  });
+
+  it('is empty when no s3 stat grid exists', () => {
+    expect(areaIndexFrom([]).size).toBe(0);
+  });
+});
+
+describe('dossier tabs', () => {
+  it('renders band tab metadata on ai dossiers', () => {
+    const secs = sectionsFor();
+    const s3 = secs.find((sec) => sec.id === 's3');
+    const grid = s3?.charts.find((c): c is Extract<ChartModel, { kind: 'stat_grid' }> => c.kind === 'stat_grid');
+    expect(grid).toBeDefined();
+    if (!grid) return;
+    const cell = grid.cells[0]!;
+    const withAiS6 = secs.map((sec) =>
+      sec.id === 's6'
+        ? {
+            ...sec,
+            source: 'ai' as const,
+            ai: {
+              areas: [
+                {
+                  category_id: cell.id,
+                  affirm: 'Volunteer culture is holding.',
+                  pivot: 'Shift from recruiting to retaining.',
+                  evidence: 'Scores stayed above seventy.',
+                  not_statement: 'This is not a burnout story.',
+                  reframe: 'Treat volunteers as the engine.',
+                  trajectory: 'Watch the next two quarters.',
+                },
+              ],
+            },
+          }
+        : sec,
+    );
+    const doc = ReportDocument({ sections: withAiS6, ...DOC_ARGS });
+    const texts = collectTexts(doc);
+    expect(texts).toContain(String(cell.score));
+    expect(texts).toContain(cell.name);
   });
 });
 
