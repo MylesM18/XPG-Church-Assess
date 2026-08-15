@@ -52,6 +52,14 @@ function WebStatGrid({ model }: { model: Extract<ChartModel, { kind: 'stat_grid'
   )
 }
 
+// The two fontSize={7.5} labels below are deliberately NOT bumped to 12 the way the cover strip
+// and WebVerdictBlock were. The row text slot is 400 units wide (CHART_W 500, less the 56-unit
+// score block, less the x=44 indent) and lib/report/charts.ts truncates to RANK_TEXT_MAX=90
+// characters: at 12 units that needs roughly 590 units and overruns the score block. Bumping only
+// the theme label would leave the secondary line larger than the question it labels. A real fix
+// has to lower RANK_TEXT_MAX -- shared with the PDF via PdfChart, so it changes PDF truncation
+// too -- and re-space the 12-unit baseline gap between the two lines. That is a layout change,
+// not a legibility patch.
 function WebRankList({ model }: { model: Extract<ChartModel, { kind: 'rank_list' }> }) {
   return (
     <svg viewBox={`0 0 ${model.width} ${model.height}`} className="w-full h-auto" role="img" aria-label="Six weakest questions">
@@ -86,7 +94,7 @@ function WebVerdictBlock({ model }: { model: Extract<ChartModel, { kind: 'verdic
       <text x={24} y={100} fill={BAND_TEXT[model.hero.band]} fontSize={84} fontWeight={600} fontFamily="Fraunces, serif">
         {model.hero.score}
       </text>
-      <text x={24} y={124} fill={INK_SOFT} fontSize={7.5} fontWeight={700}>
+      <text x={24} y={124} fill={INK_SOFT} fontSize={12} fontWeight={700}>
         {`${model.hero.tierName} · Overall Health`.toUpperCase()}
       </text>
       {model.stats.map((stat) => (
@@ -95,7 +103,7 @@ function WebVerdictBlock({ model }: { model: Extract<ChartModel, { kind: 'verdic
           <text x={stat.x + 12} y={stat.y + 34} fill={INK} fontSize={24} fontWeight={600} fontFamily="Fraunces, serif">
             {stat.value}
           </text>
-          <text x={stat.x + 12} y={stat.y + 48} fill={INK_SOFT} fontSize={7.5} fontWeight={700}>
+          <text x={stat.x + 12} y={stat.y + 48} fill={INK_SOFT} fontSize={12} fontWeight={700}>
             {stat.label.toUpperCase()}
           </text>
         </g>
