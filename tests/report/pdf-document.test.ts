@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { PDFParse } from 'pdf-parse';
 import { Page } from '@react-pdf/renderer';
 import { renderReportDocument } from '@/lib/report/pdf/render';
@@ -394,4 +396,12 @@ describe('booking CTA', () => {
     expect(text).toContain(bookingCta.buttonLabel.slice(0, -1).trimEnd());
     expect(buffer.toString('latin1')).toContain(bookingCta.url);
   }, 30_000);
+});
+
+describe('pagination hygiene', () => {
+  it('keeps openers with their content and dossiers unsplit', () => {
+    const src = readFileSync(path.join(process.cwd(), 'lib/report/pdf/document.tsx'), 'utf8');
+    expect(src).toMatch(/minPresenceAhead=\{/);
+    expect(src).toMatch(/wrap=\{false\}/);
+  });
 });

@@ -171,7 +171,7 @@ function S6View({ ai, fallback, areaIndex }: AiRendererProps & { areaIndex: Map<
       {parsed.data.areas.map((area) => {
         const meta = areaIndex.get(area.category_id);
         return (
-          <View key={area.category_id} style={s.block}>
+          <View key={area.category_id} style={s.block} wrap={false}>
             {meta && (
               <View style={s.dossierHead}>
                 <View style={[s.dossierTab, { backgroundColor: BAND_FILL[meta.band] }]}>
@@ -378,7 +378,7 @@ export function ReportDocument({
 
           {group.sections.map(({ section, number, title }) => (
             <View key={section.id}>
-              <View style={[s.opener, { backgroundColor: BAND_FILL[cover.band] }]}>
+              <View minPresenceAhead={140} style={[s.opener, { backgroundColor: BAND_FILL[cover.band] }]}>
                 <Text style={[s.openerNumber, { color: textOnBand(cover.band) }]}>{number}</Text>
                 <Text style={[s.openerTitle, { color: textOnBand(cover.band) }]}>{title}</Text>
               </View>
