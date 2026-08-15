@@ -17,9 +17,9 @@ sections:
   s1:
     title: "Church Health Assessment"
     templates:
-      capacity: "{church_name} — assessed {completed_at}, {respondent_count} respondents."
-      constraint: "{church_name} — assessed {completed_at}, {respondent_count} respondents."
-      foundation: "{church_name} — assessed {completed_at}, {respondent_count} respondents."
+      capacity: "{church_name} — {respondent_phrase}."
+      constraint: "{church_name} — {respondent_phrase}."
+      foundation: "{church_name} — {respondent_phrase}."
     length_ceiling: 200
     required_mentions: []
 

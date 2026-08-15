@@ -400,6 +400,7 @@ export function fallbackSection(id: SectionId, args: FallbackSectionArgs): Secti
     church_name: facts.cover.church_name,
     completed_at: facts.cover.completed_at ?? 'not yet completed',
     respondent_count: String(facts.cover.respondent_count),
+    respondent_phrase: `${facts.cover.respondent_count} ${facts.cover.respondent_count === 1 ? 'respondent' : 'respondents'}`,
     overall_percent: String(facts.overall.capacity),
     tier_name: facts.overall.tier.name,
     primary_name: facts.primary_constraint?.name ?? 'no single stage',
