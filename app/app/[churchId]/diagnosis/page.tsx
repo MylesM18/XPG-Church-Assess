@@ -12,10 +12,13 @@ import type { Response } from '@/lib/engine/types'
 import { knownLabels } from '@/lib/report/anonymity'
 import { churchFactsFrom, reflectionRowsFor } from '@/lib/report/inputs-hash'
 import type { AssembledSection } from '@/lib/report/compose'
+import type { CoverModel } from '@/lib/report/charts'
 import { responseHash } from '@/lib/report/response-hash'
 import { resolveReportSections } from '@/lib/report/resolve'
 import { readPersistedReport } from '@/lib/data/reports'
 import { ReportSections } from './report/sections'
+import { ReportCover } from './report/report-cover'
+import { ReportToolbar, ReportNotice } from './report/toolbar'
 import { EmptyState, StaleMethodologyNotice } from './report/shared'
 import { ShareControl } from './share-control'
 import { regenerateReport } from '../actions'
@@ -168,6 +171,7 @@ export default async function DiagnosisPage({
   // existing single-return, ternary-JSX shape.
   let sections: AssembledSection[] = []
   let stale = false
+  let cover: CoverModel | null = null
 
   if (resolution.scoreable) {
     // Mirrors app/app/[churchId]/actions.ts's `hash = responseHash(responses, diagnosis
@@ -199,29 +203,42 @@ export default async function DiagnosisPage({
 
     sections = resolved.sections
     stale = resolved.stale
+    cover = resolved.cover
   }
+
+  // The cover's date line: the run's completion month in the PDF cover's exact format
+  // (document.tsx: toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })).
+  // Same "assessed" moment as completedAt above, never a page-load date.
+  const dateLabel = run!.completed_at
+    ? new Date(run!.completed_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+    : null
 
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
-      <div className="flex items-center gap-3">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-md font-display text-base text-white"
-          style={{ backgroundColor: church.brand_color }}
-        >
-          {brand.monogram}
-        </div>
-        <p className="font-display text-lg text-ink">{church.name}</p>
-      </div>
-
       {!resolution.scoreable ? (
-        <StaleMethodologyNotice churchId={churchId}>{notScoreableMessage}</StaleMethodologyNotice>
+        <ReportNotice>
+          <StaleMethodologyNotice churchId={churchId}>{notScoreableMessage}</StaleMethodologyNotice>
+        </ReportNotice>
       ) : (
         <>
+          <ReportToolbar>
+            <a
+              href={`/api/report/${run!.id}/pdf`}
+              className="py-1.5 font-body text-sm text-ink underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              Download PDF
+            </a>
+            {isAdmin && (
+              <ShareControl
+                churchId={churchId}
+                runId={run!.id}
+                existingLink={existingShareToken ? shareLink(APP_URL, existingShareToken) : null}
+              />
+            )}
+          </ReportToolbar>
           {stale && (
-            <div className="flex flex-col gap-8">
-              <p className="font-body text-sm text-ink-soft">
-                This report predates your latest settings change.
-              </p>
+            <ReportNotice>
+              <p>This report predates your latest settings change.</p>
               <form action={regenerateReport}>
                 <input type="hidden" name="churchId" value={churchId} />
                 <button
@@ -231,25 +248,22 @@ export default async function DiagnosisPage({
                   Regenerate report
                 </button>
               </form>
-            </div>
+            </ReportNotice>
           )}
-          <ReportSections sections={sections} />
-          <div className="flex flex-col gap-8">
-            <a
-              href={`/api/report/${run!.id}/pdf`}
-              className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-            >
-              Download PDF
-            </a>
-
-            {isAdmin && (
-              <ShareControl
-                churchId={churchId}
-                runId={run!.id}
-                existingLink={existingShareToken ? shareLink(APP_URL, existingShareToken) : null}
+          {cover && (
+            <>
+              <ReportCover
+                cover={cover}
+                churchName={church.name}
+                brandColor={church.brand_color}
+                monogram={brand.monogram}
+                dateLabel={dateLabel}
               />
-            )}
-          </div>
+              <div className="flex flex-col gap-10">
+                <ReportSections sections={sections} band={cover.band} />
+              </div>
+            </>
+          )}
         </>
       )}
     </main>

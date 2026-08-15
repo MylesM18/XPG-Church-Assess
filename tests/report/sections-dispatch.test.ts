@@ -9,6 +9,9 @@ import { describe, expect, it } from 'vitest'
 import { ReportSections, SectionBodyView } from '../../app/app/[churchId]/diagnosis/report/sections'
 import type { AssembledSection } from '../../lib/report/compose'
 
+// ReportSections now requires the cover's verdict band (Part B re-skin); any band renders.
+const BAND = 'holding' as const
+
 const fallbackSection = (id: string, title: string): AssembledSection => ({
   id: id as AssembledSection['id'],
   source: 'fallback',
@@ -42,7 +45,7 @@ describe('ReportSections', () => {
   ]
 
   it('renders every section, in array order, and never re-sorts', () => {
-    const html = renderToStaticMarkup(createElement(ReportSections, { sections }))
+    const html = renderToStaticMarkup(createElement(ReportSections, { band: BAND, sections }))
     const order = ['Overview', 'Executive summary', 'How to read this'].map((t) => html.indexOf(t))
     expect(order).toEqual([...order].sort((a, b) => a - b))
     // Collect and compare the whole set — an assertion inside a loop reports only the
@@ -52,13 +55,13 @@ describe('ReportSections', () => {
   })
 
   it('takes every heading from fallback.title', () => {
-    const html = renderToStaticMarkup(createElement(ReportSections, { sections }))
+    const html = renderToStaticMarkup(createElement(ReportSections, { band: BAND, sections }))
     expect(html).toContain('>Overview<')
     expect(html).toContain('>Executive summary<')
   })
 
   it('renders exactly one <h1>, on the first section only', () => {
-    const html = renderToStaticMarkup(createElement(ReportSections, { sections }))
+    const html = renderToStaticMarkup(createElement(ReportSections, { band: BAND, sections }))
     expect((html.match(/<h1[\s>]/g) ?? []).length).toBe(1)
     expect(html.indexOf('<h1')).toBeLessThan(html.indexOf('<h2'))
     expect((html.match(/<h2[\s>]/g) ?? []).length).toBe(2)
@@ -66,14 +69,14 @@ describe('ReportSections', () => {
 
   it('renders a fallback section through SectionBodyView', () => {
     const html = renderToStaticMarkup(
-      createElement(ReportSections, { sections: [fallbackSection('s1', 'Overview')] }),
+      createElement(ReportSections, { band: BAND, sections: [fallbackSection('s1', 'Overview')] }),
     )
     expect(html).toContain('body of s1')
     expect(html).toContain('bullet a s1')
   })
 
   it('renders an empty section list without throwing', () => {
-    expect(renderToStaticMarkup(createElement(ReportSections, { sections: [] }))).toBe('')
+    expect(renderToStaticMarkup(createElement(ReportSections, { band: BAND, sections: [] }))).toBe('')
   })
 })
 
@@ -117,7 +120,7 @@ describe('AI renderers', () => {
     // FIRST failure, which would hide six broken renderers behind one.
     const leaked = Object.entries(VALID_AI).filter(([id, ai]) => {
       const html = renderToStaticMarkup(
-        createElement(ReportSections, { sections: [aiSection(id, `Title ${id}`, ai)] }),
+        createElement(ReportSections, { band: BAND, sections: [aiSection(id, `Title ${id}`, ai)] }),
       )
       return html.includes(`FALLBACK BODY ${id}`)
     })
@@ -137,7 +140,7 @@ describe('AI renderers', () => {
     const missing: string[] = []
     for (const [id, needles] of Object.entries(expected)) {
       const html = renderToStaticMarkup(
-        createElement(ReportSections, { sections: [aiSection(id, `Title ${id}`, VALID_AI[id])] }),
+        createElement(ReportSections, { band: BAND, sections: [aiSection(id, `Title ${id}`, VALID_AI[id])] }),
       )
       for (const needle of needles) if (!html.includes(needle)) missing.push(`${id}:${needle}`)
     }
@@ -146,7 +149,7 @@ describe('AI renderers', () => {
 
   it('renders the six s6 beats in order: affirm, pivot, evidence, not_statement, reframe, trajectory', () => {
     const html = renderToStaticMarkup(
-      createElement(ReportSections, { sections: [aiSection('s6', 'Areas', VALID_AI.s6)] }),
+      createElement(ReportSections, { band: BAND, sections: [aiSection('s6', 'Areas', VALID_AI.s6)] }),
     )
     const positions = [
       'affirm text', 'pivot text', 'evidence text', 'not statement text', 'reframe text', 'trajectory text',
@@ -162,6 +165,7 @@ describe('AI renderers', () => {
   it('omits the s7 pattern claim when it is null', () => {
     const html = renderToStaticMarkup(
       createElement(ReportSections, {
+        band: BAND,
         sections: [aiSection('s7', 'Lowest', { narrative: 'only narrative', pattern_claim: null })],
       }),
     )
@@ -172,7 +176,7 @@ describe('AI renderers', () => {
   it('falls back to SectionBodyView when an AI payload fails its schema, and never throws', () => {
     const broken = Object.keys(VALID_AI).filter((id) => {
       const html = renderToStaticMarkup(
-        createElement(ReportSections, { sections: [aiSection(id, `Title ${id}`, { nonsense: true })] }),
+        createElement(ReportSections, { band: BAND, sections: [aiSection(id, `Title ${id}`, { nonsense: true })] }),
       )
       return !html.includes(`FALLBACK BODY ${id}`)
     })
@@ -181,14 +185,14 @@ describe('AI renderers', () => {
 
   it('falls back when ai is null on a source:ai section', () => {
     const html = renderToStaticMarkup(
-      createElement(ReportSections, { sections: [aiSection('s2', 'Executive summary', null)] }),
+      createElement(ReportSections, { band: BAND, sections: [aiSection('s2', 'Executive summary', null)] }),
     )
     expect(html).toContain('FALLBACK BODY s2')
   })
 
   it('still takes the heading from fallback.title on an AI section', () => {
     const html = renderToStaticMarkup(
-      createElement(ReportSections, { sections: [aiSection('s2', 'Executive summary', VALID_AI.s2)] }),
+      createElement(ReportSections, { band: BAND, sections: [aiSection('s2', 'Executive summary', VALID_AI.s2)] }),
     )
     expect(html).toContain('Executive summary')
   })
@@ -196,7 +200,7 @@ describe('AI renderers', () => {
   it('uses SectionBodyView for a non-AI section id even when source is ai', () => {
     // s1/s3/s8/s10/s11/appendix have no AI renderer — they must not throw.
     const html = renderToStaticMarkup(
-      createElement(ReportSections, { sections: [aiSection('s8', 'What leaders are saying', VALID_AI.s2)] }),
+      createElement(ReportSections, { band: BAND, sections: [aiSection('s8', 'What leaders are saying', VALID_AI.s2)] }),
     )
     expect(html).toContain('FALLBACK BODY s8')
   })

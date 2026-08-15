@@ -2,6 +2,7 @@ import type { Methodology, Theme } from '../methodology/schema';
 import type { CategoryState } from '../engine/types';
 import type { FactsPack } from './facts';
 import { readingBand } from './view';
+import type { AssembledSection } from './compose';
 
 /**
  * Chart geometry, computed once, in a fixed unit space both surfaces share.
@@ -321,4 +322,22 @@ const SCALE_MAX = 100;
 function plotWidth(score: number, plotW: number): number {
   const clamped = Math.min(Math.max(score, 0), SCALE_MAX);
   return (clamped / SCALE_MAX) * plotW;
+}
+
+// ---- s6 dossier lookup. Lives here (not in lib/report/pdf/document.tsx) so the web renderer
+// can share it without importing the PDF module; document.tsx re-exports both names.
+
+/** One category's dossier metadata: name, score, and reading band — shared by S6View's per-
+ *  dossier lookup and SectionContent's areaIndex prop, so the shape lives in one place instead
+ *  of the same inline Map<string, {...}> repeated at three call sites. */
+export type AreaIndex = Map<string, { name: string; score: number; band: BandKey }>;
+
+/** Index the s3 stat grid by category id so s6 dossiers can reuse the SAME
+ * name/score/band the dashboard shows — one source of truth, no recompute. */
+export function areaIndexFrom(sections: AssembledSection[]): AreaIndex {
+  const index: AreaIndex = new Map();
+  const s3 = sections.find((sec) => sec.id === 's3');
+  const grid = s3?.charts.find((c): c is Extract<ChartModel, { kind: 'stat_grid' }> => c.kind === 'stat_grid');
+  if (grid) for (const cell of grid.cells) index.set(cell.id, { name: cell.name, score: cell.score, band: cell.band });
+  return index;
 }

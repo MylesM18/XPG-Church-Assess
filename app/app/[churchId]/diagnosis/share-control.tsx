@@ -86,7 +86,7 @@ export function ShareControl({
               type="submit"
               aria-disabled={revoking}
               onClick={(e) => { if (revoking) e.preventDefault() }}
-              className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+              className="py-1.5 font-body text-sm text-ink underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
             >
               {revoking ? 'Revoking…' : 'Revoke share link'}
             </button>
@@ -101,7 +101,7 @@ export function ShareControl({
             type="submit"
             aria-disabled={minting}
             onClick={(e) => { if (minting) e.preventDefault() }}
-            className="py-1.5 font-body text-sm text-ink-soft underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            className="py-1.5 font-body text-sm text-ink underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             {minting ? 'Creating…' : 'Create share link'}
           </button>

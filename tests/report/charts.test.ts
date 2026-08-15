@@ -1,11 +1,13 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { loadMethodology } from '@/lib/methodology/load';
 import { readingBand } from '@/lib/report/view';
 import type { CategoryState } from '@/lib/engine/types';
+import type { AssembledSection } from '@/lib/report/compose';
 import {
   BAND_FILL,
   BAND_TEXT, BAND_NAME, verdictBandFor, textOnBand,
-  statGridModel, rankListModel, verdictBlockModel, coverModel,
+  statGridModel, rankListModel, verdictBlockModel, coverModel, areaIndexFrom,
 } from '@/lib/report/charts';
 import { ALL_FIXTURES, CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
 
@@ -218,5 +220,42 @@ describe('coverModel', () => {
 
   it('is pure', () => {
     expect(coverModel(CAPACITY_FACTS, methodology)).toEqual(coverModel(CAPACITY_FACTS, methodology));
+  });
+});
+
+describe('areaIndexFrom (shared seam, moved from lib/report/pdf/document.tsx)', () => {
+  const methodology = loadMethodology();
+
+  it('indexes every stat grid cell by category id', () => {
+    const grid = statGridModel(CAPACITY_FACTS, methodology);
+    const sections: AssembledSection[] = [
+      {
+        id: 's3',
+        source: 'fallback',
+        ai: null,
+        fallback: { title: 'Health dashboard', body: '', bullets: [] },
+        charts: [grid],
+      },
+    ];
+    const index = areaIndexFrom(sections);
+    expect(index.size).toBe(grid.cells.length);
+    const first = grid.cells[0]!;
+    expect(index.get(first.id)).toEqual({ name: first.name, score: first.score, band: first.band });
+  });
+
+  it('is empty when no s3 stat grid exists', () => {
+    expect(areaIndexFrom([]).size).toBe(0);
+  });
+
+  it('is defined in charts.ts and only re-exported by the PDF document', () => {
+    const charts = readFileSync('lib/report/charts.ts', 'utf8');
+    expect(charts).toMatch(/export type AreaIndex = Map<string, \{ name: string; score: number; band: BandKey \}>;/);
+    expect(charts).toMatch(/export function areaIndexFrom\(sections: AssembledSection\[\]\): AreaIndex/);
+    const doc = readFileSync('lib/report/pdf/document.tsx', 'utf8');
+    expect(doc).toContain("export { areaIndexFrom, type AreaIndex } from '../charts';");
+    expect(doc).not.toMatch(/export function areaIndexFrom/);
+    expect(doc).not.toMatch(/export type AreaIndex/);
+    // The web renderer must never import the PDF module for this.
+    expect(doc).toMatch(/import \{[^}]*\bareaIndexFrom\b[^}]*\} from '\.\.\/charts';/);
   });
 });

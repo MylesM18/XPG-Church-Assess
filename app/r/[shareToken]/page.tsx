@@ -22,9 +22,11 @@ import { deriveDiagnosisForRun } from '@/lib/report/derive'
 import { buildFacts } from '@/lib/report/facts'
 import { churchFactsFrom } from '@/lib/report/inputs-hash'
 import { assembleFallbackOnly } from '@/lib/report/compose'
+import { coverModel } from '@/lib/report/charts'
 import { ReportSections } from '@/app/app/[churchId]/diagnosis/report/sections'
+import { ReportCover } from '@/app/app/[churchId]/diagnosis/report/report-cover'
 import type { Response } from '@/lib/engine/types'
-import { BookingCta, SharedStaleMethodologyNotice } from '@/app/app/[churchId]/diagnosis/report/shared'
+import { SharedStaleMethodologyNotice } from '@/app/app/[churchId]/diagnosis/report/shared'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -165,23 +167,29 @@ export default async function SharedReportPage({
     reflections: [],
   })
 
+  // The cover exactly as lib/report/resolve.ts derives it (coverModel(facts, methodology)),
+  // from the facts + effective methodology this page already built — no new data access, no
+  // extra RPC. No completion timestamp is reachable on this surface (see completedAt: null
+  // above), so the cover renders without a date line.
+  const cover = coverModel(facts, reportMethodology)
+
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-10">
-      <div className="flex items-center gap-3">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-md font-display text-base text-white"
-          style={{ backgroundColor: row.brand_color }}
-        >
-          {brand.monogram}
-        </div>
-        {/* Not an <h1>: ReportSections below renders the page's one true <h1> (the first
-            section's title) — tests/a11y/shared-report-heading.test.ts pins exactly one <h1> on
-            this public, unauthenticated page. Same visual treatment as before, just a <p>. */}
-        <p className="font-display text-lg text-ink">{row.church_name}</p>
-      </div>
+      {/* The monogram + church name live inside the cover now. Its church name is a <p>, not
+          a heading: ReportSections below renders the page's one true <h1> (the first section
+          opener) — tests/a11y/shared-report-heading.test.ts pins exactly one <h1> on this
+          public page, and the booking CTA rides inside ReportSections after s12. */}
+      <ReportCover
+        cover={cover}
+        churchName={row.church_name}
+        brandColor={row.brand_color}
+        monogram={brand.monogram}
+        dateLabel={null}
+      />
 
-      <ReportSections sections={sections} />
-      <BookingCta />
+      <div className="flex flex-col gap-10">
+        <ReportSections sections={sections} band={cover.band} />
+      </div>
 
       <p className="font-body text-sm text-ink-soft">
         Shared read-only view. This link expires and can be revoked at any time.
