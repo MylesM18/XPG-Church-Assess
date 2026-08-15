@@ -5,6 +5,7 @@ import type { CategoryState } from '@/lib/engine/types';
 import {
   areaBarsModel, tierGaugeModel, bottomItemsModel, BAND_FILL, THEME_FILL,
   BAND_TEXT, BAND_NAME, verdictBandFor, textOnBand,
+  statGridModel, type StatGridModel,
 } from '@/lib/report/charts';
 import { ALL_FIXTURES, CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
 
@@ -165,5 +166,52 @@ describe('seam tokens (visual overhaul)', () => {
     expect(textOnBand('severe')).toBe('#FAF7F0');
     expect(textOnBand('broken')).toBe('#FAF7F0');
     expect(textOnBand('holding')).toBe('#FAF7F0');
+  });
+});
+
+describe('statGridModel', () => {
+  const methodology = loadMethodology();
+
+  it('lays every category into a 2-column grid inside the viewBox', () => {
+    for (const { facts } of ALL_FIXTURES) {
+      const model = statGridModel(facts, methodology);
+      expect(model.kind).toBe('stat_grid');
+      expect(model.width).toBe(500);
+      expect(model.cells).toHaveLength(facts.categories.length);
+      expect(model.height).toBeCloseTo(Math.ceil(facts.categories.length / 2) * 72, 5);
+      for (const cell of model.cells) {
+        expect(cell.x).toBeGreaterThanOrEqual(0);
+        expect(cell.x + cell.w).toBeLessThanOrEqual(model.width + 1e-9);
+        expect(cell.y + cell.h).toBeLessThanOrEqual(model.height + 1e-9);
+        expect(cell.bar.x).toBeGreaterThanOrEqual(cell.x);
+        expect(cell.bar.x + cell.bar.w).toBeLessThanOrEqual(cell.x + cell.w + 1e-9);
+        expect(cell.bar.y + cell.bar.h).toBeLessThanOrEqual(cell.y + cell.h + 1e-9);
+      }
+    }
+  });
+
+  it('keeps facts order and derives band + spelled-out label per cell', () => {
+    const model = statGridModel(CAPACITY_FACTS, methodology);
+    for (const [i, cell] of model.cells.entries()) {
+      const cat = CAPACITY_FACTS.categories[i]!;
+      const band = readingBand(cat.state as CategoryState, cat.score, methodology.rules.thresholds);
+      expect(cell.id).toBe(cat.id);
+      expect(cell.name).toBe(cat.name);
+      expect(cell.score).toBe(cat.score);
+      expect(cell.band).toBe(band);
+      expect(cell.label).toBe(cell.label.toUpperCase());
+      expect(cell.label).toContain('·');
+    }
+  });
+
+  it('cells are 250 wide and the mini-bar scales with score', () => {
+    const model = statGridModel(CAPACITY_FACTS, methodology);
+    const first = model.cells[0]!;
+    expect(first.w).toBeCloseTo(250, 5);
+    expect(first.bar.w).toBeCloseTo((first.score / 100) * (250 - 24), 5);
+  });
+
+  it('is pure', () => {
+    expect(statGridModel(CAPACITY_FACTS, methodology)).toEqual(statGridModel(CAPACITY_FACTS, methodology));
   });
 });

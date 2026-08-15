@@ -120,6 +120,69 @@ export interface BottomItemsModel {
 
 export type ChartModel = AreaBarsModel | TierGaugeModel | BottomItemsModel;
 
+// ---- v2 models (visual overhaul). Unit space: 1 viewBox unit ~ 1pt at A4
+// content width (595 - 2*48 = 499). Old 320-unit models below die in T8.
+export const CHART_W_V2 = 500;
+const GRID_COLS = 2;
+const CELL_H = 72;
+const CELL_PAD = 12;
+const MINI_BAR_H = 4;
+
+export type StatCell = {
+  id: string;
+  name: string;
+  score: number;
+  band: BandKey;
+  /** Caps label with the band spelled out (spec §3.1), e.g. 'VOLUNTEERS · HOLDING'. */
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  bar: { x: number; y: number; w: number; h: number };
+};
+
+export type StatGridModel = {
+  kind: 'stat_grid';
+  width: number;
+  height: number;
+  cells: StatCell[];
+};
+
+/** Spec §2.6.1 — modular 2-col stat grid: hairline cells, big band-colored
+ * numerals, caps 'Name · Band' labels, a thin mini-bar in the true band fill. */
+export function statGridModel(facts: FactsPack, methodology: Methodology): StatGridModel {
+  const cellW = CHART_W_V2 / GRID_COLS;
+  const cells = facts.categories.map((c, i): StatCell => {
+    const band = readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds);
+    const x = (i % GRID_COLS) * cellW;
+    const y = Math.floor(i / GRID_COLS) * CELL_H;
+    return {
+      id: c.id,
+      name: c.name,
+      score: c.score,
+      band,
+      label: `${c.name} · ${BAND_NAME[band]}`.toUpperCase(),
+      x,
+      y,
+      w: cellW,
+      h: CELL_H,
+      bar: {
+        x: x + CELL_PAD,
+        y: y + CELL_H - CELL_PAD - MINI_BAR_H,
+        w: plotWidth(c.score, cellW - 2 * CELL_PAD),
+        h: MINI_BAR_H,
+      },
+    };
+  });
+  return {
+    kind: 'stat_grid',
+    width: CHART_W_V2,
+    height: Math.ceil(facts.categories.length / GRID_COLS) * CELL_H,
+    cells,
+  };
+}
+
 const CHART_W = 320;
 const AREA_LABEL_W = 104;
 const ITEM_LABEL_W = 150;
