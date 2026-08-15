@@ -67,8 +67,7 @@ describe('statGridModel', () => {
       expect(cell.name).toBe(cat.name);
       expect(cell.score).toBe(cat.score);
       expect(cell.band).toBe(band);
-      expect(cell.label).toBe(cell.label.toUpperCase());
-      expect(cell.label).toContain('·');
+      expect(cell.label).toBe(`${cat.name} · ${BAND_NAME[band]}`.toUpperCase());
     }
   });
 

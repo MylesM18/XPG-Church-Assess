@@ -9,7 +9,7 @@ import { assembleFallbackOnly } from '@/lib/report/compose';
 import type { AssembledSection } from '@/lib/report/compose';
 import { buildFacts, type ChurchFacts, type FactsPack } from '@/lib/report/facts';
 import { loadMethodology } from '@/lib/methodology/load';
-import { coverModel, statGridModel, type ChartModel } from '@/lib/report/charts';
+import { coverModel, statGridModel, BAND_NAME, type ChartModel } from '@/lib/report/charts';
 import { CAPACITY_FACTS } from '../fixtures/facts';
 import type { Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types';
 
@@ -311,6 +311,12 @@ describe('ReportDocument', () => {
     expect(texts.join(' ')).not.toContain('2026-07-18');
     expect(texts).toContain('CONFIDENTIAL');
   });
+
+  // A future report.yaml reorder or a PAGE_GROUPS edit that drops/duplicates an id should fail
+  // here with a direct diff, not surface as a silent pagination change discovered visually.
+  it('accounts for every report.yaml section exactly once, in report.yaml order', () => {
+    expect(PAGE_GROUPS.flat()).toEqual(Object.keys(methodology.report.sections));
+  });
 });
 
 describe('areaIndexFrom', () => {
@@ -369,6 +375,9 @@ describe('dossier tabs', () => {
     const texts = collectTexts(doc);
     expect(texts).toContain(String(cell.score));
     expect(texts).toContain(cell.name);
+    // The dossier tab label (band name, spelled out per spec §3.1) appears nowhere else
+    // standalone in this fixture — the s3 stat grid label is 'NAME · BAND', not the band alone.
+    expect(texts).toContain(BAND_NAME[cell.band].toUpperCase());
   });
 });
 
@@ -401,7 +410,10 @@ describe('booking CTA', () => {
 describe('pagination hygiene', () => {
   it('keeps openers with their content and dossiers unsplit', () => {
     const src = readFileSync(path.join(process.cwd(), 'lib/report/pdf/document.tsx'), 'utf8');
-    expect(src).toMatch(/minPresenceAhead=\{/);
-    expect(src).toMatch(/wrap=\{false\}/);
+    // Anchored to the actual opener View (not just any minPresenceAhead in the file).
+    expect(src).toMatch(/<View minPresenceAhead=\{140\} style=\{\[s\.opener/);
+    // Anchored to the per-dossier View (not e.g. a section wrapper that would push a whole tall
+    // section instead of keeping just each dossier block whole).
+    expect(src).toMatch(/<View key=\{area\.category_id\} style=\{s\.block\} wrap=\{false\}>/);
   });
 });

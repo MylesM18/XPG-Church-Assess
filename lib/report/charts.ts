@@ -18,8 +18,11 @@ import { readingBand } from './view';
  * bug in one place, and tests/report/chart-parity.test.ts asserts both renderers consume the same
  * model object.
  *
- * Coordinates are unitless viewBox numbers. Each renderer sets its own on-page size; nothing here
- * knows about points, pixels, or page width.
+ * Coordinates are unitless viewBox numbers in the abstract, but the v2 models below are not
+ * actually points-agnostic: CHART_W is picked so that 1 unit ~ 1pt at A4's 499pt content width,
+ * and the PDF renderer passes a model's width straight through as `width={model.width}`. Each
+ * renderer still owns its own on-page SIZE — the web SVG scales the same numbers to its own
+ * viewport — but the numbers themselves are tuned for the PDF page, not dimension-free.
  */
 
 export type BandKey = 'severe' | 'broken' | 'watch' | 'holding';
@@ -85,7 +88,7 @@ export type ChartModel = StatGridModel | RankListModel | VerdictBlockModel;
 
 // ---- v2 models (visual overhaul). Unit space: 1 viewBox unit ~ 1pt at A4
 // content width (595 - 2*48 = 499).
-export const CHART_W = 500;
+const CHART_W = 500;
 const GRID_COLS = 2;
 const CELL_H = 72;
 const CELL_PAD = 12;

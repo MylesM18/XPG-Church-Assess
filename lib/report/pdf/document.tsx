@@ -163,7 +163,7 @@ function S5View({ ai, fallback }: AiRendererProps) {
   );
 }
 
-function S6View({ ai, fallback, areaIndex }: AiRendererProps & { areaIndex: Map<string, { name: string; score: number; band: BandKey }> }) {
+function S6View({ ai, fallback, areaIndex }: AiRendererProps & { areaIndex: AreaIndex }) {
   const parsed = S6Schema.safeParse(ai);
   if (!parsed.success) return <AiFallback fallback={fallback} />;
   return (
@@ -253,7 +253,7 @@ function SectionContent({
   section, areaIndex,
 }: {
   section: AssembledSection;
-  areaIndex: Map<string, { name: string; score: number; band: BandKey }>;
+  areaIndex: AreaIndex;
 }) {
   if (section.source === 'ai' && isAiSectionId(section.id)) {
     const { id, ai, fallback } = section;
@@ -283,14 +283,18 @@ function SectionContent({
 
 /**
  * Groups the 13 sections into content pages (spec §2.7): each group becomes one `<Page>` with a
- * fixed runhead/footer and a verdict-tint opener per section inside it. A section id missing from
- * this list still gets its own single-section page (see the defensive loop in pageGroupsFor) so a
- * future report.yaml id can't silently vanish from the PDF.
+ * fixed runhead/footer and a verdict-tint opener per section inside it. s3 (verdict block + the
+ * 8-area stat grid) gets its own page: pairing it with s4, as the plan literally specified, filled
+ * page 3 with s3's content and left page 4 carrying only the s4 opener plus a line or two — an
+ * orphaned opener on a near-blank trailing page for every 8-area church (spec §6 "no near-blank
+ * trailing pages"). s4 pairs with s5 instead. A section id missing from this list still gets its
+ * own single-section page (see the defensive loop in pageGroupsFor) so a future report.yaml id
+ * can't silently vanish from the PDF.
  */
 export const PAGE_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
   ['s1', 's2'],
-  ['s3', 's4'],
-  ['s5'],
+  ['s3'],
+  ['s4', 's5'],
   ['s6'],
   ['s7', 's8'],
   ['s9', 's10'],
@@ -317,18 +321,22 @@ function pageGroupsFor(sections: AssembledSection[]): PageGroup[] {
     key: ids.join('-'),
     sections: sections.filter((sec) => ids.includes(sec.id)).map((sec) => toGroupEntry(sec, numberFor)),
   })).filter((g) => g.sections.length > 0);
-  // Defensive: a section id missing from PAGE_GROUPS still gets its own page,
-  // so a future report.yaml id can't vanish from the PDF silently.
+  // Defensive: see the PAGE_GROUPS comment above.
   for (const sec of sections) {
     if (!grouped.has(sec.id)) groups.push({ key: sec.id, sections: [toGroupEntry(sec, numberFor)] });
   }
   return groups;
 }
 
+/** One category's dossier metadata: name, score, and reading band — shared by S6View's per-
+ *  dossier lookup and SectionContent's areaIndex prop, so the shape lives in one place instead
+ *  of the same inline Map<string, {...}> repeated at three call sites. */
+export type AreaIndex = Map<string, { name: string; score: number; band: BandKey }>;
+
 /** Index the s3 stat grid by category id so s6 dossiers can reuse the SAME
  * name/score/band the dashboard shows — one source of truth, no recompute. */
-export function areaIndexFrom(sections: AssembledSection[]): Map<string, { name: string; score: number; band: BandKey }> {
-  const index = new Map<string, { name: string; score: number; band: BandKey }>();
+export function areaIndexFrom(sections: AssembledSection[]): AreaIndex {
+  const index: AreaIndex = new Map();
   const s3 = sections.find((sec) => sec.id === 's3');
   const grid = s3?.charts.find((c): c is Extract<ChartModel, { kind: 'stat_grid' }> => c.kind === 'stat_grid');
   if (grid) for (const cell of grid.cells) index.set(cell.id, { name: cell.name, score: cell.score, band: cell.band });
@@ -356,7 +364,7 @@ export function ReportDocument({
         <Text style={cs.coverChurch}>{churchName}</Text>
         <Text style={cs.coverKicker}>CHURCH HEALTH ASSESSMENT</Text>
         <Text style={cs.coverDate}>
-          {generatedAt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          {generatedAt.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
         </Text>
         <View style={cs.coverHero}>
           <Text style={[cs.coverScore, { color: BAND_TEXT[cover.band] }]}>{String(cover.score)}</Text>
