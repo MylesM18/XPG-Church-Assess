@@ -2,8 +2,9 @@ import { BAND_FILL, BAND_TEXT, THEME_FILL, type ChartModel } from '@/lib/report/
 
 /**
  * The web half of the chart seam. Consumes the SAME ChartModel the PDF renderer does
- * (lib/report/pdf/charts.tsx) and NEVER recomputes geometry — every x/y/w/h comes off the model.
- * Different primitives, identical numbers.
+ * (lib/report/pdf/charts.tsx) and NEVER recomputes geometry — the rank list and verdict block
+ * draw the model's x/y/w/h as SVG; the stat grid lays the same cells out as an HTML grid so it
+ * can reflow on narrow screens.
  *
  * Charts render on the public share page too: assembleFallbackOnly attaches the same models, and
  * chartsForSection never reads section.source. The share page is permanently fallback-only, so
@@ -15,22 +16,31 @@ const INK_SOFT = '#5A5A54'
 const RULE = '#D8D5CE'
 const CREAM = '#FAF7F0'
 
+/**
+ * The 8-area stat grid as a real HTML grid (Part B spec §4.2.5): 2 columns below sm, 4 from sm
+ * up. Still the same model object as the PDF — score, band, caps 'NAME · BAND' label and the
+ * mini-bar all come off `model.cells`; the bar length is the model's own bar.w as a share of
+ * the cell's inner width (bar.x - x is the cell padding), a unit conversion, not new geometry.
+ * The other two kinds stay SVG below.
+ */
 function WebStatGrid({ model }: { model: Extract<ChartModel, { kind: 'stat_grid' }> }) {
   return (
-    <svg viewBox={`0 0 ${model.width} ${model.height}`} className="w-full h-auto" role="img" aria-label="Area scores with health bands">
-      {model.cells.map((cell) => (
-        <g key={cell.id}>
-          <rect x={cell.x} y={cell.y} width={cell.w} height={cell.h} fill="none" stroke={RULE} strokeWidth={0.75} />
-          <text x={cell.x + 12} y={cell.y + 34} fill={BAND_TEXT[cell.band]} fontSize={24} fontWeight={600} fontFamily="Fraunces, serif">
-            {cell.score}
-          </text>
-          <text x={cell.x + 12} y={cell.y + 48} fill={INK_SOFT} fontSize={7.5} fontWeight={700}>
-            {cell.label}
-          </text>
-          <rect x={cell.bar.x} y={cell.bar.y} width={cell.bar.w} height={cell.bar.h} fill={BAND_FILL[cell.band]} />
-        </g>
-      ))}
-    </svg>
+    <ul className="grid grid-cols-2 border-l border-t border-line sm:grid-cols-4" aria-label="Area scores with health bands">
+      {model.cells.map((cell) => {
+        const inner = cell.w - 2 * (cell.bar.x - cell.x)
+        return (
+          <li key={cell.id} className="flex flex-col border-b border-r border-line p-3">
+            <p className="font-display text-2xl font-semibold leading-none" style={{ color: BAND_TEXT[cell.band] }}>
+              {cell.score}
+            </p>
+            <p className="mt-1 font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-ink-soft">
+              {cell.label}
+            </p>
+            <div className="mt-3 h-1" style={{ width: `${(cell.bar.w / inner) * 100}%`, backgroundColor: BAND_FILL[cell.band] }} />
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
