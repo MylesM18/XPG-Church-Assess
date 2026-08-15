@@ -361,7 +361,7 @@ function bulletsFor(
       return Object.entries(facts.profile).map(([k, v]) => `${PROFILE_LABELS[k] ?? k}: ${v}`);
     case 's3':
       // ONE bullet, not eight. The eight `Name: score — bandRead` lines this used to emit are
-      // now the areaBarsModel chart (lib/report/charts.ts) on both surfaces, with the bar fill
+      // now the statGridModel chart (lib/report/charts.ts) on both surfaces, with the bar fill
       // keyed to the same corrected readingBand — printing them again beside the chart is the
       // same data twice. What the chart cannot say is what the shape MEANS, which is this line.
       return [methodology.copy.xpg_read[facts.archetype][facts.overall.tier.id]];

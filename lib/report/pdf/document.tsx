@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, Link, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, Link, Svg, Rect, G, StyleSheet } from '@react-pdf/renderer';
 import { AI_SECTION_IDS, S2Schema, S4Schema, S5Schema, S6Schema, S7Schema, S9Schema, S12Schema } from '../../ai/sections';
 import type { AiSectionId } from '../../ai/sections';
 import type { AssembledSection } from '../compose';
@@ -6,22 +6,18 @@ import type { SectionBody } from '../fallback-sections';
 import { bookingCta } from '../cta';
 import { registerReportFonts, FONT_DISPLAY, FONT_BODY } from './fonts';
 import { PdfChart } from './charts';
+import { BAND_FILL, BAND_TEXT, BAND_NAME, textOnBand, type CoverModel, type ChartModel, type BandKey } from '../charts';
 
 registerReportFonts();
 
 const INK = '#1A1A18';
 const INK_SOFT = '#5A5A54';
 const RULE = '#D8D5CE';
+const CREAM = '#FAF7F0';
 
 const s = StyleSheet.create({
-  page: { paddingTop: 56, paddingBottom: 56, paddingHorizontal: 48, fontFamily: FONT_BODY, fontSize: 10.5, color: INK, lineHeight: 1.5 },
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 24, borderBottomWidth: 1, borderBottomColor: RULE, paddingBottom: 8 },
+  page: { backgroundColor: CREAM, paddingTop: 64, paddingBottom: 56, paddingHorizontal: 48, fontFamily: FONT_BODY, fontSize: 10.5, lineHeight: 1.5, color: INK },
   monogram: { width: 28, height: 28, borderRadius: 14, color: '#FFFFFF', fontFamily: FONT_DISPLAY, fontSize: 12, textAlign: 'center', paddingTop: 7, marginRight: 8 },
-  headerText: { flexDirection: 'column' },
-  churchName: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14 },
-  headerMeta: { fontSize: 9, color: INK_SOFT },
-  h1: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 18, marginBottom: 8 },
-  h2: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 13, marginBottom: 6 },
   section: { marginBottom: 18 },
   body: { marginBottom: 6 },
   bullet: { marginBottom: 2, paddingLeft: 10 },
@@ -29,9 +25,55 @@ const s = StyleSheet.create({
   block: { marginBottom: 8 },
   caveat: { fontSize: 9, color: INK_SOFT, marginTop: 8 },
   chart: { marginTop: 6, marginBottom: 6 },
+  ctaHeading: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: INK },
   ctaButton: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: INK, color: '#FFFFFF', fontFamily: FONT_DISPLAY, fontSize: 10, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 4, textDecoration: 'none' },
-  footer: { position: 'absolute', bottom: 24, left: 48, right: 48, flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: INK_SOFT },
+  runhead: { position: 'absolute', top: 24, left: 48, right: 48, flexDirection: 'row', justifyContent: 'space-between' },
+  opener: { paddingVertical: 12, paddingHorizontal: 16, marginBottom: 18 },
+  openerNumber: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1 },
+  openerTitle: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 26 },
+  footer: { position: 'absolute', bottom: 24, left: 48, right: 48, borderTopWidth: 0.75, borderTopColor: RULE, paddingTop: 6, flexDirection: 'row', justifyContent: 'space-between' },
+  capsLabel: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1, color: INK_SOFT },
+  dossierHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  dossierTab: { paddingVertical: 2, paddingHorizontal: 6, marginRight: 8 },
+  dossierTabText: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1 },
+  dossierName: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: INK, flexGrow: 1 },
+  dossierScore: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 24 },
 });
+
+const cs = StyleSheet.create({
+  coverPage: { backgroundColor: CREAM, paddingTop: 64, paddingHorizontal: 48, paddingBottom: 0, fontFamily: FONT_BODY, color: INK },
+  coverChurch: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 20, marginTop: 18 },
+  coverKicker: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1, color: INK_SOFT, marginTop: 4 },
+  coverDate: { fontSize: 10.5, color: INK_SOFT, marginTop: 2 },
+  coverHero: { marginTop: 70 },
+  coverScore: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 84 },
+  coverCaption: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 10.5, marginTop: 10 },
+  coverFoot: { position: 'absolute', left: 0, right: 0, bottom: 44, paddingVertical: 26, paddingHorizontal: 48 },
+  coverHeadline: { fontFamily: FONT_DISPLAY, fontWeight: 400, fontSize: 15, lineHeight: 1.45 },
+  coverRunline: { position: 'absolute', bottom: 20, left: 48, fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1, color: INK_SOFT },
+});
+
+/**
+ * The cover's 4-segment band strip (spec §2.5): SEVERE/BROKEN/WATCH/HOLDING swatches with an ink
+ * marker at the overall score's plotted position. Geometry comes entirely off `cover.strip` —
+ * this component never recomputes coordinates, mirroring PdfChart's contract with ChartModel.
+ */
+function CoverStrip({ cover }: { cover: CoverModel }) {
+  const markerX = Math.max(1, Math.min(cover.strip.marker.x, cover.strip.width - 1)) - 1;
+  return (
+    <Svg width={499} height={44} viewBox={`0 0 ${cover.strip.width} 44`}>
+      {cover.strip.segments.map((seg) => (
+        <G key={seg.band}>
+          <Rect x={seg.x} y={8} width={seg.w} height={14} fill={BAND_FILL[seg.band]} />
+          <Text x={seg.x} y={38} fill={INK_SOFT} style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5 }}>
+            {seg.name.toUpperCase()}
+          </Text>
+        </G>
+      ))}
+      <Rect x={markerX} y={0} width={2} height={30} fill={INK} />
+    </Svg>
+  );
+}
 
 export interface ReportDocumentProps {
   sections: AssembledSection[];
@@ -48,6 +90,8 @@ export interface ReportDocumentProps {
   labels: readonly string[];
   /** A report exists for this run but not for these inputs. Renders as an appendix caveat. */
   stale: boolean;
+  /** Cover model computed in resolve; the document never reads facts. */
+  cover: CoverModel;
 }
 
 const STALE_CAVEAT =
@@ -119,21 +163,33 @@ function S5View({ ai, fallback }: AiRendererProps) {
   );
 }
 
-function S6View({ ai, fallback }: AiRendererProps) {
+function S6View({ ai, fallback, areaIndex }: AiRendererProps & { areaIndex: AreaIndex }) {
   const parsed = S6Schema.safeParse(ai);
   if (!parsed.success) return <AiFallback fallback={fallback} />;
   return (
     <>
-      {parsed.data.areas.map((area) => (
-        <View key={area.category_id} style={s.block}>
-          <Text style={s.body}>{area.affirm}</Text>
-          <Text style={s.body}>{area.pivot}</Text>
-          <Text style={s.body}>{area.evidence}</Text>
-          <Text style={s.body}>{area.not_statement}</Text>
-          <Text style={s.body}>{area.reframe}</Text>
-          <Text style={s.body}>{area.trajectory}</Text>
-        </View>
-      ))}
+      {parsed.data.areas.map((area) => {
+        const meta = areaIndex.get(area.category_id);
+        return (
+          <View key={area.category_id} style={s.block} wrap={false}>
+            {meta && (
+              <View style={s.dossierHead}>
+                <View style={[s.dossierTab, { backgroundColor: BAND_FILL[meta.band] }]}>
+                  <Text style={[s.dossierTabText, { color: textOnBand(meta.band) }]}>{BAND_NAME[meta.band].toUpperCase()}</Text>
+                </View>
+                <Text style={s.dossierName}>{meta.name}</Text>
+                <Text style={[s.dossierScore, { color: BAND_TEXT[meta.band] }]}>{String(meta.score)}</Text>
+              </View>
+            )}
+            <Text style={s.body}>{area.affirm}</Text>
+            <Text style={s.body}>{area.pivot}</Text>
+            <Text style={s.body}>{area.evidence}</Text>
+            <Text style={s.body}>{area.not_statement}</Text>
+            <Text style={s.body}>{area.reframe}</Text>
+            <Text style={s.body}>{area.trajectory}</Text>
+          </View>
+        );
+      })}
     </>
   );
 }
@@ -193,7 +249,12 @@ function isAiSectionId(id: AssembledSection['id']): id is AiSectionId {
  * AiSectionId without a case here, and tsc — not a human — fails the build. Keep the switch;
  * a Record/Map lookup is what the web renderer avoided for eslint's react-hooks/static-components.
  */
-function SectionContent({ section }: { section: AssembledSection }) {
+function SectionContent({
+  section, areaIndex,
+}: {
+  section: AssembledSection;
+  areaIndex: AreaIndex;
+}) {
   if (section.source === 'ai' && isAiSectionId(section.id)) {
     const { id, ai, fallback } = section;
     switch (id) {
@@ -204,7 +265,7 @@ function SectionContent({ section }: { section: AssembledSection }) {
       case 's5':
         return <S5View ai={ai} fallback={fallback} />;
       case 's6':
-        return <S6View ai={ai} fallback={fallback} />;
+        return <S6View ai={ai} fallback={fallback} areaIndex={areaIndex} />;
       case 's7':
         return <S7View ai={ai} fallback={fallback} />;
       case 's9':
@@ -221,6 +282,68 @@ function SectionContent({ section }: { section: AssembledSection }) {
 }
 
 /**
+ * Groups the 13 sections into content pages (spec §2.7): each group becomes one `<Page>` with a
+ * fixed runhead/footer and a verdict-tint opener per section inside it. s3 (verdict block + the
+ * 8-area stat grid) gets its own page: pairing it with s4, as the plan literally specified, filled
+ * page 3 with s3's content and left page 4 carrying only the s4 opener plus a line or two — an
+ * orphaned opener on a near-blank trailing page for every 8-area church (spec §6 "no near-blank
+ * trailing pages"). s4 pairs with s5 instead. A section id missing from this list still gets its
+ * own single-section page (see the defensive loop in pageGroupsFor) so a future report.yaml id
+ * can't silently vanish from the PDF.
+ */
+export const PAGE_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
+  ['s1', 's2'],
+  ['s3'],
+  ['s4', 's5'],
+  ['s6'],
+  ['s7', 's8'],
+  ['s9', 's10'],
+  ['s11', 's12'],
+  ['appendix'],
+];
+
+type PageGroup = { key: string; sections: Array<{ section: AssembledSection; number: string; title: string }> };
+
+/**
+ * Reads each section's fallback title exactly once, here — the opener and the footer's running
+ * head both consume the precomputed `title` field below rather than re-deriving it from the
+ * section's fallback themselves, preserving the "one title source" invariant pdf-sections.test.ts
+ * asserts.
+ */
+function toGroupEntry(section: AssembledSection, numberFor: Map<string, string>) {
+  return { section, number: numberFor.get(section.id) ?? '00', title: section.fallback.title };
+}
+
+function pageGroupsFor(sections: AssembledSection[]): PageGroup[] {
+  const numberFor = new Map(sections.map((sec, i) => [sec.id, String(i + 1).padStart(2, '0')]));
+  const grouped = new Set(PAGE_GROUPS.flat());
+  const groups: PageGroup[] = PAGE_GROUPS.map((ids) => ({
+    key: ids.join('-'),
+    sections: sections.filter((sec) => ids.includes(sec.id)).map((sec) => toGroupEntry(sec, numberFor)),
+  })).filter((g) => g.sections.length > 0);
+  // Defensive: see the PAGE_GROUPS comment above.
+  for (const sec of sections) {
+    if (!grouped.has(sec.id)) groups.push({ key: sec.id, sections: [toGroupEntry(sec, numberFor)] });
+  }
+  return groups;
+}
+
+/** One category's dossier metadata: name, score, and reading band — shared by S6View's per-
+ *  dossier lookup and SectionContent's areaIndex prop, so the shape lives in one place instead
+ *  of the same inline Map<string, {...}> repeated at three call sites. */
+export type AreaIndex = Map<string, { name: string; score: number; band: BandKey }>;
+
+/** Index the s3 stat grid by category id so s6 dossiers can reuse the SAME
+ * name/score/band the dashboard shows — one source of truth, no recompute. */
+export function areaIndexFrom(sections: AssembledSection[]): AreaIndex {
+  const index: AreaIndex = new Map();
+  const s3 = sections.find((sec) => sec.id === 's3');
+  const grid = s3?.charts.find((c): c is Extract<ChartModel, { kind: 'stat_grid' }> => c.kind === 'stat_grid');
+  if (grid) for (const cell of grid.cells) index.set(cell.id, { name: cell.name, score: cell.score, band: cell.band });
+  return index;
+}
+
+/**
  * The PDF mirror of app/app/[churchId]/diagnosis/report/sections.tsx. Same 13 sections, same
  * order, same one-title-source rule — different primitives, because @react-pdf/renderer cannot
  * render DOM components and never could.
@@ -229,45 +352,71 @@ function SectionContent({ section }: { section: AssembledSection }) {
  * Object.keys(methodology.report.sections) order, which is report.yaml order.
  */
 export function ReportDocument({
-  sections, churchName, brandColor, monogram, generatedAt, stale,
+  sections, churchName, brandColor, monogram, generatedAt, stale, cover,
 }: ReportDocumentProps) {
-  const dateLabel = generatedAt.toISOString().slice(0, 10);
-
+  const areaIndex = areaIndexFrom(sections);
   return (
     <Document title={`${churchName} — Church Health Diagnosis`}>
-      <Page size="A4" style={s.page}>
-        <View style={s.header} fixed>
-          <Text style={[s.monogram, { backgroundColor: brandColor }]}>{monogram}</Text>
-          <View style={s.headerText}>
-            <Text style={s.churchName}>{churchName}</Text>
-            <Text style={s.headerMeta}>Church Health Diagnosis · {dateLabel}</Text>
-          </View>
+      <Page size="A4" style={cs.coverPage}>
+        {/* monogram: copy of the existing content-header monogram markup verbatim;
+            Task 12 deletes the content-header original so it lives only here. */}
+        <Text style={[s.monogram, { backgroundColor: brandColor }]}>{monogram}</Text>
+        <Text style={cs.coverChurch}>{churchName}</Text>
+        <Text style={cs.coverKicker}>CHURCH HEALTH ASSESSMENT</Text>
+        <Text style={cs.coverDate}>
+          {generatedAt.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+        </Text>
+        <View style={cs.coverHero}>
+          <Text style={[cs.coverScore, { color: BAND_TEXT[cover.band] }]}>{String(cover.score)}</Text>
+          <CoverStrip cover={cover} />
+          <Text style={cs.coverCaption}>{`${cover.caption.tierName} · ${cover.caption.score} of 100`}</Text>
         </View>
-
-        {sections.map((section, index) => (
-          <View key={section.id} style={s.section}>
-            <Text style={index === 0 ? s.h1 : s.h2}>{section.fallback.title}</Text>
-            {section.charts.map((chart) => (
-              <View key={chart.kind} style={s.chart}>
-                <PdfChart model={chart} />
-              </View>
-            ))}
-            <SectionContent section={section} />
-            {stale && section.id === 'appendix' && <Text style={s.caveat}>{STALE_CAVEAT}</Text>}
-          </View>
-        ))}
-
-        <View style={s.section}>
-          <Text style={s.h2}>{bookingCta.heading}</Text>
-          <Text style={s.body}>{bookingCta.body}</Text>
-          <Link src={bookingCta.url} style={s.ctaButton}>{bookingCta.buttonLabel}</Link>
+        <View style={[cs.coverFoot, { backgroundColor: BAND_FILL[cover.band] }]}>
+          <Text style={[cs.coverHeadline, { color: textOnBand(cover.band) }]}>{cover.headline}</Text>
         </View>
-
-        <View style={s.footer} fixed>
-          <Text>Internal leadership document</Text>
-          <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
-        </View>
+        <Text style={cs.coverRunline}>XPG · CHURCH HEALTH ASSESSMENT</Text>
       </Page>
+
+      {pageGroupsFor(sections).map((group) => (
+        <Page key={group.key} size="A4" style={s.page} wrap>
+          <View fixed style={s.runhead}>
+            <Text style={s.capsLabel}>{churchName.toUpperCase()}</Text>
+            <Text style={s.capsLabel}>CHURCH HEALTH ASSESSMENT</Text>
+          </View>
+
+          {group.sections.map(({ section, number, title }) => (
+            <View key={section.id}>
+              <View minPresenceAhead={140} style={[s.opener, { backgroundColor: BAND_FILL[cover.band] }]}>
+                <Text style={[s.openerNumber, { color: textOnBand(cover.band) }]}>{number}</Text>
+                <Text style={[s.openerTitle, { color: textOnBand(cover.band) }]}>{title}</Text>
+              </View>
+              {section.charts.map((chart) => (
+                <View key={chart.kind} style={s.chart}>
+                  <PdfChart model={chart} />
+                </View>
+              ))}
+              <SectionContent section={section} areaIndex={areaIndex} />
+              {stale && section.id === 'appendix' && <Text style={s.caveat}>{STALE_CAVEAT}</Text>}
+            </View>
+          ))}
+
+          {group.sections.some(({ section }) => section.id === 's12') ? (
+            <View style={s.section}>
+              <Text style={s.ctaHeading}>{bookingCta.heading}</Text>
+              <Text style={s.body}>{bookingCta.body}</Text>
+              <Link src={bookingCta.url} style={s.ctaButton}>{bookingCta.buttonLabel}</Link>
+            </View>
+          ) : null}
+
+          <View fixed style={s.footer}>
+            <Text
+              style={s.capsLabel}
+              render={({ pageNumber }) => `${pageNumber} · ${group.sections[0]?.title ?? ''}`}
+            />
+            <Text style={s.capsLabel}>CONFIDENTIAL</Text>
+          </View>
+        </Page>
+      ))}
     </Document>
   );
 }

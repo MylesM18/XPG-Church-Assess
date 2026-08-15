@@ -18,8 +18,11 @@ import { readingBand } from './view';
  * bug in one place, and tests/report/chart-parity.test.ts asserts both renderers consume the same
  * model object.
  *
- * Coordinates are unitless viewBox numbers. Each renderer sets its own on-page size; nothing here
- * knows about points, pixels, or page width.
+ * Coordinates are unitless viewBox numbers in the abstract, but the v2 models below are not
+ * actually points-agnostic: CHART_W is picked so that 1 unit ~ 1pt at A4's 499pt content width,
+ * and the PDF renderer passes a model's width straight through as `width={model.width}`. Each
+ * renderer still owns its own on-page SIZE — the web SVG scales the same numbers to its own
+ * viewport — but the numbers themselves are tuned for the PDF page, not dimension-free.
  */
 
 export type BandKey = 'severe' | 'broken' | 'watch' | 'holding';
@@ -42,52 +45,275 @@ export const THEME_FILL: Record<Theme, string> = {
   relational: '#4A6B4F',
 };
 
-export interface Tick { value: number; x: number }
+const INK = '#1A1A18';
+const CREAM = '#FAF7F0';
 
-export interface AreaBar {
-  id: string; name: string; score: number; band: BandKey;
-  x: number; y: number; w: number; h: number;
-}
-export interface AreaBarsModel {
-  kind: 'area_bars';
-  bars: AreaBar[];
-  ticks: Tick[];
-  /** Space reserved left of the plot for row labels. Renderers place label text within it. */
-  labelWidth: number;
-  w: number; h: number;
-}
+/** Text/numeral colors on the cream ground (spec §3.2): true amber fails
+ * contrast as text, so watch text darkens to #906722; other bands reuse
+ * their fill hex. Renderers use BAND_TEXT for text, BAND_FILL for fills. */
+export const BAND_TEXT: Record<BandKey, string> = {
+  severe: '#8C2F1F',
+  broken: '#B4552F',
+  watch: '#906722',
+  holding: '#4A6B4F',
+};
 
-export interface TierBandSeg {
-  id: string; name: string; from: number; to: number; x: number; w: number;
-}
-export interface TierGaugeModel {
-  kind: 'tier_gauge';
-  bands: TierBandSeg[];
-  marker: { x: number; label: string; value: number };
-  w: number; h: number;
-}
+/** Band color never travels alone (spec §3.1) — the spelled-out names. */
+export const BAND_NAME: Record<BandKey, 'Severe' | 'Broken' | 'Watch' | 'Holding'> = {
+  severe: 'Severe',
+  broken: 'Broken',
+  watch: 'Watch',
+  holding: 'Holding',
+};
 
-export interface BottomItemBar {
-  id: string; text: string; mean: number; theme: Theme;
-  x: number; y: number; w: number; h: number;
-}
-export interface BottomItemsModel {
-  kind: 'bottom_items';
-  bars: BottomItemBar[];
-  ticks: Tick[];
-  labelWidth: number;
-  w: number; h: number;
+const VERDICT_BAND: Record<string, BandKey> = {
+  at_risk: 'severe',
+  strained: 'broken',
+  healthy_stretched: 'watch',
+  healthy_ready: 'holding',
+};
+
+/** Overall tier id -> the band that tints the whole report ("the color IS
+ * the diagnosis", spec §2.1). Unknown ids fail dark. */
+export function verdictBandFor(tierId: string): BandKey {
+  return VERDICT_BAND[tierId] ?? 'severe';
 }
 
-export type ChartModel = AreaBarsModel | TierGaugeModel | BottomItemsModel;
+/** Spec §3.2: text ON amber panels is ink; on severe/broken/holding, cream. */
+export function textOnBand(band: BandKey): string {
+  return band === 'watch' ? INK : CREAM;
+}
 
-const CHART_W = 320;
-const AREA_LABEL_W = 104;
-const ITEM_LABEL_W = 150;
-const ROW_H = 14;
-const ROW_GAP = 6;
-const GAUGE_H = 22;
-const TICK_VALUES = [0, 25, 50, 75, 100] as const;
+export type ChartModel = StatGridModel | RankListModel | VerdictBlockModel;
+
+// ---- v2 models (visual overhaul). Unit space: 1 viewBox unit ~ 1pt at A4
+// content width (595 - 2*48 = 499).
+const CHART_W = 500;
+const GRID_COLS = 2;
+const CELL_H = 72;
+const CELL_PAD = 12;
+const MINI_BAR_H = 4;
+
+const RANK_ROW_H = 44;
+const RANK_ROW_GAP = 10;
+const SCORE_BLOCK_W = 56;
+const SCORE_BLOCK_H = 32;
+const RANK_TEXT_MAX = 90;
+
+export type StatCell = {
+  id: string;
+  name: string;
+  score: number;
+  band: BandKey;
+  /** Caps label with the band spelled out (spec §3.1), e.g. 'VOLUNTEERS · HOLDING'. */
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  bar: { x: number; y: number; w: number; h: number };
+};
+
+export type StatGridModel = {
+  kind: 'stat_grid';
+  width: number;
+  height: number;
+  cells: StatCell[];
+};
+
+/** Spec §2.6.1 — modular 2-col stat grid: hairline cells, big band-colored
+ * numerals, caps 'Name · Band' labels, a thin mini-bar in the true band fill. */
+export function statGridModel(facts: FactsPack, methodology: Methodology): StatGridModel {
+  const cellW = CHART_W / GRID_COLS;
+  const cells = facts.categories.map((c, i): StatCell => {
+    const band = readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds);
+    const x = (i % GRID_COLS) * cellW;
+    const y = Math.floor(i / GRID_COLS) * CELL_H;
+    return {
+      id: c.id,
+      name: c.name,
+      score: c.score,
+      band,
+      label: `${c.name} · ${BAND_NAME[band]}`.toUpperCase(),
+      x,
+      y,
+      w: cellW,
+      h: CELL_H,
+      bar: {
+        x: x + CELL_PAD,
+        y: y + CELL_H - CELL_PAD - MINI_BAR_H,
+        w: plotWidth(c.score, cellW - 2 * CELL_PAD),
+        h: MINI_BAR_H,
+      },
+    };
+  });
+  return {
+    kind: 'stat_grid',
+    width: CHART_W,
+    height: Math.ceil(facts.categories.length / GRID_COLS) * CELL_H,
+    cells,
+  };
+}
+
+export type RankRow = {
+  rank: string;
+  itemId: string;
+  text: string;
+  mean: number;
+  theme: Theme;
+  /** Caps theme label; renderers color it THEME_FILL[theme] (spec §2.6.2). */
+  themeLabel: string;
+  y: number;
+  h: number;
+  scoreBlock: { x: number; y: number; w: number; h: number };
+};
+
+export type RankListModel = {
+  kind: 'rank_list';
+  width: number;
+  height: number;
+  rows: RankRow[];
+};
+
+/** Spec §2.6.2 — numbered ranked punch list of the six weakest questions.
+ * Truncation is a shared-seam display format (both surfaces see the same
+ * string), so it does not violate the §5 prose-parity rule. ASCII '...'
+ * because the font subset lacks the ellipsis glyph. */
+export function rankListModel(facts: FactsPack): RankListModel | null {
+  if (facts.bottom_items.length === 0) return null;
+  const rows = facts.bottom_items.map((item, i): RankRow => {
+    const y = i * (RANK_ROW_H + RANK_ROW_GAP);
+    const text =
+      item.text.length > RANK_TEXT_MAX
+        ? `${item.text.slice(0, RANK_TEXT_MAX).trimEnd()}...`
+        : item.text;
+    return {
+      rank: String(i + 1).padStart(2, '0'),
+      itemId: item.item_id,
+      text,
+      mean: item.mean,
+      theme: item.theme,
+      themeLabel: String(item.theme).toUpperCase(),
+      y,
+      h: RANK_ROW_H,
+      scoreBlock: {
+        x: CHART_W - SCORE_BLOCK_W,
+        y: y + (RANK_ROW_H - SCORE_BLOCK_H) / 2,
+        w: SCORE_BLOCK_W,
+        h: SCORE_BLOCK_H,
+      },
+    };
+  });
+  const n = rows.length;
+  return {
+    kind: 'rank_list',
+    width: CHART_W,
+    height: n * RANK_ROW_H + (n - 1) * RANK_ROW_GAP,
+    rows,
+  };
+}
+
+const HERO_H = 140;
+const STAT_CELL_H = 64;
+
+export type VerdictStat = {
+  label: string;
+  value: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+export type VerdictBlockModel = {
+  kind: 'verdict_block';
+  width: number;
+  height: number;
+  hero: { score: number; tierName: string; band: BandKey; x: number; y: number; w: number; h: number };
+  stats: VerdictStat[];
+};
+
+/** Spec §2.6.3 — hero cell (giant verdict numeral + tier name) atop a 2x2
+ * dashboard of context stats, all hairline-boxed. NOTE: 'Questions at 20 or
+ * less' counts within bottom_items, which facts caps at 6 — it reads "of the
+ * six weakest", not a whole-instrument count. */
+export function verdictBlockModel(facts: FactsPack, methodology: Methodology): VerdictBlockModel {
+  const bands = facts.categories.map((c) =>
+    readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds),
+  );
+  const entries: Array<[string, number]> = [
+    ['Areas assessed', facts.categories.length],
+    ['Areas holding', bands.filter((b) => b === 'holding').length],
+    ['Questions at 20 or less', facts.bottom_items.filter((b) => b.mean <= 20).length],
+    ['Areas severe', bands.filter((b) => b === 'severe').length],
+  ];
+  const cellW = CHART_W / 2;
+  const stats = entries.map(([label, value], i): VerdictStat => ({
+    label,
+    value,
+    x: (i % 2) * cellW,
+    y: HERO_H + Math.floor(i / 2) * STAT_CELL_H,
+    w: cellW,
+    h: STAT_CELL_H,
+  }));
+  return {
+    kind: 'verdict_block',
+    width: CHART_W,
+    height: HERO_H + 2 * STAT_CELL_H,
+    hero: {
+      score: facts.overall.capacity,
+      tierName: facts.overall.tier.name,
+      band: verdictBandFor(facts.overall.tier.id),
+      x: 0,
+      y: 0,
+      w: CHART_W,
+      h: HERO_H,
+    },
+    stats,
+  };
+}
+
+export type CoverStripSeg = {
+  band: BandKey;
+  name: 'Severe' | 'Broken' | 'Watch' | 'Holding';
+  x: number;
+  w: number;
+};
+
+export type CoverModel = {
+  score: number;
+  tierName: string;
+  band: BandKey;
+  /** The s3 xpg_read line — the SAME string fallback-sections.ts:361 renders
+   * as s3's first bullet (§5-sanctioned reuse; no new prose is created). */
+  headline: string;
+  strip: { width: number; segments: CoverStripSeg[]; marker: { x: number } };
+  caption: { tierName: string; score: number };
+};
+
+const STRIP_BANDS: BandKey[] = ['severe', 'broken', 'watch', 'holding'];
+
+/** Spec §2.5 — cover verdict: giant score, 4-segment band strip with an ink
+ * marker at the score position, tier caption, and the xpg_read headline.
+ * NOT part of the ChartModel union: the cover flows through
+ * ResolvedReportSections.cover, never through section charts. */
+export function coverModel(facts: FactsPack, methodology: Methodology): CoverModel {
+  const segW = CHART_W / STRIP_BANDS.length;
+  const band = verdictBandFor(facts.overall.tier.id);
+  return {
+    score: facts.overall.capacity,
+    tierName: facts.overall.tier.name,
+    band,
+    headline: methodology.copy.xpg_read[facts.archetype][facts.overall.tier.id],
+    strip: {
+      width: CHART_W,
+      segments: STRIP_BANDS.map((b, i) => ({ band: b, name: BAND_NAME[b], x: i * segW, w: segW })),
+      marker: { x: plotWidth(facts.overall.capacity, CHART_W) },
+    },
+    caption: { tierName: facts.overall.tier.name, score: facts.overall.capacity },
+  };
+}
+
 const SCALE_MAX = 100;
 
 /** Score -> plot-space width. Clamped: a score outside 0-100 is a data bug, but a bar drawn
@@ -95,90 +321,4 @@ const SCALE_MAX = 100;
 function plotWidth(score: number, plotW: number): number {
   const clamped = Math.min(Math.max(score, 0), SCALE_MAX);
   return (clamped / SCALE_MAX) * plotW;
-}
-
-function ticksFor(labelWidth: number, plotW: number): Tick[] {
-  return TICK_VALUES.map((value) => ({ value, x: labelWidth + (value / SCALE_MAX) * plotW }));
-}
-
-/**
- * Eight horizontal bars, one per area, in facts.categories order — which buildFacts already
- * sorted score desc with ties by id asc (facts.ts:164). Never re-sorted here: two assessments 90
- * days apart must be comparable, and one place owning the order is what makes that true.
- */
-export function areaBarsModel(facts: FactsPack, methodology: Methodology): AreaBarsModel {
-  const plotW = CHART_W - AREA_LABEL_W;
-  const bars: AreaBar[] = facts.categories.map((c, i) => ({
-    id: c.id,
-    name: c.name,
-    score: c.score,
-    band: readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds),
-    x: AREA_LABEL_W,
-    y: i * (ROW_H + ROW_GAP),
-    w: plotWidth(c.score, plotW),
-    h: ROW_H,
-  }));
-  const h = facts.categories.length === 0 ? 0 : facts.categories.length * (ROW_H + ROW_GAP) - ROW_GAP;
-  return { kind: 'area_bars', bars, ticks: ticksFor(AREA_LABEL_W, plotW), labelWidth: AREA_LABEL_W, w: CHART_W, h };
-}
-
-/**
- * The tier gauge: rules.yaml's four tier bands tiled across 0-100 with a marker at the overall
- * capacity. Segments are built ASCENDING by `min` (the reverse of tier.ts's descending lookup
- * order) because a gauge reads left to right, and each segment's `to` is the next band's `min`
- * so the four tile the axis with no gap and no overlap.
- */
-export function tierGaugeModel(facts: FactsPack, methodology: Methodology): TierGaugeModel {
-  const tiers = methodology.rules.tiers;
-  const ascending = (Object.keys(tiers) as Array<keyof typeof tiers>)
-    .map((id) => ({ id: String(id), name: tiers[id].name, min: tiers[id].min }))
-    .sort((a, b) => a.min - b.min);
-
-  const bands: TierBandSeg[] = ascending.map((band, i) => {
-    const from = band.min;
-    const to = i + 1 < ascending.length ? ascending[i + 1]!.min : SCALE_MAX;
-    return {
-      id: band.id,
-      name: band.name,
-      from,
-      to,
-      x: (from / SCALE_MAX) * CHART_W,
-      w: ((to - from) / SCALE_MAX) * CHART_W,
-    };
-  });
-
-  return {
-    kind: 'tier_gauge',
-    bands,
-    marker: {
-      x: plotWidth(facts.overall.capacity, CHART_W),
-      label: facts.overall.tier.name,
-      value: facts.overall.capacity,
-    },
-    w: CHART_W,
-    h: GAUGE_H,
-  };
-}
-
-/**
- * The bottom-N indicator bars, in facts.bottom_items order — buildFacts already sorted them mean
- * ascending with ties by item id ascending, capped at 6. Returns null on an empty list rather
- * than a zero-height model: a renderer branching on presence is clearer than one branching on
- * `bars.length === 0`, and there is no honest chart of no data.
- */
-export function bottomItemsModel(facts: FactsPack): BottomItemsModel | null {
-  if (facts.bottom_items.length === 0) return null;
-  const plotW = CHART_W - ITEM_LABEL_W;
-  const bars: BottomItemBar[] = facts.bottom_items.map((b, i) => ({
-    id: b.item_id,
-    text: b.text,
-    mean: b.mean,
-    theme: b.theme,
-    x: ITEM_LABEL_W,
-    y: i * (ROW_H + ROW_GAP),
-    w: plotWidth(b.mean, plotW),
-    h: ROW_H,
-  }));
-  const h = facts.bottom_items.length * (ROW_H + ROW_GAP) - ROW_GAP;
-  return { kind: 'bottom_items', bars, ticks: ticksFor(ITEM_LABEL_W, plotW), labelWidth: ITEM_LABEL_W, w: CHART_W, h };
 }

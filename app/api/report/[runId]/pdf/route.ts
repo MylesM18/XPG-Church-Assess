@@ -154,7 +154,7 @@ export async function GET(
     // separately-computed label source that could disagree is the labelSource finding class.
     const labelSource = knownLabels(responses)
 
-    const { sections, stale } = await resolveReportSections({
+    const { sections, stale, cover } = await resolveReportSections({
       diagnosis: resolution.diagnosis,
       methodology: reportMethodology,
       responses,
@@ -178,6 +178,7 @@ export async function GET(
       generatedAt,
       labels: labelSource.kind === 'known' ? labelSource.labels : [],
       stale,
+      cover,
     })
 
     const filename = `xpg-diagnosis-${slugify(church.name)}-${generatedAt.toISOString().slice(0, 10)}.pdf`

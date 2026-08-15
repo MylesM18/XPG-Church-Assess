@@ -1,13 +1,56 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { PDFParse } from 'pdf-parse';
+import { Page } from '@react-pdf/renderer';
 import { renderReportDocument } from '@/lib/report/pdf/render';
+import { ReportDocument, PAGE_GROUPS, areaIndexFrom } from '@/lib/report/pdf/document';
 import { assembleFallbackOnly } from '@/lib/report/compose';
 import type { AssembledSection } from '@/lib/report/compose';
 import { buildFacts, type ChurchFacts, type FactsPack } from '@/lib/report/facts';
 import { loadMethodology } from '@/lib/methodology/load';
+import { coverModel, statGridModel, BAND_NAME, type ChartModel } from '@/lib/report/charts';
+import { CAPACITY_FACTS } from '../fixtures/facts';
 import type { Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types';
 
 const methodology = loadMethodology();
+
+type AnyEl = { type?: unknown; props?: { children?: unknown } };
+
+/** Flattens react-pdf's JSX children tree (arrays, nulls, booleans) into a
+ *  flat list of element-like nodes, for structural assertions (e.g. finding
+ *  every <Page>). Reused by Tasks 12-13.
+ *
+ *  react-pdf's own primitives (Document/Page/Text/View/Svg/...) are STRING
+ *  type tags, never functions — verified directly against the imported
+ *  components (`typeof Page === 'string'`), so `el.type === Page` filtering
+ *  below is unaffected. A node whose `type` IS a function is one of our own
+ *  custom components (SectionContent, S6View, PdfChart, ...); it is invoked
+ *  directly and its own returned tree is flattened in its place, so content
+ *  nested inside a custom component is reachable without a full react-pdf
+ *  render (Task 13 fix-round-1: keeps production call sites as ordinary JSX
+ *  — see document.tsx — by fixing the test helper instead). */
+function flatChildren(node: unknown): AnyEl[] {
+  if (node == null || typeof node === 'boolean') return [];
+  if (Array.isArray(node)) return node.flatMap(flatChildren);
+  const el = node as AnyEl;
+  if (typeof el.type === 'function') return flatChildren((el.type as (props: unknown) => unknown)(el.props));
+  return [el];
+}
+
+/** Recursively collects every string/number leaf under a react-pdf JSX tree,
+ *  in document order — the rendered text content. Reused by Tasks 12-13.
+ *  Descends into custom function components the same way flatChildren does
+ *  (see above), for the same reason. */
+function collectTexts(node: unknown): string[] {
+  if (node == null || typeof node === 'boolean') return [];
+  if (typeof node === 'string') return [node];
+  if (typeof node === 'number') return [String(node)];
+  if (Array.isArray(node)) return node.flatMap(collectTexts);
+  const el = node as AnyEl;
+  if (typeof el.type === 'function') return collectTexts((el.type as (props: unknown) => unknown)(el.props));
+  return collectTexts(el.props?.children);
+}
 
 /**
  * Task 5 (re-home the fail-closed anonymity guard): this file predates the Task 4 rewrite of
@@ -147,9 +190,20 @@ const DOC_ARGS = {
   generatedAt: new Date('2026-07-18T00:00:00Z'),
   labels: [] as string[],
   stale: false,
+  cover: coverModel(factsFor(), methodology),
 };
 
 describe('ReportDocument', () => {
+  it('renders a cover page before the content pages', () => {
+    const doc = ReportDocument({ sections: sectionsFor(), ...DOC_ARGS });
+    const pages = flatChildren(doc.props.children).filter((el) => el.type === Page);
+    expect(pages.length).toBeGreaterThanOrEqual(2);
+    const coverTexts = collectTexts(pages[0]);
+    expect(coverTexts).toContain('July 2026');
+    expect(coverTexts).toContain(DOC_ARGS.cover.headline);
+    expect(coverTexts.some((t) => t.includes('of 100'))).toBe(true);
+  });
+
   // Replaces the old "renders the church name and the verdict" + "renders all eight area
   // dossiers, in the fixed chain-then-enabler order" tests. The new renderer has no per-area
   // dossier table, so the closest still-true property is: the church name appears, and every one
@@ -243,6 +297,88 @@ describe('ReportDocument', () => {
     expect(appendix).toContain('Confidence: 0.85.');
     expect(appendix).toContain('Small sample: 3 respondents.');
   }, 30_000);
+
+  it('renders one page per populated group plus the cover, with the new furniture', () => {
+    const secs = sectionsFor();
+    const doc = ReportDocument({ sections: secs, ...DOC_ARGS });
+    const pages = flatChildren(doc.props.children).filter((el) => el.type === Page);
+    const ids = new Set<string>(secs.map((sec) => sec.id));
+    const grouped = PAGE_GROUPS.filter((g) => g.some((id) => ids.has(id))).length;
+    const leftovers = secs.filter((sec) => !PAGE_GROUPS.flat().includes(sec.id)).length;
+    expect(pages).toHaveLength(1 + grouped + leftovers);
+    const texts = collectTexts(doc);
+    expect(texts.join(' ')).not.toContain('Internal leadership document');
+    expect(texts.join(' ')).not.toContain('2026-07-18');
+    expect(texts).toContain('CONFIDENTIAL');
+  });
+
+  // A future report.yaml reorder or a PAGE_GROUPS edit that drops/duplicates an id should fail
+  // here with a direct diff, not surface as a silent pagination change discovered visually.
+  it('accounts for every report.yaml section exactly once, in report.yaml order', () => {
+    expect(PAGE_GROUPS.flat()).toEqual(Object.keys(methodology.report.sections));
+  });
+});
+
+describe('areaIndexFrom', () => {
+  it('indexes every stat grid cell by category id', () => {
+    const grid = statGridModel(CAPACITY_FACTS, methodology);
+    const sections: AssembledSection[] = [
+      {
+        id: 's3' as const,
+        source: 'fallback' as const,
+        ai: null,
+        fallback: { title: 'Health dashboard', body: '', bullets: [] },
+        charts: [grid],
+      },
+    ];
+    const index = areaIndexFrom(sections);
+    expect(index.size).toBe(grid.cells.length);
+    const first = grid.cells[0]!;
+    expect(index.get(first.id)).toEqual({ name: first.name, score: first.score, band: first.band });
+  });
+
+  it('is empty when no s3 stat grid exists', () => {
+    expect(areaIndexFrom([]).size).toBe(0);
+  });
+});
+
+describe('dossier tabs', () => {
+  it('renders band tab metadata on ai dossiers', () => {
+    const secs = sectionsFor();
+    const s3 = secs.find((sec) => sec.id === 's3');
+    const grid = s3?.charts.find((c): c is Extract<ChartModel, { kind: 'stat_grid' }> => c.kind === 'stat_grid');
+    expect(grid).toBeDefined();
+    if (!grid) return;
+    const cell = grid.cells[0]!;
+    const withAiS6 = secs.map((sec) =>
+      sec.id === 's6'
+        ? {
+            ...sec,
+            source: 'ai' as const,
+            ai: {
+              areas: [
+                {
+                  category_id: cell.id,
+                  affirm: 'Volunteer culture is holding.',
+                  pivot: 'Shift from recruiting to retaining.',
+                  evidence: 'Scores stayed above seventy.',
+                  not_statement: 'This is not a burnout story.',
+                  reframe: 'Treat volunteers as the engine.',
+                  trajectory: 'Watch the next two quarters.',
+                },
+              ],
+            },
+          }
+        : sec,
+    );
+    const doc = ReportDocument({ sections: withAiS6, ...DOC_ARGS });
+    const texts = collectTexts(doc);
+    expect(texts).toContain(String(cell.score));
+    expect(texts).toContain(cell.name);
+    // The dossier tab label (band name, spelled out per spec §3.1) appears nowhere else
+    // standalone in this fixture — the s3 stat grid label is 'NAME · BAND', not the band alone.
+    expect(texts).toContain(BAND_NAME[cell.band].toUpperCase());
+  });
 });
 
 // --- Booking CTA ---------------------------------------------------------------------------
@@ -269,4 +405,15 @@ describe('booking CTA', () => {
     expect(text).toContain(bookingCta.buttonLabel.slice(0, -1).trimEnd());
     expect(buffer.toString('latin1')).toContain(bookingCta.url);
   }, 30_000);
+});
+
+describe('pagination hygiene', () => {
+  it('keeps openers with their content and dossiers unsplit', () => {
+    const src = readFileSync(path.join(process.cwd(), 'lib/report/pdf/document.tsx'), 'utf8');
+    // Anchored to the actual opener View (not just any minPresenceAhead in the file).
+    expect(src).toMatch(/<View minPresenceAhead=\{140\} style=\{\[s\.opener/);
+    // Anchored to the per-dossier View (not e.g. a section wrapper that would push a whole tall
+    // section instead of keeping just each dossier block whole).
+    expect(src).toMatch(/<View key=\{area\.category_id\} style=\{s\.block\} wrap=\{false\}>/);
+  });
 });

@@ -404,13 +404,13 @@ describe('chart models on AssembledSection', () => {
   // than redeclaring it here — task-5-brief.md's snippet shadowed it locally, but the outer
   // const is the same value and there is no reason to load the methodology twice in one file.
 
-  it('gives s3 the tier gauge then the area bars, in that order', () => {
+  it('gives s3 the verdict block then the stat grid, in that order', () => {
     const charts = chartsForSection('s3', CAPACITY_FACTS, methodology);
-    expect(charts.map((c) => c.kind)).toEqual(['tier_gauge', 'area_bars']);
+    expect(charts.map((c) => c.kind)).toEqual(['verdict_block', 'stat_grid']);
   });
 
-  it('gives s7 the bottom-items chart', () => {
-    expect(chartsForSection('s7', CAPACITY_FACTS, methodology).map((c) => c.kind)).toEqual(['bottom_items']);
+  it('gives s7 the rank-list chart', () => {
+    expect(chartsForSection('s7', CAPACITY_FACTS, methodology).map((c) => c.kind)).toEqual(['rank_list']);
   });
 
   it('gives s7 no chart when there are no bottom items', () => {
@@ -429,7 +429,7 @@ describe('chart models on AssembledSection', () => {
       const sections = assembleFallbackOnly({ facts, methodology, reflections: [] });
       const s3 = sections.find((s) => s.id === 's3')!;
       expect(s3.source, name).toBe('fallback');
-      expect(s3.charts.map((c) => c.kind), name).toEqual(['tier_gauge', 'area_bars']);
+      expect(s3.charts.map((c) => c.kind), name).toEqual(['verdict_block', 'stat_grid']);
     }
   });
 

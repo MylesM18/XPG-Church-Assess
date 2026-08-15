@@ -5,6 +5,7 @@ import { assembleFallbackOnly } from '@/lib/report/compose'
 import type { AssembledSection } from '@/lib/report/compose'
 import { renderReportDocument } from '@/lib/report/pdf/render'
 import { buildFacts, type ChurchFacts, type FactsPack } from '@/lib/report/facts'
+import { coverModel } from '@/lib/report/charts'
 import type { Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types'
 
 const methodology = loadMethodology()
@@ -111,6 +112,7 @@ const baseProps = () => ({
   generatedAt: new Date('2026-01-01T00:00:00.000Z'),
   labels: [] as string[],
   stale: false,
+  cover: coverModel(FACTS_FIXTURE, methodology),
 })
 
 describe('the PDF document renders the 13 assembled sections', () => {
@@ -211,14 +213,22 @@ describe('the re-homed fail-closed anonymity guard', () => {
             ...s,
             charts: [
               {
-                kind: 'area_bars' as const,
-                bars: [
-                  { id: 'guest', name: 'Marcus mentioned parking', score: 50, band: 'watch' as const, x: 0, y: 0, w: 0, h: 0 },
+                kind: 'rank_list' as const,
+                width: 500,
+                height: 44,
+                rows: [
+                  {
+                    rank: '01',
+                    itemId: 'SYS3',
+                    text: 'Marcus mentioned parking',
+                    mean: 10,
+                    theme: 'systems' as const,
+                    themeLabel: 'SYSTEMS',
+                    y: 0,
+                    h: 44,
+                    scoreBlock: { x: 444, y: 6, w: 56, h: 32 },
+                  },
                 ],
-                ticks: [],
-                labelWidth: 0,
-                w: 0,
-                h: 0,
               },
             ],
           }
@@ -251,5 +261,17 @@ describe('the re-homed fail-closed anonymity guard', () => {
     // containsRespondentLabel skips empty needles, so [] is a no-op, not a match-everything.
     const buffer = await renderReportDocument({ ...baseProps(), labels: [] })
     expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
+  })
+
+  it('refuses to render when the cover carries a respondent label', async () => {
+    const props = baseProps()
+    const poisoned = { ...props, cover: { ...props.cover, headline: 'Marcus said the west door sticks' }, labels: ['Marcus'] }
+    // renderReportDocument is not `async` and the guard throws synchronously (before the first
+    // `await` inside it), so calling it directly inside expect(...) would throw during argument
+    // evaluation instead of producing a rejected promise — wrap in an async IIFE, same as the
+    // other synchronous-guard-throw tests in this file (e.g. the per-section version above).
+    await expect(
+      (async () => renderReportDocument(poisoned))(),
+    ).rejects.toThrow(/cover carries a respondent label/)
   })
 })
