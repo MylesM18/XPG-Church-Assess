@@ -221,6 +221,20 @@ describe('S2 profile bullets', () => {
 // redundant beside the statGridModel chart wired in Task 6) to a single XPG-read line keyed off
 // archetype x tier. The two tests below replace the old eight-bullet assertions; the fuller
 // archetype x tier coverage lives in the 's3 executive dashboard' describe block below.
+describe('S1 respondent phrase', () => {
+  it('pluralises to "N respondents" and drops the timestamp', () => {
+    const facts = { ...capacityFacts, cover: { ...capacityFacts.cover, respondent_count: 4 } };
+    const s1 = fallbackSection('s1', { facts, methodology, reflections: [] });
+    expect(s1.body).toBe(`${facts.cover.church_name} — 4 respondents.`);
+  });
+
+  it('singularises to "1 respondent" when the count is exactly one', () => {
+    const facts = { ...capacityFacts, cover: { ...capacityFacts.cover, respondent_count: 1 } };
+    const s1 = fallbackSection('s1', { facts, methodology, reflections: [] });
+    expect(s1.body).toBe(`${facts.cover.church_name} — 1 respondent.`);
+  });
+});
+
 describe('S3 health dashboard', () => {
   it('renders exactly one bullet — the XPG read for this archetype and tier', () => {
     const s3 = fallbackSection('s3', { facts: capacityFacts, methodology, reflections: [] });

@@ -30,7 +30,7 @@ const s = StyleSheet.create({
   runhead: { position: 'absolute', top: 24, left: 48, right: 48, flexDirection: 'row', justifyContent: 'space-between' },
   opener: { paddingVertical: 12, paddingHorizontal: 16, marginBottom: 18 },
   openerNumber: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1 },
-  openerTitle: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 26 },
+  openerTitle: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 26, lineHeight: 1.2 },
   footer: { position: 'absolute', bottom: 24, left: 48, right: 48, borderTopWidth: 0.75, borderTopColor: RULE, paddingTop: 6, flexDirection: 'row', justifyContent: 'space-between' },
   capsLabel: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1, color: INK_SOFT },
   dossierHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
