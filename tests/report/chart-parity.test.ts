@@ -14,8 +14,9 @@ describe('chart renderer parity', () => {
       const text = readFileSync(src, 'utf8');
       // The whole point of the seam: a renderer that calls a model builder is computing its own
       // geometry, and the two surfaces can then silently disagree.
-      expect(text, src).not.toMatch(/areaBarsModel\s*\(|tierGaugeModel\s*\(|bottomItemsModel\s*\(/);
+      expect(text, src).not.toMatch(/(?:areaBarsModel|tierGaugeModel|bottomItemsModel|statGridModel|rankListModel|verdictBlockModel|coverModel)\s*\(/);
       expect(text, src).toMatch(/BAND_FILL/);
+      expect(text, src).toMatch(/BAND_TEXT/);
     }
   });
 
@@ -24,10 +25,10 @@ describe('chart renderer parity', () => {
     expect(readFileSync(WEB_CHARTS, 'utf8')).not.toMatch(/@react-pdf\/renderer/);
   });
 
-  it('both renderers handle all three chart kinds', () => {
+  it('both renderers handle all six chart kinds', () => {
     for (const src of [PDF_CHARTS, WEB_CHARTS]) {
       const text = readFileSync(src, 'utf8');
-      for (const kind of ['area_bars', 'tier_gauge', 'bottom_items']) {
+      for (const kind of ['area_bars', 'tier_gauge', 'bottom_items', 'stat_grid', 'rank_list', 'verdict_block']) {
         expect(text, `${src} / ${kind}`).toContain(`'${kind}'`);
       }
       expect(text, src).toContain('_exhaustive');
@@ -35,7 +36,7 @@ describe('chart renderer parity', () => {
   });
 
   it('every chart a section carries has a kind both renderers switch on', () => {
-    const known = new Set(['area_bars', 'tier_gauge', 'bottom_items']);
+    const known = new Set(['area_bars', 'tier_gauge', 'bottom_items', 'stat_grid', 'rank_list', 'verdict_block']);
     for (const { name, facts } of ALL_FIXTURES) {
       for (const section of assembleFallbackOnly({ facts, methodology, reflections: [] })) {
         for (const chart of section.charts) {

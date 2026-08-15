@@ -118,7 +118,13 @@ export interface BottomItemsModel {
   w: number; h: number;
 }
 
-export type ChartModel = AreaBarsModel | TierGaugeModel | BottomItemsModel;
+export type ChartModel =
+  | AreaBarsModel
+  | TierGaugeModel
+  | BottomItemsModel
+  | StatGridModel
+  | RankListModel
+  | VerdictBlockModel;
 
 // ---- v2 models (visual overhaul). Unit space: 1 viewBox unit ~ 1pt at A4
 // content width (595 - 2*48 = 499). Old 320-unit models below die in T8.
