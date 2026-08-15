@@ -4,6 +4,7 @@ import { resolveReportSections } from '@/lib/report/resolve'
 import { loadMethodology } from '@/lib/methodology/load'
 import type { PersistedReportLookup } from '@/lib/data/reports'
 import type { Diagnosis, DiagnosisCategory } from '@/lib/engine/types'
+import type { ChartModel } from '@/lib/report/charts'
 
 describe('lib/data/reports.ts — the hash-addressed reports seam', () => {
   const src = readFileSync('lib/data/reports.ts', 'utf8')
@@ -134,6 +135,13 @@ describe('resolveReportSections', () => {
     })
     expect(r.stale).toBe(false)
     expect(r.sections.every((s) => s.source === 'fallback')).toBe(true)
+    // Cross-check: cover and s3's verdict block are both built from the same post-revalidated
+    // `facts` variable inside resolveReportSections, so their scores must agree.
+    const s3 = r.sections.find((sec) => sec.id === 's3')
+    const verdict = s3?.charts.find((c): c is Extract<ChartModel, { kind: 'verdict_block' }> => c.kind === 'verdict_block')
+    expect(r.cover.strip.segments).toHaveLength(4)
+    expect(typeof r.cover.headline).toBe('string')
+    expect(verdict?.hero.score).toBe(r.cover.score)
   })
 
   it('is stale when a report exists but not for these inputs', async () => {

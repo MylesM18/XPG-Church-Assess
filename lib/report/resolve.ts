@@ -3,6 +3,8 @@ import type { ThemeClusterFact } from '@/lib/report/facts'
 import { reportInputs } from '@/lib/report/inputs-hash'
 import { assembleReport } from '@/lib/report/compose'
 import type { AssembledSection } from '@/lib/report/compose'
+import { coverModel } from '@/lib/report/charts'
+import type { CoverModel } from '@/lib/report/charts'
 import type { PersistedReportLookup } from '@/lib/data/reports'
 
 type ReportInputsArgs = Parameters<typeof reportInputs>[0]
@@ -34,6 +36,7 @@ export interface ResolvedReportSections {
   inputsHash: string
   /** A report exists for this run, but not for these inputs. Drives the D-P5-4 notice. */
   stale: boolean
+  cover: CoverModel
 }
 
 export async function resolveReportSections(
@@ -76,7 +79,9 @@ export async function resolveReportSections(
     liveInputsHash: inputsHash,
   })
 
-  return { sections, inputsHash, stale }
+  const cover = coverModel(facts, inputs.methodology)
+
+  return { sections, inputsHash, stale, cover }
 }
 
 /**
