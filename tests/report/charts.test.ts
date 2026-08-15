@@ -253,7 +253,7 @@ describe('rankListModel', () => {
   it('truncates very long item text with ASCII ellipsis (font subset has no …)', () => {
     const long = 'x'.repeat(200);
     const facts = makeFacts({
-      bottom_items: [{ item_id: 'SYS3', text: long, mean: 10, theme: 'systems' }],
+      bottom_items: [{ item_id: 'SYS3', category_id: 'sys', text: long, mean: 10, theme: 'systems' }],
     });
     const model = rankListModel(facts);
     expect(model).not.toBeNull();
