@@ -247,6 +247,66 @@ export function rankListModel(facts: FactsPack): RankListModel | null {
   };
 }
 
+const HERO_H = 140;
+const STAT_CELL_H = 64;
+
+export type VerdictStat = {
+  label: string;
+  value: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+export type VerdictBlockModel = {
+  kind: 'verdict_block';
+  width: number;
+  height: number;
+  hero: { score: number; tierName: string; band: BandKey; x: number; y: number; w: number; h: number };
+  stats: VerdictStat[];
+};
+
+/** Spec §2.6.3 — hero cell (giant verdict numeral + tier name) atop a 2x2
+ * dashboard of context stats, all hairline-boxed. NOTE: 'Questions at 20 or
+ * less' counts within bottom_items, which facts caps at 6 — it reads "of the
+ * six weakest", not a whole-instrument count. */
+export function verdictBlockModel(facts: FactsPack, methodology: Methodology): VerdictBlockModel {
+  const bands = facts.categories.map((c) =>
+    readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds),
+  );
+  const entries: Array<[string, number]> = [
+    ['Areas assessed', facts.categories.length],
+    ['Areas holding', bands.filter((b) => b === 'holding').length],
+    ['Questions at 20 or less', facts.bottom_items.filter((b) => b.mean <= 20).length],
+    ['Areas severe', bands.filter((b) => b === 'severe').length],
+  ];
+  const cellW = CHART_W_V2 / 2;
+  const stats = entries.map(([label, value], i): VerdictStat => ({
+    label,
+    value,
+    x: (i % 2) * cellW,
+    y: HERO_H + Math.floor(i / 2) * STAT_CELL_H,
+    w: cellW,
+    h: STAT_CELL_H,
+  }));
+  return {
+    kind: 'verdict_block',
+    width: CHART_W_V2,
+    height: HERO_H + 2 * STAT_CELL_H,
+    hero: {
+      score: facts.overall.capacity,
+      tierName: facts.overall.tier.name,
+      band: verdictBandFor(facts.overall.tier.id),
+      x: 0,
+      y: 0,
+      w: CHART_W_V2,
+      h: HERO_H,
+    },
+    stats,
+  };
+}
+
 const CHART_W = 320;
 const AREA_LABEL_W = 104;
 const ITEM_LABEL_W = 150;

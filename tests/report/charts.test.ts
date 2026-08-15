@@ -5,7 +5,7 @@ import type { CategoryState } from '@/lib/engine/types';
 import {
   areaBarsModel, tierGaugeModel, bottomItemsModel, BAND_FILL, THEME_FILL,
   BAND_TEXT, BAND_NAME, verdictBandFor, textOnBand,
-  statGridModel, type StatGridModel, rankListModel,
+  statGridModel, type StatGridModel, rankListModel, verdictBlockModel,
 } from '@/lib/report/charts';
 import { ALL_FIXTURES, CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
 
@@ -264,5 +264,52 @@ describe('rankListModel', () => {
 
   it('is pure', () => {
     expect(rankListModel(CAPACITY_FACTS)).toEqual(rankListModel(CAPACITY_FACTS));
+  });
+});
+
+describe('verdictBlockModel', () => {
+  const methodology = loadMethodology();
+
+  it('hero mirrors overall and stats carry the four locked labels', () => {
+    for (const { facts } of ALL_FIXTURES) {
+      const model = verdictBlockModel(facts, methodology);
+      expect(model.kind).toBe('verdict_block');
+      expect(model.hero.score).toBe(facts.overall.capacity);
+      expect(model.hero.tierName).toBe(facts.overall.tier.name);
+      expect(model.hero.band).toBe(verdictBandFor(facts.overall.tier.id));
+      expect(model.stats.map((s) => s.label)).toEqual([
+        'Areas assessed',
+        'Areas holding',
+        'Questions at 20 or less',
+        'Areas severe',
+      ]);
+    }
+  });
+
+  it('computes the stat values from facts', () => {
+    const model = verdictBlockModel(CAPACITY_FACTS, methodology);
+    const bands = CAPACITY_FACTS.categories.map((c) =>
+      readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds),
+    );
+    expect(model.stats[0]!.value).toBe(CAPACITY_FACTS.categories.length);
+    expect(model.stats[1]!.value).toBe(bands.filter((b) => b === 'holding').length);
+    expect(model.stats[2]!.value).toBe(CAPACITY_FACTS.bottom_items.filter((b) => b.mean <= 20).length);
+    expect(model.stats[3]!.value).toBe(bands.filter((b) => b === 'severe').length);
+  });
+
+  it('lays hero above a 2x2 dashboard inside the viewBox', () => {
+    const model = verdictBlockModel(CAPACITY_FACTS, methodology);
+    expect(model.hero.w).toBeCloseTo(model.width, 5);
+    expect(model.stats).toHaveLength(4);
+    for (const stat of model.stats) {
+      expect(stat.y).toBeGreaterThanOrEqual(model.hero.h);
+      expect(stat.x + stat.w).toBeLessThanOrEqual(model.width + 1e-9);
+      expect(stat.y + stat.h).toBeLessThanOrEqual(model.height + 1e-9);
+      expect(stat.w).toBeCloseTo(model.width / 2, 5);
+    }
+  });
+
+  it('is pure', () => {
+    expect(verdictBlockModel(CAPACITY_FACTS, methodology)).toEqual(verdictBlockModel(CAPACITY_FACTS, methodology));
   });
 });
