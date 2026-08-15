@@ -302,7 +302,7 @@ describe('ReportDocument', () => {
     const secs = sectionsFor();
     const doc = ReportDocument({ sections: secs, ...DOC_ARGS });
     const pages = flatChildren(doc.props.children).filter((el) => el.type === Page);
-    const ids = new Set(secs.map((sec) => sec.id));
+    const ids = new Set<string>(secs.map((sec) => sec.id));
     const grouped = PAGE_GROUPS.filter((g) => g.some((id) => ids.has(id))).length;
     const leftovers = secs.filter((sec) => !PAGE_GROUPS.flat().includes(sec.id)).length;
     expect(pages).toHaveLength(1 + grouped + leftovers);

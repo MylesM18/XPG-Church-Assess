@@ -5,11 +5,9 @@ import type { CategoryState } from '@/lib/engine/types';
 import {
   BAND_FILL,
   BAND_TEXT, BAND_NAME, verdictBandFor, textOnBand,
-  statGridModel, type StatGridModel, rankListModel, verdictBlockModel, coverModel,
+  statGridModel, rankListModel, verdictBlockModel, coverModel,
 } from '@/lib/report/charts';
 import { ALL_FIXTURES, CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
-
-const methodology = loadMethodology();
 
 describe('seam tokens (visual overhaul)', () => {
   it('BAND_TEXT darkens watch and reuses the fill hex elsewhere', () => {
