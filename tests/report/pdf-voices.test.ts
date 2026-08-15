@@ -5,6 +5,7 @@ import { assembleFallbackOnly } from '@/lib/report/compose';
 import type { AssembledSection } from '@/lib/report/compose';
 import { buildFacts, type ChurchFacts, type FactsPack } from '@/lib/report/facts';
 import { loadMethodology } from '@/lib/methodology/load';
+import { coverModel } from '@/lib/report/charts';
 import type { Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types';
 
 const methodology = loadMethodology();
@@ -142,6 +143,7 @@ const DOC_ARGS = {
   generatedAt: new Date('2026-07-18T00:00:00Z'),
   labels: [] as string[],
   stale: false,
+  cover: coverModel(factsFor().facts, methodology),
 };
 
 const S8_TITLE = 'What leaders are saying'; // methodology.report.sections.s8.title

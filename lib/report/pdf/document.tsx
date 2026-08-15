@@ -6,6 +6,7 @@ import type { SectionBody } from '../fallback-sections';
 import { bookingCta } from '../cta';
 import { registerReportFonts, FONT_DISPLAY, FONT_BODY } from './fonts';
 import { PdfChart } from './charts';
+import type { CoverModel } from '../charts';
 
 registerReportFonts();
 
@@ -48,6 +49,8 @@ export interface ReportDocumentProps {
   labels: readonly string[];
   /** A report exists for this run but not for these inputs. Renders as an appendix caveat. */
   stale: boolean;
+  /** Cover model computed in resolve; the document never reads facts. */
+  cover: CoverModel;
 }
 
 const STALE_CAVEAT =

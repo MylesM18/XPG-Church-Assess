@@ -65,6 +65,15 @@ export function renderReportDocument(props: ReportDocumentProps): Promise<Buffer
     }
   }
 
+  // The cover (props.cover: CoverModel) walks separately from the per-section loop above: it
+  // is NOT one of props.sections, so it would otherwise never pass through the guard at all.
+  // Same fail-closed pattern, same collectStrings/containsRespondentLabel reuse.
+  for (const text of collectStrings(props.cover)) {
+    if (containsRespondentLabel(text, props.labels)) {
+      throw new Error('renderReportDocument: cover carries a respondent label; refusing to render');
+    }
+  }
+
   const element = createElement(ReportDocument, props) as unknown as ReactElement<DocumentProps>;
   return renderToBuffer(element);
 }

@@ -5,6 +5,7 @@ import { assembleFallbackOnly } from '@/lib/report/compose'
 import type { AssembledSection } from '@/lib/report/compose'
 import { renderReportDocument } from '@/lib/report/pdf/render'
 import { buildFacts, type ChurchFacts, type FactsPack } from '@/lib/report/facts'
+import { coverModel } from '@/lib/report/charts'
 import type { Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types'
 
 const methodology = loadMethodology()
@@ -111,6 +112,7 @@ const baseProps = () => ({
   generatedAt: new Date('2026-01-01T00:00:00.000Z'),
   labels: [] as string[],
   stale: false,
+  cover: coverModel(FACTS_FIXTURE, methodology),
 })
 
 describe('the PDF document renders the 13 assembled sections', () => {
@@ -259,5 +261,17 @@ describe('the re-homed fail-closed anonymity guard', () => {
     // containsRespondentLabel skips empty needles, so [] is a no-op, not a match-everything.
     const buffer = await renderReportDocument({ ...baseProps(), labels: [] })
     expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
+  })
+
+  it('refuses to render when the cover carries a respondent label', async () => {
+    const props = baseProps()
+    const poisoned = { ...props, cover: { ...props.cover, headline: 'Marcus said the west door sticks' }, labels: ['Marcus'] }
+    // renderReportDocument is not `async` and the guard throws synchronously (before the first
+    // `await` inside it), so calling it directly inside expect(...) would throw during argument
+    // evaluation instead of producing a rejected promise — wrap in an async IIFE, same as the
+    // other synchronous-guard-throw tests in this file (e.g. the per-section version above).
+    await expect(
+      (async () => renderReportDocument(poisoned))(),
+    ).rejects.toThrow(/cover carries a respondent label/)
   })
 })
