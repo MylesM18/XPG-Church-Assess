@@ -40,8 +40,8 @@ export function renderReportDocument(props: ReportDocumentProps): Promise<Buffer
   //
   // Checks fallback body/bullets, every string inside the AI payload, and every string inside
   // this section's chart models (lib/report/charts.ts) — not because chart strings can carry
-  // respondent text (they can't: every AreaBar/BottomItemBar/TierBandSeg string is a category
-  // name, item text, theme key or tier name straight off methodology, never respondent-supplied),
+  // respondent text (they can't: every StatCell/RankRow/VerdictStat string is a category name,
+  // item text, theme key or tier name straight off methodology, never respondent-supplied),
   // but so the invariant above is literally true rather than true-except-for-one-payload-shape.
   // Deliberately NOT fallback.title: titles come from report.yaml, never from respondent data,
   // and a label that happens to be a common word would 500 every export.

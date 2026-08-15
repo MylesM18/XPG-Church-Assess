@@ -218,7 +218,7 @@ describe('S2 profile bullets', () => {
 });
 
 // Task 7: S3 dropped from eight `Name: score — bandRead` bullets (one per category, now
-// redundant beside the areaBarsModel chart wired in Task 6) to a single XPG-read line keyed off
+// redundant beside the statGridModel chart wired in Task 6) to a single XPG-read line keyed off
 // archetype x tier. The two tests below replace the old eight-bullet assertions; the fuller
 // archetype x tier coverage lives in the 's3 executive dashboard' describe block below.
 describe('S3 health dashboard', () => {

@@ -211,14 +211,22 @@ describe('the re-homed fail-closed anonymity guard', () => {
             ...s,
             charts: [
               {
-                kind: 'area_bars' as const,
-                bars: [
-                  { id: 'guest', name: 'Marcus mentioned parking', score: 50, band: 'watch' as const, x: 0, y: 0, w: 0, h: 0 },
+                kind: 'rank_list' as const,
+                width: 500,
+                height: 44,
+                rows: [
+                  {
+                    rank: '01',
+                    itemId: 'SYS3',
+                    text: 'Marcus mentioned parking',
+                    mean: 10,
+                    theme: 'systems' as const,
+                    themeLabel: 'SYSTEMS',
+                    y: 0,
+                    h: 44,
+                    scoreBlock: { x: 444, y: 6, w: 56, h: 32 },
+                  },
                 ],
-                ticks: [],
-                labelWidth: 0,
-                w: 0,
-                h: 0,
               },
             ],
           }
