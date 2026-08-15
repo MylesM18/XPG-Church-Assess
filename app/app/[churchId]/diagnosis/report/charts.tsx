@@ -22,10 +22,18 @@ const CREAM = '#FAF7F0'
  * mini-bar all come off `model.cells`; the bar length is the model's own bar.w as a share of
  * the cell's inner width (bar.x - x is the cell padding), a unit conversion, not new geometry.
  * The other two kinds stay SVG below.
+ *
+ * `role="list"` is not redundant: Safari/VoiceOver drops a <ul>'s implicit list role once it
+ * carries `display:grid`, so without it the eight cells stop being announced as a list. Keep it
+ * for as long as this is a grid.
  */
 function WebStatGrid({ model }: { model: Extract<ChartModel, { kind: 'stat_grid' }> }) {
   return (
-    <ul className="grid grid-cols-2 border-l border-t border-line sm:grid-cols-4" aria-label="Area scores with health bands">
+    <ul
+      role="list"
+      className="grid grid-cols-2 border-l border-t border-line sm:grid-cols-4"
+      aria-label="Area scores with health bands"
+    >
       {model.cells.map((cell) => {
         const inner = cell.w - 2 * (cell.bar.x - cell.x)
         return (

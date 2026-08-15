@@ -13,6 +13,12 @@ const CAPS_LABEL = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1
  * Every coordinate comes off `cover.strip` (segments + marker.x); this component never
  * recomputes geometry. viewBox width = strip.width, height 44, exactly like the PDF; the SVG
  * scales to the column width.
+ *
+ * One deliberate divergence from the PDF: the labels are fontSize 12, not the PDF's 7.5. The PDF
+ * draws its strip at close to 1:1, but here the 500-unit viewBox scales down to the column (about
+ * 327px on a 375px screen, a factor of 0.654), which would render 7.5 at roughly 4.9px. 12 units
+ * lands near 7.9px there and still clears the segment width: HOLDING, the longest label, is well
+ * under the 125 units a segment gets.
  */
 function CoverStrip({ cover }: { cover: CoverModel }) {
   const markerX = Math.max(1, Math.min(cover.strip.marker.x, cover.strip.width - 1)) - 1
@@ -26,7 +32,7 @@ function CoverStrip({ cover }: { cover: CoverModel }) {
       {cover.strip.segments.map((seg) => (
         <g key={seg.band}>
           <rect x={seg.x} y={8} width={seg.w} height={14} fill={BAND_FILL[seg.band]} />
-          <text x={seg.x} y={38} fill={INK_SOFT} fontSize={7.5} fontWeight={700}>
+          <text x={seg.x} y={38} fill={INK_SOFT} fontSize={12} fontWeight={700}>
             {seg.name.toUpperCase()}
           </text>
         </g>
