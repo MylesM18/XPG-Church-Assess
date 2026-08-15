@@ -42,6 +42,45 @@ export const THEME_FILL: Record<Theme, string> = {
   relational: '#4A6B4F',
 };
 
+const INK = '#1A1A18';
+const CREAM = '#FAF7F0';
+
+/** Text/numeral colors on the cream ground (spec §3.2): true amber fails
+ * contrast as text, so watch text darkens to #906722; other bands reuse
+ * their fill hex. Renderers use BAND_TEXT for text, BAND_FILL for fills. */
+export const BAND_TEXT: Record<BandKey, string> = {
+  severe: '#8C2F1F',
+  broken: '#B4552F',
+  watch: '#906722',
+  holding: '#4A6B4F',
+};
+
+/** Band color never travels alone (spec §3.1) — the spelled-out names. */
+export const BAND_NAME: Record<BandKey, 'Severe' | 'Broken' | 'Watch' | 'Holding'> = {
+  severe: 'Severe',
+  broken: 'Broken',
+  watch: 'Watch',
+  holding: 'Holding',
+};
+
+const VERDICT_BAND: Record<string, BandKey> = {
+  at_risk: 'severe',
+  strained: 'broken',
+  healthy_stretched: 'watch',
+  healthy_ready: 'holding',
+};
+
+/** Overall tier id -> the band that tints the whole report ("the color IS
+ * the diagnosis", spec §2.1). Unknown ids fail dark. */
+export function verdictBandFor(tierId: string): BandKey {
+  return VERDICT_BAND[tierId] ?? 'severe';
+}
+
+/** Spec §3.2: text ON amber panels is ink; on severe/broken/holding, cream. */
+export function textOnBand(band: BandKey): string {
+  return band === 'watch' ? INK : CREAM;
+}
+
 export interface Tick { value: number; x: number }
 
 export interface AreaBar {

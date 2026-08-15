@@ -4,6 +4,7 @@ import { readingBand } from '@/lib/report/view';
 import type { CategoryState } from '@/lib/engine/types';
 import {
   areaBarsModel, tierGaugeModel, bottomItemsModel, BAND_FILL, THEME_FILL,
+  BAND_TEXT, BAND_NAME, verdictBandFor, textOnBand,
 } from '@/lib/report/charts';
 import { ALL_FIXTURES, CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
 
@@ -136,5 +137,33 @@ describe('bottomItemsModel', () => {
         expect(bar.y + bar.h, name).toBeLessThanOrEqual(model.h + 1e-9);
       }
     }
+  });
+});
+
+describe('seam tokens (visual overhaul)', () => {
+  it('BAND_TEXT darkens watch and reuses the fill hex elsewhere', () => {
+    expect(BAND_TEXT.watch).toBe('#906722');
+    expect(BAND_TEXT.severe).toBe(BAND_FILL.severe);
+    expect(BAND_TEXT.broken).toBe(BAND_FILL.broken);
+    expect(BAND_TEXT.holding).toBe(BAND_FILL.holding);
+  });
+
+  it('BAND_NAME spells out every band', () => {
+    expect(BAND_NAME).toEqual({ severe: 'Severe', broken: 'Broken', watch: 'Watch', holding: 'Holding' });
+  });
+
+  it('verdictBandFor maps the four tier ids and fails dark on unknown', () => {
+    expect(verdictBandFor('at_risk')).toBe('severe');
+    expect(verdictBandFor('strained')).toBe('broken');
+    expect(verdictBandFor('healthy_stretched')).toBe('watch');
+    expect(verdictBandFor('healthy_ready')).toBe('holding');
+    expect(verdictBandFor('nonsense_tier')).toBe('severe');
+  });
+
+  it('textOnBand puts ink on amber and cream on everything else', () => {
+    expect(textOnBand('watch')).toBe('#1A1A18');
+    expect(textOnBand('severe')).toBe('#FAF7F0');
+    expect(textOnBand('broken')).toBe('#FAF7F0');
+    expect(textOnBand('holding')).toBe('#FAF7F0');
   });
 });
