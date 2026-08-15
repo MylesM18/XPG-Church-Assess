@@ -212,7 +212,7 @@ describe('assembleFallbackOnly', () => {
   // Task 5: charts are attached on this permanently-fallback path — the public share page
   // never goes through assembleReport, so if the attach point lived only there, the share page
   // would silently render s3/s7 without their charts.
-  it('attaches the tier gauge then area bars charts to s3, and the bottom-items chart to s7', () => {
+  it('attaches the verdict block then stat grid charts to s3, and the rank-list chart to s7', () => {
     const sections = assembleFallbackOnly({
       facts: FIXTURE_FACTS,
       methodology: FIXTURE_METHODOLOGY,
@@ -220,8 +220,8 @@ describe('assembleFallbackOnly', () => {
     });
     const s3 = sections.find((s) => s.id === 's3')!;
     const s7 = sections.find((s) => s.id === 's7')!;
-    expect(s3.charts.map((c) => c.kind)).toEqual(['tier_gauge', 'area_bars']);
-    expect(s7.charts.map((c) => c.kind)).toEqual(['bottom_items']);
+    expect(s3.charts.map((c) => c.kind)).toEqual(['verdict_block', 'stat_grid']);
+    expect(s7.charts.map((c) => c.kind)).toEqual(['rank_list']);
   });
 
   it('gives every non-s3/s7 section no charts', () => {

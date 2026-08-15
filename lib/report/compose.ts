@@ -3,7 +3,7 @@ import { gateSection } from '../ai/section-gates';
 import { fallbackSections, type FallbackSectionArgs, type SectionBody } from './fallback-sections';
 import type { FactsPack } from './facts';
 import type { Methodology, SectionId } from '../methodology/schema';
-import { areaBarsModel, bottomItemsModel, tierGaugeModel, type ChartModel } from './charts';
+import { statGridModel, rankListModel, verdictBlockModel, type ChartModel } from './charts';
 
 export type { SectionId } from '../methodology/schema';
 
@@ -123,9 +123,9 @@ export function chartsForSection(
   facts: FactsPack,
   methodology: Methodology,
 ): ChartModel[] {
-  if (id === 's3') return [tierGaugeModel(facts, methodology), areaBarsModel(facts, methodology)];
+  if (id === 's3') return [verdictBlockModel(facts, methodology), statGridModel(facts, methodology)];
   if (id === 's7') {
-    const model = bottomItemsModel(facts);
+    const model = rankListModel(facts);
     return model ? [model] : [];
   }
   return [];
