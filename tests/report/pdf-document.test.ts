@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { PDFParse } from 'pdf-parse';
+import { Page } from '@react-pdf/renderer';
 import { renderReportDocument } from '@/lib/report/pdf/render';
+import { ReportDocument } from '@/lib/report/pdf/document';
 import { assembleFallbackOnly } from '@/lib/report/compose';
 import type { AssembledSection } from '@/lib/report/compose';
 import { buildFacts, type ChurchFacts, type FactsPack } from '@/lib/report/facts';
@@ -9,6 +11,28 @@ import { coverModel } from '@/lib/report/charts';
 import type { Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types';
 
 const methodology = loadMethodology();
+
+type AnyEl = { type?: unknown; props?: { children?: unknown } };
+
+/** Flattens react-pdf's JSX children tree (arrays, nulls, booleans) into a
+ *  flat list of element-like nodes, for structural assertions (e.g. finding
+ *  every <Page>). Reused by Tasks 12-13. */
+function flatChildren(node: unknown): AnyEl[] {
+  if (node == null || typeof node === 'boolean') return [];
+  if (Array.isArray(node)) return node.flatMap(flatChildren);
+  return [node as AnyEl];
+}
+
+/** Recursively collects every string/number leaf under a react-pdf JSX tree,
+ *  in document order — the rendered text content. Reused by Tasks 12-13. */
+function collectTexts(node: unknown): string[] {
+  if (node == null || typeof node === 'boolean') return [];
+  if (typeof node === 'string') return [node];
+  if (typeof node === 'number') return [String(node)];
+  if (Array.isArray(node)) return node.flatMap(collectTexts);
+  const el = node as AnyEl;
+  return collectTexts(el.props?.children);
+}
 
 /**
  * Task 5 (re-home the fail-closed anonymity guard): this file predates the Task 4 rewrite of
@@ -152,6 +176,16 @@ const DOC_ARGS = {
 };
 
 describe('ReportDocument', () => {
+  it('renders a cover page before the content pages', () => {
+    const doc = ReportDocument({ sections: sectionsFor(), ...DOC_ARGS });
+    const pages = flatChildren(doc.props.children).filter((el) => el.type === Page);
+    expect(pages.length).toBeGreaterThanOrEqual(2);
+    const coverTexts = collectTexts(pages[0]);
+    expect(coverTexts).toContain('July 2026');
+    expect(coverTexts).toContain(DOC_ARGS.cover.headline);
+    expect(coverTexts.some((t) => t.includes('of 100'))).toBe(true);
+  });
+
   // Replaces the old "renders the church name and the verdict" + "renders all eight area
   // dossiers, in the fixed chain-then-enabler order" tests. The new renderer has no per-area
   // dossier table, so the closest still-true property is: the church name appears, and every one

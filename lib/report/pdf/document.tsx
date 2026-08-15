@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, Link, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, Link, Svg, Rect, G, StyleSheet } from '@react-pdf/renderer';
 import { AI_SECTION_IDS, S2Schema, S4Schema, S5Schema, S6Schema, S7Schema, S9Schema, S12Schema } from '../../ai/sections';
 import type { AiSectionId } from '../../ai/sections';
 import type { AssembledSection } from '../compose';
@@ -6,13 +6,14 @@ import type { SectionBody } from '../fallback-sections';
 import { bookingCta } from '../cta';
 import { registerReportFonts, FONT_DISPLAY, FONT_BODY } from './fonts';
 import { PdfChart } from './charts';
-import type { CoverModel } from '../charts';
+import { BAND_FILL, BAND_TEXT, textOnBand, type CoverModel } from '../charts';
 
 registerReportFonts();
 
 const INK = '#1A1A18';
 const INK_SOFT = '#5A5A54';
 const RULE = '#D8D5CE';
+const CREAM = '#FAF7F0';
 
 const s = StyleSheet.create({
   page: { paddingTop: 56, paddingBottom: 56, paddingHorizontal: 48, fontFamily: FONT_BODY, fontSize: 10.5, color: INK, lineHeight: 1.5 },
@@ -33,6 +34,41 @@ const s = StyleSheet.create({
   ctaButton: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: INK, color: '#FFFFFF', fontFamily: FONT_DISPLAY, fontSize: 10, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 4, textDecoration: 'none' },
   footer: { position: 'absolute', bottom: 24, left: 48, right: 48, flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: INK_SOFT },
 });
+
+const cs = StyleSheet.create({
+  coverPage: { backgroundColor: CREAM, paddingTop: 64, paddingHorizontal: 48, paddingBottom: 0, fontFamily: FONT_BODY, color: INK },
+  coverChurch: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 20, marginTop: 18 },
+  coverKicker: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1, color: INK_SOFT, marginTop: 4 },
+  coverDate: { fontSize: 10.5, color: INK_SOFT, marginTop: 2 },
+  coverHero: { marginTop: 70 },
+  coverScore: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 84 },
+  coverCaption: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 10.5, marginTop: 10 },
+  coverFoot: { position: 'absolute', left: 0, right: 0, bottom: 44, paddingVertical: 26, paddingHorizontal: 48 },
+  coverHeadline: { fontFamily: FONT_DISPLAY, fontWeight: 400, fontSize: 15, lineHeight: 1.45 },
+  coverRunline: { position: 'absolute', bottom: 20, left: 48, fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1, color: INK_SOFT },
+});
+
+/**
+ * The cover's 4-segment band strip (spec §2.5): SEVERE/BROKEN/WATCH/HOLDING swatches with an ink
+ * marker at the overall score's plotted position. Geometry comes entirely off `cover.strip` —
+ * this component never recomputes coordinates, mirroring PdfChart's contract with ChartModel.
+ */
+function CoverStrip({ cover }: { cover: CoverModel }) {
+  const markerX = Math.max(1, Math.min(cover.strip.marker.x, cover.strip.width - 1)) - 1;
+  return (
+    <Svg width={499} height={44} viewBox={`0 0 ${cover.strip.width} 44`}>
+      {cover.strip.segments.map((seg) => (
+        <G key={seg.band}>
+          <Rect x={seg.x} y={8} width={seg.w} height={14} fill={BAND_FILL[seg.band]} />
+          <Text x={seg.x} y={38} fill={INK_SOFT} style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5 }}>
+            {seg.name.toUpperCase()}
+          </Text>
+        </G>
+      ))}
+      <Rect x={markerX} y={0} width={2} height={30} fill={INK} />
+    </Svg>
+  );
+}
 
 export interface ReportDocumentProps {
   sections: AssembledSection[];
@@ -232,12 +268,32 @@ function SectionContent({ section }: { section: AssembledSection }) {
  * Object.keys(methodology.report.sections) order, which is report.yaml order.
  */
 export function ReportDocument({
-  sections, churchName, brandColor, monogram, generatedAt, stale,
+  sections, churchName, brandColor, monogram, generatedAt, stale, cover,
 }: ReportDocumentProps) {
   const dateLabel = generatedAt.toISOString().slice(0, 10);
 
   return (
     <Document title={`${churchName} — Church Health Diagnosis`}>
+      <Page size="A4" style={cs.coverPage}>
+        {/* monogram: copy of the existing content-header monogram markup verbatim;
+            Task 12 deletes the content-header original so it lives only here. */}
+        <Text style={[s.monogram, { backgroundColor: brandColor }]}>{monogram}</Text>
+        <Text style={cs.coverChurch}>{churchName}</Text>
+        <Text style={cs.coverKicker}>CHURCH HEALTH ASSESSMENT</Text>
+        <Text style={cs.coverDate}>
+          {generatedAt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+        </Text>
+        <View style={cs.coverHero}>
+          <Text style={[cs.coverScore, { color: BAND_TEXT[cover.band] }]}>{String(cover.score)}</Text>
+          <CoverStrip cover={cover} />
+          <Text style={cs.coverCaption}>{`${cover.caption.tierName} · ${cover.caption.score} of 100`}</Text>
+        </View>
+        <View style={[cs.coverFoot, { backgroundColor: BAND_FILL[cover.band] }]}>
+          <Text style={[cs.coverHeadline, { color: textOnBand(cover.band) }]}>{cover.headline}</Text>
+        </View>
+        <Text style={cs.coverRunline}>XPG · CHURCH HEALTH ASSESSMENT</Text>
+      </Page>
+
       <Page size="A4" style={s.page}>
         <View style={s.header} fixed>
           <Text style={[s.monogram, { backgroundColor: brandColor }]}>{monogram}</Text>
