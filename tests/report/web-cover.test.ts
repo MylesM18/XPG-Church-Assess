@@ -54,17 +54,30 @@ describe('ReportCover', () => {
     expect(html).toContain('>Grace Chapel</p>')
   })
 
-  it('draws the 4-segment strip and the ink marker straight off cover.strip', () => {
+  it('draws the four-step tier ladder off cover.ladder: order, active-row branching, and a11y wiring', () => {
     const html = render(null)
-    expect(html).toContain(`viewBox="0 0 ${cover.strip.width} 44"`)
-    expect(cover.strip.segments).toHaveLength(4)
-    for (const seg of cover.strip.segments) {
-      expect(html).toContain(`<rect x="${seg.x}" y="8" width="${seg.w}" height="14" fill="${BAND_FILL[seg.band]}"`)
-      expect(html).toContain(`>${seg.name.toUpperCase()}</text>`)
+    expect(cover.ladder).toHaveLength(4)
+
+    // role="list" + the aria-label live on the <ul>.
+    expect(html).toContain('role="list"')
+    expect(html).toContain('aria-label="Health tiers, lowest to highest"')
+
+    // All four rows render, worst -> best, each name as real text.
+    for (const row of cover.ladder) {
+      expect(html).toContain(`>${escapeHtml(row.name)}</span>`)
     }
-    const markerX = Math.max(1, Math.min(cover.strip.marker.x, cover.strip.width - 1)) - 1
-    expect(html).toContain(`<rect x="${markerX}" y="0" width="2" height="30" fill="#1A1A18"`)
-    // 4 segment rects + 1 marker, nothing recomputed or added.
-    expect((html.match(/<rect /g) ?? []).length).toBe(5)
+    const orderPattern = new RegExp(cover.ladder.map((row) => escapeHtml(row.name)).join('[\\s\\S]*'))
+    expect(html).toMatch(orderPattern)
+
+    // Exactly one row carries aria-current — the active tier, and no other.
+    expect((html.match(/aria-current="true"/g) ?? []).length).toBe(1)
+    expect(cover.ladder.filter((row) => row.active)).toHaveLength(1)
+
+    // The active row's fill is solid (opacity 1); an inactive row's is washed (opacity 0.18) —
+    // 0.18 is a design decision, hard-coded here so a silent change fails loudly.
+    const activeRow = cover.ladder.find((row) => row.active)!
+    const inactiveRow = cover.ladder.find((row) => !row.active)!
+    expect(html).toContain(`background-color:${BAND_FILL[activeRow.band]};opacity:1`)
+    expect(html).toContain(`background-color:${BAND_FILL[inactiveRow.band]};opacity:0.18`)
   })
 })
