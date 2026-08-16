@@ -31,7 +31,10 @@ const render = (secs: AssembledSection[], band: BandKey) =>
 const CAPS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]'
 const BODY = 'font-body text-base leading-[1.6] text-ink'
 const SUBHEAD = 'font-display text-[1.0625rem] font-semibold text-ink'
+const LIST = 'list-disc space-y-1 pl-5 font-body text-base leading-[1.6] text-ink'
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const countOf = (html: string, needle: string) =>
+  (html.match(new RegExp(escapeRe(needle), 'g')) ?? []).length
 
 describe('ReportSections openers (web mirror of the PDF openers)', () => {
   it('numbers the sections 01..NN in array order, in the caps label', () => {
@@ -51,10 +54,23 @@ describe('ReportSections openers (web mirror of the PDF openers)', () => {
   })
 
   it('tints every opener with BAND_FILL[band] and textOnBand(band) — both textOnBand outcomes', () => {
+    // SCOPED TO THE OPENER ELEMENT (its own class string), not a bare style-attribute count over
+    // the whole page. Since Task 16 the section visuals render inside this markup too, and
+    // several of them legitimately paint the same BAND_FILL/textOnBand pair from their OWN model
+    // band — WebChainRail's stage ordinal chips are the concrete case (4 watch-banded stages in
+    // CAPACITY_FACTS). Pairing the style with the opener div's class is strictly stronger than
+    // the old count: it proves the tint is on the opener, not merely somewhere in the document.
+    const OPENER_CLASS = '-mx-6 px-6 py-3 sm:mx-0 sm:px-4'
     for (const band of ['watch', 'holding'] as const) {
       const html = render(sections, band)
-      const opener = `style="background-color:${BAND_FILL[band]};color:${textOnBand(band)}"`
+      const opener =
+        `<div class="${OPENER_CLASS}" style="background-color:${BAND_FILL[band]};color:${textOnBand(band)}">`
       expect((html.match(new RegExp(escapeRe(opener), 'g')) ?? []).length, band).toBe(sections.length)
+      // No opener may carry any OTHER tint: an opener that fell back to a different band would
+      // keep the count above correct only if a second opener double-rendered, but this catches
+      // the simpler regression of an opener rendered with the wrong band outright.
+      const anyOpener = new RegExp(`${escapeRe(`<div class="${OPENER_CLASS}" style="`)}[^"]*"`, 'g')
+      expect((html.match(anyOpener) ?? []).length, band).toBe(sections.length)
     }
   })
 
@@ -209,6 +225,115 @@ describe('WebVerdictBlock (rebuilt in HTML) + the WebStatGrid percentile line', 
         `${liOpen}<p class="font-display text-2xl font-semibold leading-none text-ink">${stat.value}</p>` +
         `<p class="mt-1 font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-ink-soft">${escapeHtml(stat.label.toUpperCase())}</p></li>`
       expect(scoped, stat.label).toContain(li)
+    }
+  })
+})
+
+/**
+ * Task 16: SectionVisualsAbove / SectionVisualsBelow decide WHAT renders WHERE, so placement
+ * and ordering ARE the behaviour under test here — not mere presence. Every anchor below is a
+ * full element string (class and/or aria-label together with the value), never a bare phrase:
+ * a substring like 'Confidence' or a score also occurs in ordinary report prose, so an
+ * unscoped check would pass even with the dispatcher deleted.
+ */
+describe('per-section visual placement (Task 16 dispatchers)', () => {
+  // WebConfidence's own eyebrow element. Deliberately NOT the bare word 'Confidence' — the
+  // appendix's fallback bullets literally include 'Confidence: 0.85.', which would make a
+  // substring check pass with the meter entirely absent.
+  const CONFIDENCE_HEAD = `<p class="${CAPS}" style="color:#5A5A54">Confidence</p>`
+  // WebCapacityBars' first bar label.
+  const CAPACITY_LABEL = `<span class="${CAPS}" style="color:#5A5A54">Capacity</span>`
+  const STAT_GRID = 'aria-label="Area scores with health bands"'
+  const RANK_LIST = 'aria-label="Weakest questions, ranked"'
+  const THEME_SPLIT = `<p class="${CAPS}" style="color:#5A5A54">THEME OF THE WEAKEST INDICATORS</p>`
+  const only = (id: string) => sections.filter((s) => s.id === id)
+  const bodyOf = (id: string) =>
+    `<p class="${BODY}">${escapeHtml(sections.find((s) => s.id === id)!.fallback.body)}</p>`
+
+  it('renders the confidence meter EXACTLY ONCE, on the appendix section, below its prose', () => {
+    // Two regressions in one count. 2 => Task 10's temporary
+    // `{section.id === 'appendix' ? <WebConfidence .../> : null}` line survived alongside the
+    // dispatcher (double render). 0 => SectionVisualsBelow was pasted with the brief's
+    // `case 's13'`, which no runtime SectionId ever equals (SectionId is s1..s12 | 'appendix'),
+    // so BELOW_IDS.includes('appendix') is false and the meter silently vanishes.
+    expect(countOf(render(sections, 'holding'), CONFIDENCE_HEAD)).toBe(1)
+
+    // ...and it is the appendix that carries it, not some other section.
+    expect(countOf(render(only('appendix'), 'holding'), CONFIDENCE_HEAD)).toBe(1)
+    expect(countOf(render(sections.filter((s) => s.id !== 'appendix'), 'holding'), CONFIDENCE_HEAD)).toBe(0)
+
+    // BELOW means below: the meter follows the appendix's own body paragraph.
+    const html = render(only('appendix'), 'holding')
+    expect(html.indexOf(bodyOf('appendix'))).toBeGreaterThan(-1)
+    expect(html.indexOf(CONFIDENCE_HEAD)).toBeGreaterThan(html.indexOf(bodyOf('appendix')))
+  })
+
+  it("moves s7's rank list BELOW the section prose, with the theme split above it", () => {
+    const html = render(only('s7'), 'holding')
+    const at = [THEME_SPLIT, bodyOf('s7'), RANK_LIST].map((needle) => html.indexOf(needle))
+    // Presence first: an indexOf-ordering assertion over absent needles degenerates to
+    // [-1, -1, -1], which is trivially sorted and would pass with nothing rendered at all.
+    expect(at, 'theme split / s7 body / rank list must all render').not.toContain(-1)
+    expect(at).toEqual([...at].sort((a, b) => a - b))
+    // The pre-Task-16 blind `section.charts.map` rendered the rank list ABOVE the body; that
+    // regression flips the last two indexes and fails the sort above. This count additionally
+    // fails if the chart is rendered in BOTH slots.
+    expect(countOf(render(sections, 'holding'), RANK_LIST)).toBe(1)
+  })
+
+  it('interleaves s3 as verdict block, then capacity bars, then stat grid', () => {
+    const html = render(only('s3'), 'holding')
+    const verdict = sections
+      .find((s) => s.id === 's3')!
+      .charts.find((c): c is Extract<ChartModel, { kind: 'verdict_block' }> => c.kind === 'verdict_block')!
+    const hero =
+      `<p class="font-display font-semibold leading-none" ` +
+      `style="font-size:clamp(3.5rem, 12vw, 5.25rem);color:${BAND_TEXT[verdict.hero.band]}">${verdict.hero.score}</p>`
+    const at = [hero, CAPACITY_LABEL, STAT_GRID].map((needle) => html.indexOf(needle))
+    expect(at, 'verdict hero / capacity bars / stat grid must all render').not.toContain(-1)
+    // The interleave IS the requirement: the blind map rendered both charts adjacent
+    // (verdict, stat grid) with nothing between them, which fails this ordering.
+    expect(at).toEqual([...at].sort((a, b) => a - b))
+    for (const needle of [hero, CAPACITY_LABEL, STAT_GRID]) expect(countOf(html, needle), needle).toBe(1)
+  })
+
+  it('replaces the s10 bullet list with the phase rail while its body paragraph survives', () => {
+    const rail = visuals.s10.phaseRail
+    expect(rail, 's10 phase rail must be modelled for this fixture').not.toBeNull()
+    const html = render(only('s10'), 'holding')
+
+    // The paragraph SectionBodyView would have rendered still reaches the page, verbatim.
+    expect(html).toContain(bodyOf('s10'))
+    // Every phase block renders its text in the rail's own paragraph element.
+    for (const block of rail!.blocks) {
+      expect(html, block.dayLabel).toContain(
+        `<p class="font-body text-[0.9375rem] leading-[1.6]">${escapeHtml(block.text)}</p>`,
+      )
+    }
+    expect(html.indexOf(bodyOf('s10'))).toBeLessThan(html.indexOf(rail!.blocks[0]!.text))
+
+    // Every bullet the rail supersedes is gone as a <li>, and with this fixture the bullets are
+    // EXACTLY the superseded set, so the <ul> disappears entirely rather than rendering empty.
+    for (const bullet of rail!.supersedes) {
+      expect(html, bullet).not.toContain(`<li>${escapeHtml(bullet)}</li>`)
+    }
+    const s10Bullets = sections.find((s) => s.id === 's10')!.fallback.bullets
+    expect(s10Bullets, 'fixture precondition: every s10 bullet is superseded').toEqual(rail!.supersedes)
+    expect(html).not.toContain(`<ul class="${LIST}">`)
+    // Control: the pre-Task-16 render put those bullets on the page as an ordinary list.
+    expect(render(sections.filter((s) => s.id === 's9'), 'holding')).toContain(`<ul class="${LIST}">`)
+  })
+
+  it('leaves every unplaced section rendering its prose with no visual bolted on', () => {
+    // s1/s2/s5/s6/s11/s12 are in neither ABOVE_IDS nor BELOW_IDS and carry no charts, so the
+    // dispatchers must contribute nothing at all to them. Fails if an id is added to either
+    // list without a model, or if a dispatcher stops early-returning.
+    for (const id of ['s1', 's2', 's5', 's6', 's11', 's12']) {
+      const html = render(only(id), 'holding')
+      expect(html, id).toContain(bodyOf(id))
+      for (const needle of [CONFIDENCE_HEAD, CAPACITY_LABEL, STAT_GRID, RANK_LIST, THEME_SPLIT]) {
+        expect(html, `${id} must not render ${needle}`).not.toContain(needle)
+      }
     }
   })
 })

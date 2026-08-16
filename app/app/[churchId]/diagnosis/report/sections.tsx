@@ -4,11 +4,20 @@ import type { AiSectionId } from '@/lib/ai/sections'
 import type { AssembledSection } from '@/lib/report/compose'
 import type { SectionBody } from '@/lib/report/fallback-sections'
 import { BAND_FILL, BAND_TEXT, BAND_NAME, textOnBand, areaIndexFrom } from '@/lib/report/charts'
-import type { AreaIndex, BandKey } from '@/lib/report/charts'
+import type { AreaIndex, BandKey, ChartModel } from '@/lib/report/charts'
 import { bookingCta } from '@/lib/report/cta'
-import type { WebVisuals } from '@/lib/report/web-visuals'
+import type { PhaseRailModel, WebVisuals } from '@/lib/report/web-visuals'
 import { WebChart } from './charts'
-import { WebConfidence } from './web-visuals'
+import {
+  WebCapacityBars,
+  WebChainRail,
+  WebConfidence,
+  WebConstraintCallout,
+  WebDumbbells,
+  WebPhaseRail,
+  WebSpread,
+  WebThemeSplit,
+} from './web-visuals'
 
 // Type ramp (Part B spec §4.1), the web mapping of the PDF's poster ramp: body 1rem/1.6 in INK
 // (the PDF sets body in INK; ink-soft is for caps labels only), AI sub-heads display 600
@@ -231,6 +240,128 @@ function SectionContent({ section, areaIndex }: { section: AssembledSection; are
 }
 
 /**
+ * Per-section visual placement (spec §5.2). Replaces the blind
+ * `section.charts.map` that used to render every chart in one slot above the
+ * body — the new layout needs some visuals above the prose and some below it,
+ * and needs to interleave the two rebuilt charts with a new HTML component.
+ *
+ * Sections with no explicit placement keep exactly today's behaviour: all of
+ * their charts, above the body, in model order.
+ *
+ * LITERAL COMPONENT TAGS ONLY, `never` in every default — see the doc comment at
+ * the top of SectionContent. A Map/lookup of component identifiers is a real
+ * react-hooks/static-components error in this repo, not a style preference.
+ */
+type AboveId = 's3' | 's4' | 's7' | 's9'
+type BelowId = 's4' | 's7' | 's8' | 'appendix'
+
+const ABOVE_IDS: readonly string[] = ['s3', 's4', 's7', 's9']
+const BELOW_IDS: readonly string[] = ['s4', 's7', 's8', 'appendix']
+
+function chartOfKind(section: AssembledSection, kind: ChartModel['kind']) {
+  return section.charts.find((chart) => chart.kind === kind) ?? null
+}
+
+function SectionVisualsAbove({
+  section,
+  visuals,
+}: {
+  section: AssembledSection
+  visuals: WebVisuals
+}) {
+  if (!ABOVE_IDS.includes(section.id)) {
+    return (
+      <>
+        {section.charts.map((chart) => (
+          <WebChart key={chart.kind} model={chart} />
+        ))}
+      </>
+    )
+  }
+
+  const verdict = chartOfKind(section, 'verdict_block')
+  const statGrid = chartOfKind(section, 'stat_grid')
+
+  switch (section.id as AboveId) {
+    case 's3':
+      return (
+        <>
+          {verdict ? <WebChart model={verdict} /> : null}
+          <WebCapacityBars model={visuals.s3.capacity} />
+          {statGrid ? <WebChart model={statGrid} /> : null}
+        </>
+      )
+    case 's4':
+      return visuals.s4.constraint ? (
+        <WebConstraintCallout model={visuals.s4.constraint} />
+      ) : null
+    case 's7':
+      return visuals.s7.themeSplit ? <WebThemeSplit model={visuals.s7.themeSplit} /> : null
+    case 's9':
+      return <WebChainRail model={visuals.s9.chain} />
+    default: {
+      const exhaustive: never = section.id as never
+      return exhaustive
+    }
+  }
+}
+
+/**
+ * The confidence meter's case is 'appendix', not 's13'. The MODEL's own key is
+ * `visuals.s13` (spec §5.1's 13th-section numbering), but the runtime SectionId of the
+ * last section is 'appendix' (methodology/schema.ts) — there is no 's13' section id, so
+ * a `case 's13'` here would never match and the meter would silently vanish. The id and
+ * the model key differ on purpose.
+ */
+function SectionVisualsBelow({
+  section,
+  visuals,
+}: {
+  section: AssembledSection
+  visuals: WebVisuals
+}) {
+  if (!BELOW_IDS.includes(section.id)) return null
+
+  const rankList = chartOfKind(section, 'rank_list')
+
+  switch (section.id as BelowId) {
+    case 's4':
+      return visuals.s4.dumbbells ? <WebDumbbells model={visuals.s4.dumbbells} /> : null
+    case 's7':
+      return rankList ? <WebChart model={rankList} /> : null
+    case 's8':
+      return visuals.s8.spread ? <WebSpread model={visuals.s8.spread} /> : null
+    case 'appendix':
+      return <WebConfidence model={visuals.s13.confidence} />
+    default: {
+      const exhaustive: never = section.id as never
+      return exhaustive
+    }
+  }
+}
+
+/**
+ * s10 renders its roadmap as the phase rail instead of a bullet list (spec §6.6).
+ * The body paragraph is untouched; the rail is handed the FULL bullet array and
+ * subtracts model.supersedes itself, so s10Bullets' extra `Do not work on yet:`
+ * line survives verbatim beneath the rail.
+ */
+function S10PhaseBody({
+  section,
+  model,
+}: {
+  section: AssembledSection
+  model: PhaseRailModel
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {section.fallback.body ? <p className={BODY}>{section.fallback.body}</p> : null}
+      <WebPhaseRail model={model} bullets={section.fallback.bullets} />
+    </div>
+  )
+}
+
+/**
  * Renders the 13 report sections as the web mirror of the PDF's content pages (Part B spec):
  * each section opens with a band-tinted opener (BAND_FILL[band] box, number 01..13 as a caps
  * label over the title in textOnBand), then its charts, then its content; the booking CTA
@@ -273,15 +404,13 @@ export function ReportSections({ sections, band, visuals }: { sections: Assemble
                 <h2 className={OPENER_TITLE} style={OPENER_TITLE_SIZE}>{section.fallback.title}</h2>
               )}
             </div>
-            {section.charts.map((chart) => (
-              <WebChart key={chart.kind} model={chart} />
-            ))}
-            <SectionContent section={section} areaIndex={areaIndex} />
-            {/* The model's own key is 's13' (spec §5.1's 13th-section numbering), but the
-                runtime SectionId for the last section is 'appendix' (methodology/schema.ts) —
-                there is no 's13' section id. Temporary placement; Task 16 replaces this line
-                with the SectionVisualsBelow dispatcher. */}
-            {section.id === 'appendix' ? <WebConfidence model={visuals.s13.confidence} /> : null}
+            <SectionVisualsAbove section={section} visuals={visuals} />
+            {section.id === 's10' && visuals.s10.phaseRail ? (
+              <S10PhaseBody section={section} model={visuals.s10.phaseRail} />
+            ) : (
+              <SectionContent section={section} areaIndex={areaIndex} />
+            )}
+            <SectionVisualsBelow section={section} visuals={visuals} />
           </section>
           {section.id === 's12' && (
             <div className="flex flex-col items-start gap-2">

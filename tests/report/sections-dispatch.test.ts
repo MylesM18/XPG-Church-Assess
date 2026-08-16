@@ -8,7 +8,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ReportSections, SectionBodyView } from '../../app/app/[churchId]/diagnosis/report/sections'
 import type { AssembledSection } from '../../lib/report/compose'
-import type { WebVisuals } from '../../lib/report/web-visuals'
+import type { ChartModel } from '../../lib/report/charts'
+import type { PhaseRailModel, WebVisuals } from '../../lib/report/web-visuals'
 
 // ReportSections now requires the cover's verdict band (Part B re-skin); any band renders.
 const BAND = 'holding' as const
@@ -218,5 +219,168 @@ describe('AI renderers', () => {
       createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [aiSection('s8', 'What leaders are saying', VALID_AI.s2)] }),
     )
     expect(html).toContain('FALLBACK BODY s8')
+  })
+})
+
+// --- Visual placement dispatchers (Task 16) ---------------------------------------------------
+//
+// The real-data placement/ordering assertions live in tests/report/web-sections.test.ts. These
+// two cases need shapes CAPACITY_FACTS cannot produce: a section that carries charts while
+// belonging to NEITHER placement list, and an s10 whose bullets are not entirely superseded by
+// the phase rail (s10Bullets only appends its extra `Do not work on yet:` line for the
+// 'constraint' archetype). Both are built synthetically here.
+//
+// Class strings are the ones sections.tsx uses, kept in sync by hand exactly as
+// web-sections.test.ts does — a drift fails these loudly rather than silently.
+const BODY_CLASS = 'font-body text-base leading-[1.6] text-ink'
+const LIST_CLASS = 'list-disc space-y-1 pl-5 font-body text-base leading-[1.6] text-ink'
+const RAIL_TEXT_CLASS = 'font-body text-[0.9375rem] leading-[1.6]'
+const CAPS_CLASS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]'
+const CONFIDENCE_HEAD = `<p class="${CAPS_CLASS}" style="color:#5A5A54">Confidence</p>`
+const STAT_GRID = 'aria-label="Area scores with health bands"'
+const RANK_LIST = 'aria-label="Weakest questions, ranked"'
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const countOf = (html: string, needle: string) =>
+  (html.match(new RegExp(escapeRe(needle), 'g')) ?? []).length
+
+const SYNTHETIC_STAT_GRID: ChartModel = {
+  kind: 'stat_grid',
+  width: 500,
+  height: 72,
+  cells: [
+    {
+      id: 'c1',
+      name: 'Volunteers',
+      score: 61,
+      band: 'holding',
+      percentile: 40,
+      label: 'VOLUNTEERS · HOLDING',
+      x: 0,
+      y: 0,
+      w: 250,
+      h: 72,
+      bar: { x: 12, y: 56, w: 100, h: 4 },
+    },
+  ],
+}
+
+const SYNTHETIC_RANK_LIST: ChartModel = {
+  kind: 'rank_list',
+  width: 500,
+  height: 44,
+  rows: [
+    {
+      rank: '01',
+      itemId: 'q1',
+      text: 'RANKED QUESTION ONE',
+      fullText: 'RANKED QUESTION ONE',
+      mean: 42,
+      theme: 'systems',
+      themeLabel: 'SYSTEMS',
+      y: 0,
+      h: 44,
+      scoreBlock: { x: 444, y: 6, w: 56, h: 32 },
+    },
+  ],
+}
+
+describe('SectionVisualsAbove / SectionVisualsBelow', () => {
+  it('renders EVERY chart of an unplaced section above its body, in model order, exactly once', () => {
+    // s5 is in neither ABOVE_IDS nor BELOW_IDS, so it must keep the pre-Task-16 behaviour of the
+    // blind `section.charts.map`: all charts, above the body, in array order. Regressions this
+    // catches: the `!ABOVE_IDS.includes(...)` early return being dropped (charts vanish); 's5'
+    // being added to BELOW_IDS (a chart moves below, or renders twice); the charts and the body
+    // swapping slots.
+    const section: AssembledSection = {
+      ...fallbackSection('s5', 'Strengths'),
+      charts: [SYNTHETIC_RANK_LIST, SYNTHETIC_STAT_GRID],
+    }
+    const html = renderToStaticMarkup(
+      createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [section] }),
+    )
+    const body = `<p class="${BODY_CLASS}">body of s5</p>`
+    const at = [RANK_LIST, STAT_GRID, body].map((needle) => html.indexOf(needle))
+    expect(at, 'both charts and the body must render').not.toContain(-1)
+    // Model order (rank list BEFORE stat grid, both before the body), not kind order.
+    expect(at).toEqual([...at].sort((a, b) => a - b))
+    expect(countOf(html, RANK_LIST)).toBe(1)
+    expect(countOf(html, STAT_GRID)).toBe(1)
+    // Nothing from the placement branches leaks onto an unplaced section.
+    expect(html).not.toContain(CONFIDENCE_HEAD)
+  })
+
+  it('swaps the s10 bullets for the phase rail, keeping the body and any bullet it does not supersede', () => {
+    const phaseRail: PhaseRailModel = {
+      blocks: [
+        { numeral: '30', dayLabel: '30 days', text: 'RAIL BLOCK THIRTY', opacity: 1 },
+        { numeral: '60', dayLabel: '60 days', text: 'RAIL BLOCK SIXTY', opacity: 0.6 },
+        { numeral: '90', dayLabel: '90 days', text: 'RAIL BLOCK NINETY', opacity: 0.3 },
+      ],
+      band: 'holding',
+      supersedes: ['SUPERSEDED BULLET'],
+    }
+    const section: AssembledSection = {
+      ...fallbackSection('s10', 'Roadmap'),
+      fallback: {
+        title: 'Roadmap',
+        body: 'BODY OF S10',
+        bullets: ['SUPERSEDED BULLET', 'SURVIVING BULLET'],
+      },
+    }
+    const html = renderToStaticMarkup(
+      createElement(ReportSections, {
+        visuals: { ...VISUALS, s10: { phaseRail } },
+        band: BAND,
+        sections: [section],
+      }),
+    )
+
+    // Prose parity: every string SectionBodyView would have rendered for s10, EXCEPT the ones
+    // the model declares superseded, still reaches the page.
+    expect(html).toContain(`<p class="${BODY_CLASS}">BODY OF S10</p>`)
+    expect(html).toContain(`<li>SURVIVING BULLET</li>`)
+    expect(html).not.toContain(`<li>SUPERSEDED BULLET</li>`)
+    // The superseded string is not merely un-listed, it is off the page entirely (the rail
+    // renders its own copy from the model's blocks, not from the bullet text).
+    expect(html).not.toContain('SUPERSEDED BULLET')
+
+    for (const block of phaseRail.blocks) {
+      expect(html, block.dayLabel).toContain(`<p class="${RAIL_TEXT_CLASS}">${block.text}</p>`)
+    }
+    const at = ['BODY OF S10', 'RAIL BLOCK THIRTY', 'RAIL BLOCK NINETY', 'SURVIVING BULLET'].map(
+      (needle) => html.indexOf(needle),
+    )
+    expect(at, 'body, rail blocks and the surviving bullet must all render').not.toContain(-1)
+    expect(at).toEqual([...at].sort((a, b) => a - b))
+  })
+
+  it('leaves s10 on SectionContent when the phase rail is absent, never an empty frame', () => {
+    // VISUALS pins s10.phaseRail to null. The `&& visuals.s10.phaseRail` guard must then fall
+    // through to the ordinary body renderer rather than render a railless wrapper.
+    const html = renderToStaticMarkup(
+      createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [fallbackSection('s10', 'Roadmap')] }),
+    )
+    expect(html).toContain(`<p class="${BODY_CLASS}">body of s10</p>`)
+    expect(html).toContain(`<ul class="${LIST_CLASS}">`)
+    expect(html).toContain('<li>bullet a s10</li>')
+    expect(html).not.toContain(RAIL_TEXT_CLASS)
+  })
+
+  it('renders the confidence meter for the appendix id only, exactly once', () => {
+    // Guards the id correction directly: the MODEL key is visuals.s13, but the runtime
+    // SectionId is 'appendix'. A `case 's13'` in SectionVisualsBelow renders 0 of these.
+    const appendix = renderToStaticMarkup(
+      createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [fallbackSection('appendix', 'Methodology')] }),
+    )
+    expect(countOf(appendix, CONFIDENCE_HEAD)).toBe(1)
+    const others = renderToStaticMarkup(
+      createElement(ReportSections, {
+        visuals: VISUALS,
+        band: BAND,
+        sections: ['s1', 's10', 's11', 's12'].map((id) => fallbackSection(id, `Title ${id}`)),
+      }),
+    )
+    expect(countOf(others, CONFIDENCE_HEAD)).toBe(0)
   })
 })
