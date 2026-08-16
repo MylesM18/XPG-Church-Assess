@@ -228,3 +228,50 @@ describe('webVisuals — s8 disagreement spread', () => {
     expect(webVisuals(makeFacts({ dispersion: [] }), methodology).s8.spread).toBeNull();
   });
 });
+
+describe('webVisuals — s9 dependency chain', () => {
+  const methodology = loadMethodology();
+
+  it('orders stages by rules.chain, not by score', () => {
+    const model = webVisuals(CAPACITY_FACTS, methodology).s9.chain;
+    const expected = methodology.rules.chain.filter((id) =>
+      CAPACITY_FACTS.categories.some((c) => c.id === id),
+    );
+    expect(model.stages.map((s) => s.id)).toEqual(expected);
+    expect(model.stages.map((s) => s.ordinal)).toEqual(
+      expected.map((_, i) => String(i + 1).padStart(2, '0')),
+    );
+    for (const stage of model.stages) {
+      const cat = CAPACITY_FACTS.categories.find((c) => c.id === stage.id)!;
+      expect(stage.name).toBe(cat.name);
+      expect(stage.score).toBe(cat.score);
+      expect(stage.band).toBe(
+        readingBand(cat.state as CategoryState, cat.score, methodology.rules.thresholds),
+      );
+    }
+  });
+
+  it("maps the 'all' gates literal to every stage and arrays to their own stages", () => {
+    const facts = makeFacts({
+      gating: [
+        { enabler_id: 'gov', name: 'Governance', score: 22, note: 'Gates everything' },
+        { enabler_id: 'comm', name: 'Communication', score: 40, note: 'Gates the front door' },
+      ],
+    });
+    const model = webVisuals(facts, methodology).s9.chain;
+    for (const stage of model.stages) {
+      expect(stage.gates.map((g) => g.id)).toContain('gov');
+    }
+    const withComm = model.stages.filter((s) => s.gates.some((g) => g.id === 'comm'));
+    expect(withComm.map((s) => s.id).sort()).toEqual(['conn', 'guest']);
+    const gov = model.stages[0]!.gates.find((g) => g.id === 'gov')!;
+    expect(gov).toMatchObject({ name: 'Governance', score: 22, note: 'Gates everything' });
+  });
+
+  it('carries the existing read sentences and never goes empty', () => {
+    const model = webVisuals(CAPACITY_FACTS, methodology).s9.chain;
+    expect(model.reads).toEqual(CAPACITY_FACTS.dependencies.map((d) => d.read_sentence));
+    expect(webVisuals(makeFacts({ gating: [], dependencies: [] }), methodology).s9.chain)
+      .not.toBeNull();
+  });
+});

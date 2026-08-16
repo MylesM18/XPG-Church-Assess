@@ -114,11 +114,34 @@ export type SpreadModel = {
   thresholdLabel: string;
 };
 
+export type ChainGate = { id: string; name: string; score: number; note: string; band: BandKey };
+
+export type ChainStage = {
+  id: string;
+  /** '01'..'05', from the stage's position in rules.chain. */
+  ordinal: string;
+  name: string;
+  score: number;
+  band: BandKey;
+  /** Gate chips sit beside the stages they actually gate, not in one list at the
+   * bottom — gating[] carries no mapping, rules.enablers[].gates does. */
+  gates: ChainGate[];
+};
+
+export type ChainModel = { stages: ChainStage[]; reads: string[] };
+
+/** rules.enablers[].gates is `'all' | string[]` (methodology/schema.ts:57).
+ * The 'all' literal must be handled explicitly — it is not an array. */
+function gatesStage(gates: 'all' | string[], stageId: string): boolean {
+  return gates === 'all' || gates.includes(stageId);
+}
+
 export type WebVisuals = {
   s3: { capacity: CapacityBarsModel };
   s4: { constraint: ConstraintCalloutModel | null; dumbbells: DumbbellsModel | null };
   s7: { themeSplit: ThemeSplitModel | null };
   s8: { spread: SpreadModel | null };
+  s9: { chain: ChainModel };
   s13: { confidence: ConfidenceModel };
 };
 
@@ -251,6 +274,41 @@ function spreadModel(facts: FactsPack, methodology: Methodology): SpreadModel | 
   };
 }
 
+function chainModel(facts: FactsPack, methodology: Methodology): ChainModel {
+  const stages: ChainStage[] = [];
+
+  for (const stageId of methodology.rules.chain) {
+    const found = categoryLookup(facts, methodology, stageId);
+    // A chain stage with no category has no truthful score to print, so it is
+    // dropped rather than rendered with a fabricated one.
+    if (!found) continue;
+
+    const gates: ChainGate[] = [];
+    for (const gate of facts.gating) {
+      const enabler = methodology.rules.enablers[gate.enabler_id];
+      if (!enabler || !gatesStage(enabler.gates, stageId)) continue;
+      gates.push({
+        id: gate.enabler_id,
+        name: gate.name,
+        score: gate.score,
+        note: gate.note,
+        band: categoryLookup(facts, methodology, gate.enabler_id)?.band ?? 'severe',
+      });
+    }
+
+    stages.push({
+      id: stageId,
+      ordinal: String(stages.length + 1).padStart(2, '0'),
+      name: found.name,
+      score: found.score,
+      band: found.band,
+      gates,
+    });
+  }
+
+  return { stages, reads: facts.dependencies.map((d) => d.read_sentence) };
+}
+
 export function webVisuals(facts: FactsPack, methodology: Methodology): WebVisuals {
   return {
     s3: { capacity: capacityBars(facts) },
@@ -260,6 +318,7 @@ export function webVisuals(facts: FactsPack, methodology: Methodology): WebVisua
     },
     s7: { themeSplit: themeSplit(facts) },
     s8: { spread: spreadModel(facts, methodology) },
+    s9: { chain: chainModel(facts, methodology) },
     s13: { confidence: confidenceModel(facts) },
   };
 }
