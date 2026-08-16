@@ -287,12 +287,16 @@ function chainModel(facts: FactsPack, methodology: Methodology): ChainModel {
     for (const gate of facts.gating) {
       const enabler = methodology.rules.enablers[gate.enabler_id];
       if (!enabler || !gatesStage(enabler.gates, stageId)) continue;
+      // Band comes from the chip's OWN printed score, not a re-lookup in facts.categories:
+      // a chip that prints 22 can never render a healthier band than 22 earns. This does
+      // not depend on how buildFacts happens to populate gating[] (see constraintCallout's
+      // identical reasoning above for the s4 panel).
       gates.push({
         id: gate.enabler_id,
         name: gate.name,
         score: gate.score,
         note: gate.note,
-        band: categoryLookup(facts, methodology, gate.enabler_id)?.band ?? 'severe',
+        band: readingBand('gate', gate.score, methodology.rules.thresholds),
       });
     }
 

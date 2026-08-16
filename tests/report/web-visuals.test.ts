@@ -274,4 +274,19 @@ describe('webVisuals — s9 dependency chain', () => {
     expect(webVisuals(makeFacts({ gating: [], dependencies: [] }), methodology).s9.chain)
       .not.toBeNull();
   });
+
+  it("bands each gate chip from its OWN printed score, not a re-lookup by enabler id", () => {
+    const facts = makeFacts({
+      gating: [
+        { enabler_id: 'gov', name: 'Governance', score: 22, note: 'Gates everything' },
+        { enabler_id: 'comm', name: 'Communication', score: 40, note: 'Gates the front door' },
+      ],
+    });
+    const model = webVisuals(facts, methodology).s9.chain;
+    const gov = model.stages[0]!.gates.find((g) => g.id === 'gov')!;
+    expect(gov.band).toBe('severe');
+    const stageWithComm = model.stages.find((s) => s.gates.some((g) => g.id === 'comm'))!;
+    const comm = stageWithComm.gates.find((g) => g.id === 'comm')!;
+    expect(comm.band).toBe('broken');
+  });
 });
