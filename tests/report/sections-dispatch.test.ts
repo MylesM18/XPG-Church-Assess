@@ -9,7 +9,13 @@ import { describe, expect, it } from 'vitest'
 import { ReportSections, SectionBodyView } from '../../app/app/[churchId]/diagnosis/report/sections'
 import type { AssembledSection } from '../../lib/report/compose'
 import type { ChartModel } from '../../lib/report/charts'
-import type { PhaseRailModel, WebVisuals } from '../../lib/report/web-visuals'
+import type {
+  ConstraintCalloutModel,
+  DumbbellsModel,
+  PhaseRailModel,
+  SpreadModel,
+  WebVisuals,
+} from '../../lib/report/web-visuals'
 
 // ReportSections now requires the cover's verdict band (Part B re-skin); any band renders.
 const BAND = 'holding' as const
@@ -382,5 +388,137 @@ describe('SectionVisualsAbove / SectionVisualsBelow', () => {
       }),
     )
     expect(countOf(others, CONFIDENCE_HEAD)).toBe(0)
+  })
+})
+
+// --- s4 / s8 placement, the branches CAPACITY_FACTS leaves null ------------------------------
+//
+// Fix round 1. Three of the eight placement branches — s4's constraint callout (ABOVE), s4's
+// dumbbells (BELOW) and s8's spread (BELOW) — never rendered in any test, because
+// facts.primary_constraint / blind_spots / dispersion are all empty under CAPACITY_FACTS, so
+// webVisuals() models them as null. The COMPONENTS are covered by
+// tests/report/web-visual-components.test.ts; what was uncovered is the DISPATCHER's placement
+// decision for them, which is the behaviour this task exists to provide.
+//
+// The shared VISUALS literal above keeps every field null — several tests assert on that
+// null-ness — so the non-null models live in a separate NON_NULL_VISUALS variant built from it.
+
+const CONSTRAINT: ConstraintCalloutModel = {
+  eyebrow: 'PRIMARY CONSTRAINT',
+  band: 'severe',
+  rows: [{ id: 'k1', name: 'CONSTRAINT ROW NAME', score: 31, note: null }],
+}
+
+const DUMBBELLS: DumbbellsModel = {
+  rows: [
+    {
+      id: 'k2',
+      name: 'DUMBBELL ROW NAME',
+      belief: 80,
+      evidence: 40,
+      gap: 40,
+      band: 'broken',
+      beliefPct: 80,
+      evidencePct: 40,
+    },
+  ],
+}
+
+const SPREAD: SpreadModel = {
+  rows: [{ id: 'k3', name: 'SPREAD ROW NAME', spread: 2.5, pct: 62.5, band: 'watch' }],
+  axisMax: 4,
+  axisMaxLabel: '4',
+  threshold: 1.5,
+  thresholdPct: 37.5,
+  thresholdLabel: 'THRESHOLD 1.5',
+}
+
+const NON_NULL_VISUALS: WebVisuals = {
+  ...VISUALS,
+  s4: { constraint: CONSTRAINT, dumbbells: DUMBBELLS },
+  s8: { spread: SPREAD },
+}
+
+// Element-scoped anchors: each is the component's OWN outer element or a value inside its own
+// element, never a bare phrase. A row name on its own would also match ordinary prose.
+const CONSTRAINT_PANEL = '<div class="-mx-6 flex flex-col gap-3 px-6 py-5 sm:mx-0 sm:px-5"'
+const CONSTRAINT_EYEBROW = `<p class="${CAPS_CLASS}">PRIMARY CONSTRAINT</p>`
+const DUMBBELLS_LIST = '<ul role="list" class="flex flex-col gap-4">'
+// WebDumbbells' own footnote line, the one element that prints both values as real text.
+const DUMBBELLS_VALUES =
+  `<p class="font-body text-[0.6875rem] tracking-[0.04em]" style="color:#5A5A54">` +
+  `Evidence 40 · Belief 80</p>`
+const SPREAD_THRESHOLD = `<span class="${CAPS_CLASS}" style="color:#5A5A54">THRESHOLD 1.5</span>`
+const SPREAD_ROW = `<span class="${CAPS_CLASS}" style="color:#5A5A54">SPREAD ROW NAME</span>`
+
+const renderOne = (section: AssembledSection, visuals: WebVisuals) =>
+  renderToStaticMarkup(createElement(ReportSections, { visuals, band: BAND, sections: [section] }))
+
+describe('s4 / s8 placement branches (non-null models)', () => {
+  it('splits s4 across the body: constraint callout ABOVE, dumbbells BELOW, each exactly once', () => {
+    const html = renderOne(fallbackSection('s4', 'The core constraint'), NON_NULL_VISUALS)
+    const body = `<p class="${BODY_CLASS}">body of s4</p>`
+    const at = [CONSTRAINT_PANEL, body, DUMBBELLS_VALUES].map((needle) => html.indexOf(needle))
+    expect(at, 'callout, body and dumbbells must all render').not.toContain(-1)
+    // THE SPLIT IS THE BEHAVIOUR. Verified by mutation: swapping the two s4 branches (callout to
+    // SectionVisualsBelow, dumbbells to SectionVisualsAbove) inverts these indexes and fails
+    // this sort, as does collapsing both into one slot on either side of the body.
+    expect(at).toEqual([...at].sort((a, b) => a - b))
+    for (const needle of [CONSTRAINT_PANEL, CONSTRAINT_EYEBROW, DUMBBELLS_LIST, DUMBBELLS_VALUES]) {
+      expect(countOf(html, needle), needle).toBe(1)
+    }
+    // The callout is s4's ABOVE branch in full: no chart is rendered above it as well.
+    expect(html).not.toContain(STAT_GRID)
+    expect(html).not.toContain(RANK_LIST)
+  })
+
+  it('renders s8 spread BELOW the body, with nothing above it', () => {
+    const html = renderOne(fallbackSection('s8', 'What leaders are saying'), NON_NULL_VISUALS)
+    const body = `<p class="${BODY_CLASS}">body of s8</p>`
+    const at = [body, SPREAD_ROW, SPREAD_THRESHOLD].map((needle) => html.indexOf(needle))
+    expect(at, 'body, spread row and threshold label must all render').not.toContain(-1)
+    // Breaks if s8 is moved to ABOVE_IDS, or if the spread is emitted in both slots.
+    expect(at).toEqual([...at].sort((a, b) => a - b))
+    expect(countOf(html, SPREAD_ROW)).toBe(1)
+    expect(countOf(html, SPREAD_THRESHOLD)).toBe(1)
+    // s8 has no ABOVE branch at all: SectionVisualsAbove's early return runs and s8 carries no
+    // charts, so nothing precedes the body.
+    const opener = html.indexOf('</h1>')
+    expect(html.slice(opener, html.indexOf(body))).toBe('</h1></div>')
+  })
+
+  it('renders nothing at all for the same three branches when their models are null', () => {
+    // Global constraint: "Never an empty frame, never a 'no data' message." A null model means
+    // the component is ABSENT — not an empty wrapper, not a stray element. Breaks if a branch
+    // stops guarding on null and renders its outer <div>/<ul> with no rows.
+    for (const id of ['s4', 's8']) {
+      const html = renderOne(fallbackSection(id, `Title ${id}`), VISUALS)
+      expect(html, id).toContain(`<p class="${BODY_CLASS}">body of ${id}</p>`)
+      for (const needle of [
+        CONSTRAINT_PANEL,
+        CONSTRAINT_EYEBROW,
+        DUMBBELLS_LIST,
+        DUMBBELLS_VALUES,
+        SPREAD_THRESHOLD,
+        SPREAD_ROW,
+      ]) {
+        expect(html, `${id} must not render ${needle}`).not.toContain(needle)
+      }
+    }
+    // And the prose still stands alone: s4's own bullets are untouched by the absent visuals.
+    const s4 = renderOne(fallbackSection('s4', 'The core constraint'), VISUALS)
+    expect(s4).toContain('<li>bullet a s4</li>')
+    expect(s4).toContain('<li>bullet b s4</li>')
+  })
+
+  it('keeps each non-null model on its OWN section and leaks none onto the others', () => {
+    // Breaks if a branch reads the wrong visuals key (e.g. s8's case returning s4's dumbbells),
+    // which the switch's literal cases make easy to typo and which no type error would catch.
+    const s4 = renderOne(fallbackSection('s4', 'The core constraint'), NON_NULL_VISUALS)
+    const s8 = renderOne(fallbackSection('s8', 'What leaders are saying'), NON_NULL_VISUALS)
+    expect(s4).not.toContain(SPREAD_ROW)
+    expect(s4).not.toContain(SPREAD_THRESHOLD)
+    expect(s8).not.toContain(CONSTRAINT_PANEL)
+    expect(s8).not.toContain(DUMBBELLS_VALUES)
   })
 })

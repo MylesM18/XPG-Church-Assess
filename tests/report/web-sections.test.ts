@@ -334,6 +334,15 @@ describe('per-section visual placement (Task 16 dispatchers)', () => {
       for (const needle of [CONFIDENCE_HEAD, CAPACITY_LABEL, STAT_GRID, RANK_LIST, THEME_SPLIT]) {
         expect(html, `${id} must not render ${needle}`).not.toContain(needle)
       }
+      // Contiguity, not just absence. The five checks above pass even when the dispatcher emits
+      // a STRAY TEXT NODE, which is exactly what a fall-through produces: the `never` arm
+      // returns section.id and React renders it as visible text (verified by mutation — adding
+      // an id to ABOVE_IDS with no matching case emits a bare `s5` right here, and every
+      // absence check above still passed). Asserting the opener's closing </div> is immediately
+      // followed by the body paragraph closes that hole for all six unplaced sections.
+      expect(html, `${id} emits something between its opener and its body`).toContain(
+        `</div>${bodyOf(id)}`,
+      )
     }
   })
 })
