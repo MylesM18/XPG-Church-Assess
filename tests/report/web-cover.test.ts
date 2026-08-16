@@ -79,5 +79,15 @@ describe('ReportCover', () => {
     const inactiveRow = cover.ladder.find((row) => !row.active)!
     expect(html).toContain(`background-color:${BAND_FILL[activeRow.band]};opacity:1`)
     expect(html).toContain(`background-color:${BAND_FILL[inactiveRow.band]};opacity:0.18`)
+
+    // The active row is not distinguished by colour alone — it is also physically larger. Tie the
+    // padding classes to aria-current itself (rather than checking presence anywhere in the page)
+    // so the assertion fails whichever way the branch collapses, including a straight inversion.
+    expect(html).toContain('<li aria-current="true" class="relative -mx-1 flex items-center px-4 py-2.5">')
+    expect(html).toContain('<li class="relative flex items-center px-3 py-2">')
+
+    // Exactly 4 <li> elements — an injected or duplicated row would slip past the order/substring
+    // checks above unnoticed.
+    expect((html.match(/<li/g) ?? []).length).toBe(4)
   })
 })
