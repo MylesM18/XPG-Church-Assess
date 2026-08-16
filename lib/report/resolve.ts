@@ -5,6 +5,7 @@ import { assembleReport } from '@/lib/report/compose'
 import type { AssembledSection } from '@/lib/report/compose'
 import { coverModel } from '@/lib/report/charts'
 import type { CoverModel } from '@/lib/report/charts'
+import { webVisuals, type WebVisuals } from '@/lib/report/web-visuals'
 import type { PersistedReportLookup } from '@/lib/data/reports'
 
 type ReportInputsArgs = Parameters<typeof reportInputs>[0]
@@ -37,6 +38,10 @@ export interface ResolvedReportSections {
   /** A report exists for this run, but not for these inputs. Drives the D-P5-4 notice. */
   stale: boolean
   cover: CoverModel
+  /** Web-only visual models (spec §5.1). Attached beside `cover`, never to
+   * section.charts. The PDF route destructures this object and simply does not
+   * read this field — do NOT thread it into the PDF. */
+  visuals: WebVisuals
 }
 
 export async function resolveReportSections(
@@ -80,8 +85,9 @@ export async function resolveReportSections(
   })
 
   const cover = coverModel(facts, inputs.methodology)
+  const visuals = webVisuals(facts, inputs.methodology)
 
-  return { sections, inputsHash, stale, cover }
+  return { sections, inputsHash, stale, cover, visuals }
 }
 
 /**

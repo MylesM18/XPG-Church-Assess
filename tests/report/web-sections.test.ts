@@ -13,17 +13,19 @@ import { loadMethodology } from '@/lib/methodology/load'
 import { areaIndexFrom, BAND_FILL, BAND_NAME, BAND_TEXT, textOnBand } from '@/lib/report/charts'
 import type { BandKey, ChartModel } from '@/lib/report/charts'
 import { bookingCta } from '@/lib/report/cta'
+import { webVisuals } from '@/lib/report/web-visuals'
 import { CAPACITY_FACTS } from '../fixtures/facts'
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const methodology = loadMethodology()
 const sections = assembleFallbackOnly({ facts: CAPACITY_FACTS, methodology, reflections: [] })
+const visuals = webVisuals(CAPACITY_FACTS, methodology)
 
 const escapeHtml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;')
 
 const render = (secs: AssembledSection[], band: BandKey) =>
-  renderToStaticMarkup(createElement(ReportSections, { sections: secs, band }))
+  renderToStaticMarkup(createElement(ReportSections, { sections: secs, band, visuals }))
 
 // The class constants sections.tsx uses (kept in sync by hand; a drift fails these tests loudly).
 const CAPS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]'

@@ -8,9 +8,23 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ReportSections, SectionBodyView } from '../../app/app/[churchId]/diagnosis/report/sections'
 import type { AssembledSection } from '../../lib/report/compose'
+import type { WebVisuals } from '../../lib/report/web-visuals'
 
 // ReportSections now requires the cover's verdict band (Part B re-skin); any band renders.
 const BAND = 'holding' as const
+
+// This file's sections are synthetic (fallbackSection/aiSection), so `visuals` is a minimal
+// literal satisfying WebVisuals rather than the real facts/methodology pipeline — these tests
+// exercise dispatch/chrome, not the visual models themselves (that's tests/report/web-visuals*).
+const VISUALS: WebVisuals = {
+  s3: { capacity: { band: 'holding', capacity: 0, throughput: 0, capacityPct: 0, throughputPct: 0, gap: 0, gapLabel: null } },
+  s4: { constraint: null, dumbbells: null },
+  s7: { themeSplit: null },
+  s8: { spread: null },
+  s9: { chain: { stages: [], reads: [] } },
+  s10: { phaseRail: null },
+  s13: { confidence: { pct: 0, label: '0%', respondents: 0, areas: 0, thinnest: null } },
+}
 
 const fallbackSection = (id: string, title: string): AssembledSection => ({
   id: id as AssembledSection['id'],
@@ -45,7 +59,7 @@ describe('ReportSections', () => {
   ]
 
   it('renders every section, in array order, and never re-sorts', () => {
-    const html = renderToStaticMarkup(createElement(ReportSections, { band: BAND, sections }))
+    const html = renderToStaticMarkup(createElement(ReportSections, { visuals: VISUALS, band: BAND, sections }))
     const order = ['Overview', 'Executive summary', 'How to read this'].map((t) => html.indexOf(t))
     expect(order).toEqual([...order].sort((a, b) => a - b))
     // Collect and compare the whole set — an assertion inside a loop reports only the
@@ -55,13 +69,13 @@ describe('ReportSections', () => {
   })
 
   it('takes every heading from fallback.title', () => {
-    const html = renderToStaticMarkup(createElement(ReportSections, { band: BAND, sections }))
+    const html = renderToStaticMarkup(createElement(ReportSections, { visuals: VISUALS, band: BAND, sections }))
     expect(html).toContain('>Overview<')
     expect(html).toContain('>Executive summary<')
   })
 
   it('renders exactly one <h1>, on the first section only', () => {
-    const html = renderToStaticMarkup(createElement(ReportSections, { band: BAND, sections }))
+    const html = renderToStaticMarkup(createElement(ReportSections, { visuals: VISUALS, band: BAND, sections }))
     expect((html.match(/<h1[\s>]/g) ?? []).length).toBe(1)
     expect(html.indexOf('<h1')).toBeLessThan(html.indexOf('<h2'))
     expect((html.match(/<h2[\s>]/g) ?? []).length).toBe(2)
@@ -69,14 +83,14 @@ describe('ReportSections', () => {
 
   it('renders a fallback section through SectionBodyView', () => {
     const html = renderToStaticMarkup(
-      createElement(ReportSections, { band: BAND, sections: [fallbackSection('s1', 'Overview')] }),
+      createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [fallbackSection('s1', 'Overview')] }),
     )
     expect(html).toContain('body of s1')
     expect(html).toContain('bullet a s1')
   })
 
   it('renders an empty section list without throwing', () => {
-    expect(renderToStaticMarkup(createElement(ReportSections, { band: BAND, sections: [] }))).toBe('')
+    expect(renderToStaticMarkup(createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [] }))).toBe('')
   })
 })
 
@@ -120,7 +134,7 @@ describe('AI renderers', () => {
     // FIRST failure, which would hide six broken renderers behind one.
     const leaked = Object.entries(VALID_AI).filter(([id, ai]) => {
       const html = renderToStaticMarkup(
-        createElement(ReportSections, { band: BAND, sections: [aiSection(id, `Title ${id}`, ai)] }),
+        createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [aiSection(id, `Title ${id}`, ai)] }),
       )
       return html.includes(`FALLBACK BODY ${id}`)
     })
@@ -140,7 +154,7 @@ describe('AI renderers', () => {
     const missing: string[] = []
     for (const [id, needles] of Object.entries(expected)) {
       const html = renderToStaticMarkup(
-        createElement(ReportSections, { band: BAND, sections: [aiSection(id, `Title ${id}`, VALID_AI[id])] }),
+        createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [aiSection(id, `Title ${id}`, VALID_AI[id])] }),
       )
       for (const needle of needles) if (!html.includes(needle)) missing.push(`${id}:${needle}`)
     }
@@ -149,7 +163,7 @@ describe('AI renderers', () => {
 
   it('renders the six s6 beats in order: affirm, pivot, evidence, not_statement, reframe, trajectory', () => {
     const html = renderToStaticMarkup(
-      createElement(ReportSections, { band: BAND, sections: [aiSection('s6', 'Areas', VALID_AI.s6)] }),
+      createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [aiSection('s6', 'Areas', VALID_AI.s6)] }),
     )
     const positions = [
       'affirm text', 'pivot text', 'evidence text', 'not statement text', 'reframe text', 'trajectory text',
@@ -165,6 +179,7 @@ describe('AI renderers', () => {
   it('omits the s7 pattern claim when it is null', () => {
     const html = renderToStaticMarkup(
       createElement(ReportSections, {
+        visuals: VISUALS,
         band: BAND,
         sections: [aiSection('s7', 'Lowest', { narrative: 'only narrative', pattern_claim: null })],
       }),
@@ -176,7 +191,7 @@ describe('AI renderers', () => {
   it('falls back to SectionBodyView when an AI payload fails its schema, and never throws', () => {
     const broken = Object.keys(VALID_AI).filter((id) => {
       const html = renderToStaticMarkup(
-        createElement(ReportSections, { band: BAND, sections: [aiSection(id, `Title ${id}`, { nonsense: true })] }),
+        createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [aiSection(id, `Title ${id}`, { nonsense: true })] }),
       )
       return !html.includes(`FALLBACK BODY ${id}`)
     })
@@ -185,14 +200,14 @@ describe('AI renderers', () => {
 
   it('falls back when ai is null on a source:ai section', () => {
     const html = renderToStaticMarkup(
-      createElement(ReportSections, { band: BAND, sections: [aiSection('s2', 'Executive summary', null)] }),
+      createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [aiSection('s2', 'Executive summary', null)] }),
     )
     expect(html).toContain('FALLBACK BODY s2')
   })
 
   it('still takes the heading from fallback.title on an AI section', () => {
     const html = renderToStaticMarkup(
-      createElement(ReportSections, { band: BAND, sections: [aiSection('s2', 'Executive summary', VALID_AI.s2)] }),
+      createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [aiSection('s2', 'Executive summary', VALID_AI.s2)] }),
     )
     expect(html).toContain('Executive summary')
   })
@@ -200,7 +215,7 @@ describe('AI renderers', () => {
   it('uses SectionBodyView for a non-AI section id even when source is ai', () => {
     // s1/s3/s8/s10/s11/appendix have no AI renderer — they must not throw.
     const html = renderToStaticMarkup(
-      createElement(ReportSections, { band: BAND, sections: [aiSection('s8', 'What leaders are saying', VALID_AI.s2)] }),
+      createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [aiSection('s8', 'What leaders are saying', VALID_AI.s2)] }),
     )
     expect(html).toContain('FALLBACK BODY s8')
   })

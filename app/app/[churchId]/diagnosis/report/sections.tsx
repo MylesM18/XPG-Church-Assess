@@ -6,7 +6,9 @@ import type { SectionBody } from '@/lib/report/fallback-sections'
 import { BAND_FILL, BAND_TEXT, BAND_NAME, textOnBand, areaIndexFrom } from '@/lib/report/charts'
 import type { AreaIndex, BandKey } from '@/lib/report/charts'
 import { bookingCta } from '@/lib/report/cta'
+import type { WebVisuals } from '@/lib/report/web-visuals'
 import { WebChart } from './charts'
+import { WebConfidence } from './web-visuals'
 
 // Type ramp (Part B spec §4.1), the web mapping of the PDF's poster ramp: body 1rem/1.6 in INK
 // (the PDF sets body in INK; ink-soft is for caps labels only), AI sub-heads display 600
@@ -253,7 +255,7 @@ function SectionContent({ section, areaIndex }: { section: AssembledSection; are
  * their text kept on the body column (px-6), and sit inside the column with the PDF's 16px
  * inset (px-4) from sm up.
  */
-export function ReportSections({ sections, band }: { sections: AssembledSection[]; band: BandKey }) {
+export function ReportSections({ sections, band, visuals }: { sections: AssembledSection[]; band: BandKey; visuals: WebVisuals }) {
   const areaIndex = areaIndexFrom(sections)
   return (
     <>
@@ -275,6 +277,11 @@ export function ReportSections({ sections, band }: { sections: AssembledSection[
               <WebChart key={chart.kind} model={chart} />
             ))}
             <SectionContent section={section} areaIndex={areaIndex} />
+            {/* The model's own key is 's13' (spec §5.1's 13th-section numbering), but the
+                runtime SectionId for the last section is 'appendix' (methodology/schema.ts) —
+                there is no 's13' section id. Temporary placement; Task 16 replaces this line
+                with the SectionVisualsBelow dispatcher. */}
+            {section.id === 'appendix' ? <WebConfidence model={visuals.s13.confidence} /> : null}
           </section>
           {section.id === 's12' && (
             <div className="flex flex-col items-start gap-2">
