@@ -3,6 +3,8 @@ import { loadMethodology } from '@/lib/methodology/load';
 import { roadmapEntries } from '@/lib/report/fallback-sections';
 import { webVisuals } from '@/lib/report/web-visuals';
 import { CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
+import { readingBand } from '@/lib/report/view';
+import type { CategoryState } from '@/lib/engine/types';
 
 describe('roadmapEntries is exported for the web phase rail', () => {
   const methodology = loadMethodology();
@@ -88,5 +90,71 @@ describe('webVisuals is pure', () => {
 
   it('returns deep-equal output for the same input', () => {
     expect(webVisuals(CAPACITY_FACTS, methodology)).toEqual(webVisuals(CAPACITY_FACTS, methodology));
+  });
+});
+
+describe('webVisuals — s4 constraint callout', () => {
+  const methodology = loadMethodology();
+
+  it('prefers the primary constraint and looks its score up in categories', () => {
+    const cat = CAPACITY_FACTS.categories[CAPACITY_FACTS.categories.length - 1]!;
+    const facts = makeFacts({ primary_constraint: { category_id: cat.id, name: cat.name } });
+    const model = webVisuals(facts, methodology).s4.constraint;
+    expect(model).not.toBeNull();
+    expect(model!.eyebrow).toBe('PRIMARY CONSTRAINT');
+    expect(model!.rows).toHaveLength(1);
+    expect(model!.rows[0]!).toEqual({ id: cat.id, name: cat.name, score: cat.score, note: null });
+    expect(model!.band).toBe(
+      readingBand(cat.state as CategoryState, cat.score, methodology.rules.thresholds),
+    );
+  });
+
+  it('falls back to gated enablers, one row each, banded by the lowest score', () => {
+    const facts = makeFacts({
+      primary_constraint: null,
+      gating: [
+        { enabler_id: 'comm', name: 'Communication', score: 40, note: 'Gates guest and connect' },
+        { enabler_id: 'gov', name: 'Governance', score: 22, note: 'Gates everything' },
+      ],
+    });
+    const model = webVisuals(facts, methodology).s4.constraint;
+    expect(model).not.toBeNull();
+    expect(model!.eyebrow).toBe('GATING ENABLER');
+    expect(model!.rows.map((r) => r.id)).toEqual(['comm', 'gov']);
+    expect(model!.rows[1]!.note).toBe('Gates everything');
+    // Panel ground follows the worst (lowest-scoring) gated enabler.
+    expect(model!.band).toBe('severe');
+  });
+
+  it('is omitted with no primary constraint and no gated enabler', () => {
+    const facts = makeFacts({ primary_constraint: null, gating: [] });
+    expect(webVisuals(facts, methodology).s4.constraint).toBeNull();
+  });
+});
+
+describe('webVisuals — s4 blind-spot dumbbells', () => {
+  const methodology = loadMethodology();
+
+  it('plots evidence and belief on a shared 0-100 track in facts order', () => {
+    const cat = CAPACITY_FACTS.categories[0]!;
+    const facts = makeFacts({
+      blind_spots: [
+        { category_id: cat.id, name: cat.name, belief: 78, evidence: 41, gap: 37 },
+      ],
+    });
+    const model = webVisuals(facts, methodology).s4.dumbbells;
+    expect(model).not.toBeNull();
+    expect(model!.rows).toHaveLength(1);
+    const row = model!.rows[0]!;
+    expect(row).toMatchObject({ id: cat.id, name: cat.name, belief: 78, evidence: 41, gap: 37 });
+    expect(row.beliefPct).toBeCloseTo(78, 5);
+    expect(row.evidencePct).toBeCloseTo(41, 5);
+    expect(row.band).toBe(
+      readingBand(cat.state as CategoryState, cat.score, methodology.rules.thresholds),
+    );
+  });
+
+  it('is omitted when there are no blind spots', () => {
+    expect(webVisuals(makeFacts({ blind_spots: [] }), methodology).s4.dumbbells).toBeNull();
   });
 });

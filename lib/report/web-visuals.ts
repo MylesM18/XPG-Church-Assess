@@ -64,8 +64,32 @@ export type ConfidenceModel = {
   thinnest: { name: string; count: number } | null;
 };
 
+export type ConstraintRow = { id: string; name: string; score: number; note: string | null };
+
+export type ConstraintCalloutModel = {
+  eyebrow: 'PRIMARY CONSTRAINT' | 'GATING ENABLER';
+  /** Panel ground. On the gating face this follows the worst (lowest-scoring)
+   * gated enabler, so the panel never looks healthier than its worst row. */
+  band: BandKey;
+  rows: ConstraintRow[];
+};
+
+export type DumbbellRow = {
+  id: string;
+  name: string;
+  belief: number;
+  evidence: number;
+  gap: number;
+  band: BandKey;
+  beliefPct: number;
+  evidencePct: number;
+};
+
+export type DumbbellsModel = { rows: DumbbellRow[] };
+
 export type WebVisuals = {
   s3: { capacity: CapacityBarsModel };
+  s4: { constraint: ConstraintCalloutModel | null; dumbbells: DumbbellsModel | null };
   s13: { confidence: ConfidenceModel };
 };
 
@@ -99,10 +123,73 @@ function confidenceModel(facts: FactsPack): ConfidenceModel {
   };
 }
 
+function constraintCallout(
+  facts: FactsPack,
+  methodology: Methodology,
+): ConstraintCalloutModel | null {
+  const primary = facts.primary_constraint;
+  if (primary) {
+    const found = categoryLookup(facts, methodology, primary.category_id);
+    if (found) {
+      return {
+        eyebrow: 'PRIMARY CONSTRAINT',
+        band: found.band,
+        rows: [{ id: primary.category_id, name: primary.name, score: found.score, note: null }],
+      };
+    }
+    // No matching category means no truthful score to print, so fall through to
+    // the gating face rather than render a panel with a fabricated number.
+  }
+
+  if (facts.gating.length === 0) return null;
+
+  let worst = facts.gating[0]!;
+  for (const gate of facts.gating) {
+    if (gate.score < worst.score) worst = gate;
+  }
+  // Band comes from the gating row's OWN score, not a re-lookup in facts.categories: a
+  // gating row exists only because its enabler scored below thresholds.gate, which is the
+  // exact condition that assigns CategoryState 'gate' to an enabler (see categoriesFrom's
+  // own convention). readingBand treats 'broken' and 'gate' identically, so this can only
+  // ever land on 'severe' or 'broken' for a genuinely gated row — never 'watch'/'holding' —
+  // which is what keeps the panel from ever looking healthier than its worst row.
+  const worstBand = readingBand('gate', worst.score, methodology.rules.thresholds);
+
+  return {
+    eyebrow: 'GATING ENABLER',
+    band: worstBand,
+    rows: facts.gating.map((gate) => ({
+      id: gate.enabler_id,
+      name: gate.name,
+      score: gate.score,
+      note: gate.note,
+    })),
+  };
+}
+
+function dumbbells(facts: FactsPack, methodology: Methodology): DumbbellsModel | null {
+  if (facts.blind_spots.length === 0) return null;
+  return {
+    rows: facts.blind_spots.map((spot) => ({
+      id: spot.category_id,
+      name: spot.name,
+      belief: spot.belief,
+      evidence: spot.evidence,
+      gap: spot.gap,
+      band: categoryLookup(facts, methodology, spot.category_id)?.band ?? 'severe',
+      beliefPct: pct(spot.belief),
+      evidencePct: pct(spot.evidence),
+    })),
+  };
+}
+
 export function webVisuals(facts: FactsPack, methodology: Methodology): WebVisuals {
-  void methodology;
   return {
     s3: { capacity: capacityBars(facts) },
+    s4: {
+      constraint: constraintCallout(facts, methodology),
+      dumbbells: dumbbells(facts, methodology),
+    },
     s13: { confidence: confidenceModel(facts) },
   };
 }
