@@ -227,7 +227,7 @@ describe('WebSpread', () => {
     expect(html).toContain(`style="left:${model.thresholdPct}%;border-color:#5A5A54"`)
   })
 
-  it('renders BOTH rows even though they share the same id — nothing is dropped by a naive id-keyed dedup', () => {
+  it('renders BOTH rows even though they share the same id — nothing is dropped, and each row keeps its OWN name bound to its OWN spread', () => {
     // Regression this catches: keying the list on `row.id` alone (e.g. a
     // `<li key={row.id}>` instead of `${row.id}-${i}`) would not, by itself,
     // break renderToStaticMarkup output — but a de-dup written against that
@@ -238,6 +238,22 @@ describe('WebSpread', () => {
     expect(html).toContain(escapeHtml('Communication Rhythm'))
     expect(html).toContain('>3.2<')
     expect(html).toContain('>4.5<')
+    // The four checks above only prove each value is present SOMEWHERE — they
+    // would still pass if row 1's name were rendered next to row 2's spread (a
+    // mispairing bug), since every value would still appear once in total.
+    // Splitting on `<li` isolates each row's own markup so name and spread are
+    // checked bound together, per row — a cross-row mispairing fails this.
+    const [, row1Chunk, row2Chunk] = html.split('<li')
+    expect(row1Chunk).toBeDefined()
+    expect(row2Chunk).toBeDefined()
+    expect(row1Chunk).toContain(escapeHtml('Governance Cadence'))
+    expect(row1Chunk).toContain('>3.2<')
+    expect(row1Chunk).not.toContain(escapeHtml('Communication Rhythm'))
+    expect(row1Chunk).not.toContain('>4.5<')
+    expect(row2Chunk).toContain(escapeHtml('Communication Rhythm'))
+    expect(row2Chunk).toContain('>4.5<')
+    expect(row2Chunk).not.toContain(escapeHtml('Governance Cadence'))
+    expect(row2Chunk).not.toContain('>3.2<')
   })
 })
 
@@ -351,15 +367,35 @@ describe('WebPhaseRail', () => {
     expect(htmlNone).not.toContain('<ul')
   })
 
-  it('uses textOnBand(model.band) as text colour for a full-opacity (1) block', () => {
-    expect(html).toContain(`color:${textOnBand(model.band)}`)
-  })
+  it('binds the colour flip to its OWN block: full-opacity -> textOnBand(band), reduced-opacity -> INK', () => {
+    // With exactly two blocks and exactly two possible colours, unscoped
+    // `html.toContain('color:'+textOnBand(...))` / `html.toContain('color:#1A1A18')`
+    // checks (as this test used to do) are satisfied even by an INVERTED ternary
+    // (`block.opacity === 1 ? INK : textOnBand(model.band)`) — both hex strings
+    // still appear in the page, just swapped onto the wrong blocks. Splitting on
+    // `<li` isolates each block's own markup (bullets: [] so the remaining-
+    // bullets <ul> contributes no extra `<li>` to split on), then each half is
+    // checked against its OWN opacity marker bound to its OWN expected colour.
+    const htmlNoBullets = renderToStaticMarkup(createElement(WebPhaseRail, { model, bullets: [] }))
+    const [, fullOpacityChunk, reducedOpacityChunk] = htmlNoBullets.split('<li')
+    expect(fullOpacityChunk).toBeDefined()
+    expect(reducedOpacityChunk).toBeDefined()
 
-  it('uses INK (#1A1A18), not textOnBand, as text colour for a reduced-opacity (<1) block', () => {
-    // Regression this catches: `block.opacity === 1 ? textOnBand(model.band) :
-    // INK` inverted or dropped to always use textOnBand — the 60-day block
-    // would render CREAM text on its 60%-strength ground, which is the exact
-    // illegibility this ternary exists to prevent.
-    expect(html).toContain('color:#1A1A18')
+    // Full-opacity (1) block: its own chunk carries its own opacity:1 marker
+    // AND textOnBand(model.band) — never INK.
+    expect(fullOpacityChunk).toContain('opacity:1"')
+    expect(fullOpacityChunk).toContain(`color:${textOnBand(model.band)}`)
+    expect(fullOpacityChunk).not.toContain('color:#1A1A18')
+
+    // Reduced-opacity (0.6) block: its own chunk carries its own opacity:0.6
+    // marker AND INK — never textOnBand(model.band). Regression this catches:
+    // `block.opacity === 1 ? textOnBand(model.band) : INK` inverted or dropped
+    // to always use textOnBand — the 60-day block would render CREAM text on
+    // its 60%-strength ground, which is the exact illegibility this ternary
+    // exists to prevent, and this is the only pair of assertions in this file
+    // that can actually catch that inversion.
+    expect(reducedOpacityChunk).toContain('opacity:0.6"')
+    expect(reducedOpacityChunk).toContain('color:#1A1A18')
+    expect(reducedOpacityChunk).not.toContain(`color:${textOnBand(model.band)}`)
   })
 })
