@@ -106,6 +106,10 @@ export type StatCell = {
   name: string;
   score: number;
   band: BandKey;
+  /** Cohort percentile for the "vs. cohort" annotation (spec §6.3). Straight
+   * pass-through of CategoryFact.percentile; null when the cohort is too thin.
+   * WEB ONLY — the PDF stat grid does not render it. */
+  percentile: number | null;
   /** Caps label with the band spelled out (spec §3.1), e.g. 'VOLUNTEERS · HOLDING'. */
   label: string;
   x: number;
@@ -134,6 +138,7 @@ export function statGridModel(facts: FactsPack, methodology: Methodology): StatG
       id: c.id,
       name: c.name,
       score: c.score,
+      percentile: c.percentile,
       band,
       label: `${c.name} · ${BAND_NAME[band]}`.toUpperCase(),
       x,

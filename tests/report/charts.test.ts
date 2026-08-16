@@ -68,6 +68,7 @@ describe('statGridModel', () => {
       expect(cell.id).toBe(cat.id);
       expect(cell.name).toBe(cat.name);
       expect(cell.score).toBe(cat.score);
+      expect(cell.percentile).toBe(cat.percentile);
       expect(cell.band).toBe(band);
       expect(cell.label).toBe(`${cat.name} · ${BAND_NAME[band]}`.toUpperCase());
     }
