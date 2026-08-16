@@ -221,6 +221,7 @@ describe('the re-homed fail-closed anonymity guard', () => {
                     rank: '01',
                     itemId: 'SYS3',
                     text: 'Marcus mentioned parking',
+                    fullText: 'Marcus mentioned parking',
                     mean: 10,
                     theme: 'systems' as const,
                     themeLabel: 'SYSTEMS',

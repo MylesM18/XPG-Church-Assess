@@ -43,7 +43,9 @@ const PROFILE_LABELS: Record<string, string> = {
   consultant_notes: 'Consultant notes',
 };
 
-type Phase = 'align' | 'build' | 'scale';
+/** Exported for the web phase rail, which keys its opacity ramp off the PHASE rather than
+ *  the entry's array position — see roadmapEntries below and lib/report/web-visuals.ts. */
+export type Phase = 'align' | 'build' | 'scale';
 const PHASES: readonly Phase[] = ['align', 'build', 'scale'];
 const DAY_LABELS: Record<Phase, string> = { align: '30 days', build: '60 days', scale: '90 days' };
 
@@ -217,9 +219,13 @@ function s9Bullets(facts: FactsPack): string[] {
 }
 
 /**
- * S10's roadmap skeleton: one { dayLabel, text } entry per phase (constraint, capacity) or per
- * (phase, gated enabler) pair (foundation — Natalie's ruling 8: 2 gated enablers ⇒ 6 entries, 3
- * ⇒ 9). `text` is used by S10 only — S11 does NOT mirror this list's raw cardinality; see
+ * S10's roadmap skeleton: one { phase, dayLabel, text } entry per phase (constraint, capacity) or
+ * per (phase, gated enabler) pair (foundation — Natalie's ruling 8: 2 gated enablers ⇒ 6 entries,
+ * 3 ⇒ 9). `phase` is the entry's own align/build/scale key, carried so consumers can group by
+ * phase without either parsing `dayLabel` back into a phase or (worse) assuming array position
+ * stands in for phase — which only holds in the 3-entry archetypes. It is the single source
+ * `dayLabel` is derived from, so the two can never disagree. `text` is used by S10 only — S11
+ * does NOT mirror this list's raw cardinality; see
  * s11Bullets's own doc comment below for ruling 11-REVISED (the withdrawn per-bullet ruling 11
  * mirrored every entry here 1:1, which produced byte-identical duplicate S11 bullets whenever an
  * archetype had more than one roadmap entry per phase — e.g. a 2-gated-enabler foundation).
@@ -235,16 +241,19 @@ function s9Bullets(facts: FactsPack): string[] {
  * *count* — see tests/report/fallback-sections.test.ts's dedicated "action_library path" checks,
  * which assert the exact enabler text against report.yaml, not just presence.
  */
-function roadmapEntries(facts: FactsPack, methodology: Methodology): Array<{ dayLabel: string; text: string }> {
+export function roadmapEntries(
+  facts: FactsPack,
+  methodology: Methodology,
+): Array<{ phase: Phase; dayLabel: string; text: string }> {
   const lib = methodology.report.action_library;
-  const entries: Array<{ dayLabel: string; text: string }> = [];
+  const entries: Array<{ phase: Phase; dayLabel: string; text: string }> = [];
 
   if (facts.archetype === 'constraint' && facts.primary_constraint) {
     // Constraint path: action_library.categories[...], never .enablers[...].
     const set = lib.categories[facts.primary_constraint.category_id];
     for (const phase of PHASES) {
       const text = set?.[phase];
-      if (text) entries.push({ dayLabel: DAY_LABELS[phase], text });
+      if (text) entries.push({ phase, dayLabel: DAY_LABELS[phase], text });
     }
   } else if (facts.archetype === 'foundation') {
     // Foundation / gated-enabler path: action_library.enablers[...], never .categories[...].
@@ -254,7 +263,7 @@ function roadmapEntries(facts: FactsPack, methodology: Methodology): Array<{ day
       for (const g of facts.gating) {
         const set = lib.enablers[g.enabler_id];
         const text = set?.[phase];
-        if (text) entries.push({ dayLabel: DAY_LABELS[phase], text });
+        if (text) entries.push({ phase, dayLabel: DAY_LABELS[phase], text });
       }
     }
   } else {
@@ -264,7 +273,7 @@ function roadmapEntries(facts: FactsPack, methodology: Methodology): Array<{ day
     const mode = facts.generosity_mode ?? 'both';
     const set = lib.generosity[mode];
     for (const phase of PHASES) {
-      entries.push({ dayLabel: DAY_LABELS[phase], text: set[phase] });
+      entries.push({ phase, dayLabel: DAY_LABELS[phase], text: set[phase] });
     }
   }
 

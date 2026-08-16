@@ -23,6 +23,7 @@ import { buildFacts } from '@/lib/report/facts'
 import { churchFactsFrom } from '@/lib/report/inputs-hash'
 import { assembleFallbackOnly } from '@/lib/report/compose'
 import { coverModel } from '@/lib/report/charts'
+import { webVisuals } from '@/lib/report/web-visuals'
 import { ReportSections } from '@/app/app/[churchId]/diagnosis/report/sections'
 import { ReportCover } from '@/app/app/[churchId]/diagnosis/report/report-cover'
 import type { Response } from '@/lib/engine/types'
@@ -167,6 +168,8 @@ export default async function SharedReportPage({
     reflections: [],
   })
 
+  const visuals = webVisuals(facts, reportMethodology)
+
   // The cover exactly as lib/report/resolve.ts derives it (coverModel(facts, methodology)),
   // from the facts + effective methodology this page already built — no new data access, no
   // extra RPC. No completion timestamp is reachable on this surface (see completedAt: null
@@ -188,7 +191,7 @@ export default async function SharedReportPage({
       />
 
       <div className="flex flex-col gap-10">
-        <ReportSections sections={sections} band={cover.band} />
+        <ReportSections sections={sections} band={cover.band} visuals={visuals} />
       </div>
 
       <p className="font-body text-sm text-ink-soft">

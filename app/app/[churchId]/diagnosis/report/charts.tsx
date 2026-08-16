@@ -11,9 +11,6 @@ import { BAND_FILL, BAND_TEXT, THEME_FILL, type ChartModel } from '@/lib/report/
  * the charts are the one part of it that is not a degraded view of the real report.
  */
 
-const INK = '#1A1A18'
-const INK_SOFT = '#5A5A54'
-const RULE = '#D8D5CE'
 const CREAM = '#FAF7F0'
 
 /**
@@ -44,6 +41,11 @@ function WebStatGrid({ model }: { model: Extract<ChartModel, { kind: 'stat_grid'
             <p className="mt-1 font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-ink-soft">
               {cell.label}
             </p>
+            {cell.percentile === null ? null : (
+              <p className="mt-1 font-body text-[0.625rem] font-bold uppercase tracking-[0.1em] text-ink-soft">
+                {`${cell.percentile}TH PCTL`}
+              </p>
+            )}
             <div className="mt-3 h-1" style={{ width: `${(cell.bar.w / inner) * 100}%`, backgroundColor: BAND_FILL[cell.band] }} />
           </li>
         )
@@ -52,63 +54,87 @@ function WebStatGrid({ model }: { model: Extract<ChartModel, { kind: 'stat_grid'
   )
 }
 
-// The two fontSize={7.5} labels below are deliberately NOT bumped to 12 the way the cover strip
-// and WebVerdictBlock were. The row text slot is 400 units wide (CHART_W 500, less the 56-unit
-// score block, less the x=44 indent) and lib/report/charts.ts truncates to RANK_TEXT_MAX=90
-// characters: at 12 units that needs roughly 590 units and overruns the score block. Bumping only
-// the theme label would leave the secondary line larger than the question it labels. A real fix
-// has to lower RANK_TEXT_MAX -- shared with the PDF via PdfChart, so it changes PDF truncation
-// too -- and re-space the 12-unit baseline gap between the two lines. That is a layout change,
-// not a legibility patch.
+// Rebuilt in HTML (spec §6.5). The SVG version had to truncate at RANK_TEXT_MAX=90 and set the
+// question at fontSize 7.5 to fit a fixed 400-unit text slot; wrapping HTML has neither limit, so
+// this reads `row.fullText` in sentence case at a real body size. lib/report/charts.ts keeps
+// producing `row.text` for the PDF, which still has the fixed slot.
 function WebRankList({ model }: { model: Extract<ChartModel, { kind: 'rank_list' }> }) {
   return (
-    <svg viewBox={`0 0 ${model.width} ${model.height}`} className="w-full h-auto" role="img" aria-label="Six weakest questions">
+    <ol role="list" className="flex flex-col" aria-label="Weakest questions, ranked">
       {model.rows.map((row, i) => (
-        <g key={row.itemId}>
-          {i > 0 ? (
-            <line x1={0} y1={row.y - 5} x2={model.width} y2={row.y - 5} stroke={RULE} strokeWidth={0.75} />
-          ) : null}
-          <text x={0} y={row.y + 30} fill={BAND_FILL.broken} fontSize={24} fontWeight={600} fontFamily="Fraunces, serif">
+        <li
+          key={row.itemId}
+          className={`grid grid-cols-[2.25rem_1fr_auto] items-start gap-3 py-3${
+            i > 0 ? ' border-t border-line' : ''
+          }`}
+        >
+          <span className="font-display text-[1.75rem] font-semibold leading-none text-ink-soft">
             {row.rank}
-          </text>
-          <text x={44} y={row.y + 18} fill={INK} fontSize={7.5} fontWeight={700}>
-            {row.text.toUpperCase()}
-          </text>
-          <text x={44} y={row.y + 30} fill={THEME_FILL[row.theme]} fontSize={7.5} fontWeight={700}>
-            {row.themeLabel}
-          </text>
-          <rect x={row.scoreBlock.x} y={row.scoreBlock.y} width={row.scoreBlock.w} height={row.scoreBlock.h} fill={BAND_FILL.severe} />
-          <text x={row.scoreBlock.x + 14} y={row.scoreBlock.y + 22} fill={CREAM} fontSize={16} fontWeight={600} fontFamily="Fraunces, serif">
-            {row.mean}
-          </text>
-        </g>
+          </span>
+          <div className="flex flex-col gap-1">
+            <p className="font-body text-[0.8125rem] leading-[1.5] text-ink">{row.fullText}</p>
+            <p
+              className="font-body text-[0.625rem] font-bold uppercase tracking-[0.1em]"
+              style={{ color: THEME_FILL[row.theme] }}
+            >
+              {row.themeLabel}
+            </p>
+          </div>
+          <span
+            className="flex min-w-[3.5rem] items-center justify-center px-2 py-1"
+            style={{ backgroundColor: BAND_FILL.severe }}
+          >
+            <span
+              className="font-display text-[1.125rem] font-semibold leading-none"
+              style={{ color: CREAM }}
+            >
+              {row.mean}
+            </span>
+          </span>
+        </li>
       ))}
-    </svg>
+    </ol>
   )
 }
 
+/**
+ * Hero verdict + a 2x2 context dashboard, as HTML (spec §6.3). Was an SVG whose
+ * only job was to draw four hairline rects and place text inside them — a grid
+ * with borders does that natively, and the hero numeral can then scale with the
+ * viewport instead of being locked to a 500-unit viewBox.
+ *
+ * Reads the model for VALUES ONLY. hero.x/y/w/h and stat.x/y/w/h are PDF
+ * geometry and are deliberately unread here.
+ */
 function WebVerdictBlock({ model }: { model: Extract<ChartModel, { kind: 'verdict_block' }> }) {
   return (
-    <svg viewBox={`0 0 ${model.width} ${model.height}`} className="w-full h-auto" role="img" aria-label="Overall health verdict">
-      <rect x={model.hero.x} y={model.hero.y} width={model.hero.w} height={model.hero.h} fill="none" stroke={RULE} strokeWidth={0.75} />
-      <text x={24} y={100} fill={BAND_TEXT[model.hero.band]} fontSize={84} fontWeight={600} fontFamily="Fraunces, serif">
-        {model.hero.score}
-      </text>
-      <text x={24} y={124} fill={INK_SOFT} fontSize={12} fontWeight={700}>
-        {`${model.hero.tierName} · Overall Health`.toUpperCase()}
-      </text>
-      {model.stats.map((stat) => (
-        <g key={stat.label}>
-          <rect x={stat.x} y={stat.y} width={stat.w} height={stat.h} fill="none" stroke={RULE} strokeWidth={0.75} />
-          <text x={stat.x + 12} y={stat.y + 34} fill={INK} fontSize={24} fontWeight={600} fontFamily="Fraunces, serif">
-            {stat.value}
-          </text>
-          <text x={stat.x + 12} y={stat.y + 48} fill={INK_SOFT} fontSize={12} fontWeight={700}>
-            {stat.label.toUpperCase()}
-          </text>
-        </g>
-      ))}
-    </svg>
+    <div className="flex flex-col">
+      <div className="flex flex-col gap-1 border border-line p-5">
+        <p
+          className="font-display font-semibold leading-none"
+          style={{ fontSize: 'clamp(3.5rem, 12vw, 5.25rem)', color: BAND_TEXT[model.hero.band] }}
+        >
+          {model.hero.score}
+        </p>
+        <p className="font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-ink-soft">
+          {`${model.hero.tierName} · Overall Health`.toUpperCase()}
+        </p>
+      </div>
+      <ul
+        role="list"
+        className="grid grid-cols-2 border-l border-t border-line"
+        aria-label="Context statistics"
+      >
+        {model.stats.map((stat) => (
+          <li key={stat.label} className="flex flex-col border-b border-r border-line p-3">
+            <p className="font-display text-2xl font-semibold leading-none text-ink">{stat.value}</p>
+            <p className="mt-1 font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-ink-soft">
+              {stat.label.toUpperCase()}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

@@ -45,17 +45,27 @@ const nameOf = (id: string): string => NAMES.get(id) ?? id;
 const STAGE_ID_SET = new Set<string>(rules.chain);
 const AREA_IDS = [...rules.chain, ...Object.keys(rules.enablers)];
 
-function cat(id: string, score: number, state: string, respondentCount = 9): CategoryFact {
+function cat(
+  id: string,
+  score: number,
+  state: string,
+  respondentCount = 9,
+  percentile: number | null = 40,
+): CategoryFact {
   return {
     id,
     name: nameOf(id),
     kind: STAGE_ID_SET.has(id) ? 'stage' : 'enabler',
     score,
     state,
-    // Deferred (fix-round-1 finding, explicitly left unfixed this round): every category here
-    // reads either 'ok' or 'broken'/'gate' at this fixed percentile, so CategoryState 'watch' is
-    // never exercised by any fixture. Logged, not fixed.
-    percentile: 40,
+    // fix-round-1 finding, now closed: categoriesFrom (below) used to derive `state` from score
+    // alone, so CategoryState 'watch' was never exercised by any fixture. categoriesFrom now
+    // mirrors lib/engine/assemble.ts's categoryState exactly, including the percentile rule, so
+    // 'watch' is reachable through the normal call path (see CATEGORY_WATCH_FACTS below).
+    // `percentile` still defaults to 40 here — every pre-existing fixture keeps that default,
+    // and 40 < 25 is false, so this default's own behaviour is unchanged; only
+    // categoriesFrom's percentileOverrides (below) ever passes something under 25.
+    percentile,
     respondent_count: respondentCount,
   };
 }
@@ -75,16 +85,42 @@ function tally(items: BottomItemFact[]): Record<Theme, number> {
   return counts;
 }
 
-/** categories, sorted exactly as buildFacts does. `state` is derived from rules.yaml's own
- *  break/gate thresholds (both 45 today), never a hand-typed magic number, so a future
- *  rules.yaml threshold change cannot silently desync the fixtures from production. */
-function categoriesFrom(scores: Record<string, number>): CategoryFact[] {
+/** categories, sorted exactly as buildFacts does. `state` mirrors lib/engine/assemble.ts's
+ *  categoryState EXACTLY, thresholds included: score reads rules.yaml's own break/gate
+ *  thresholds (both 45 today), never a hand-typed magic number, so a future rules.yaml
+ *  threshold change cannot silently desync the fixtures from production. The percentile check's
+ *  `25` is a bare literal in production too (assemble.ts:37,41 — not a rules.yaml config key),
+ *  so it is mirrored here as the same bare literal rather than inventing a config field that
+ *  does not exist. Precedence matters and is mirrored too: the score check runs FIRST, so a
+ *  broken/gating score wins over a low percentile even when both conditions hold — only a score
+ *  that already clears its threshold can still read 'watch' off percentile.
+ *
+ *  `percentileOverrides` is additive scenario data (not production-derived — same status as
+ *  blind_spots/dispersion below): a fixture that wants a category's cohort modeled as too thin
+ *  to report a percentile passes `{ [id]: null }` here, and one that wants a category to read
+ *  bottom-quartile passes `{ [id]: <number < 25> }`; every id not present keeps cat()'s own 40
+ *  default. Every fixture that predates the percentile rule below passes no override at all
+ *  (or only a null override, which the rule also leaves at 'ok'/'broken'/'gate' unchanged — see
+ *  CATEGORY_WATCH_FACTS's comment for why), so this stays byte-for-byte unchanged for all of
+ *  them. */
+function categoriesFrom(
+  scores: Record<string, number>,
+  percentileOverrides: Record<string, number | null> = {},
+): CategoryFact[] {
   const all = AREA_IDS.map((id) => {
     const score = scores[id]!;
     const isStage = STAGE_ID_SET.has(id);
     const threshold = isStage ? rules.thresholds.break : rules.thresholds.gate;
-    const state = score < threshold ? (isStage ? 'broken' : 'gate') : 'ok';
-    return cat(id, score, state);
+    const percentile = id in percentileOverrides ? percentileOverrides[id]! : 40;
+    let state: string;
+    if (score < threshold) {
+      state = isStage ? 'broken' : 'gate';
+    } else if (percentile !== null && percentile < 25) {
+      state = 'watch';
+    } else {
+      state = 'ok';
+    }
+    return cat(id, score, state, undefined, percentile);
   });
   return sortCategories(all);
 }
@@ -327,6 +363,81 @@ export const THEMES_N3_FACTS: FactsPack = makeFacts({
   ],
 });
 
+/** 7. watch — healthy_stretched tier (hero band 'watch'), no broken stage, no gating enablers: a
+ *  genuinely healthy church, just not the top tier. Every score is well clear of both the break
+ *  and gate thresholds (45) and sits inside [70, 85) with room on both sides (capacity lands at
+ *  77 — see the derivation below), so this is the first fixture whose capacity clears 70 at all.
+ *  That reaches: verdictBandFor's 'watch' arm (charts.ts:70-75, never hit by any other fixture,
+ *  which top out around capacity 60); the one band where BAND_TEXT and BAND_FILL actually
+ *  differ (BAND_TEXT.watch '#906722' vs BAND_FILL.watch '#C08A2E' — every other band's two
+ *  tables are byte-identical); and, via WATCH_PERCENTILES, `sys`'s percentile is modeled as null
+ *  (cohort too thin) while every other category keeps cat()'s own 40 — the first fixture to
+ *  produce a null percentile at all, exercising the `cell.percentile === null` branch
+ *  app/app/[churchId]/diagnosis/report/charts.tsx's WebStatGrid has never had render coverage
+ *  for. */
+const WATCH_SCORES: Record<string, number> = {
+  guest: 80, conn: 79, disc: 78, vol: 77, gen: 76, gov: 75, comm: 74, sys: 73,
+};
+const WATCH_PERCENTILES: Record<string, number | null> = { sys: null };
+const WATCH_DERIVED = constraintFrom(WATCH_SCORES);
+export const WATCH_FACTS: FactsPack = makeFacts({
+  archetype: archetypeFromDerived(WATCH_DERIVED),
+  categories: categoriesFrom(WATCH_SCORES, WATCH_PERCENTILES),
+  overall: overallFrom(WATCH_SCORES),
+  primary_constraint: WATCH_DERIVED.primary_constraint,
+  gating: WATCH_DERIVED.gating,
+  dependencies: dependenciesFrom(WATCH_SCORES),
+});
+
+/** 8. holding — healthy_ready tier (hero band 'holding'), no broken stage, no gating enablers:
+ *  the top tier, comfortably clear of the 85 floor (capacity lands at 91). Reaches the 'holding'
+ *  verdict path no other fixture reaches (every other fixture, WATCH_FACTS included, tops out
+ *  below 85). */
+const HOLDING_SCORES: Record<string, number> = {
+  guest: 94, conn: 93, disc: 92, vol: 91, gen: 90, gov: 89, comm: 88, sys: 87,
+};
+const HOLDING_DERIVED = constraintFrom(HOLDING_SCORES);
+export const HOLDING_FACTS: FactsPack = makeFacts({
+  archetype: archetypeFromDerived(HOLDING_DERIVED),
+  categories: categoriesFrom(HOLDING_SCORES),
+  overall: overallFrom(HOLDING_SCORES),
+  primary_constraint: HOLDING_DERIVED.primary_constraint,
+  gating: HOLDING_DERIVED.gating,
+  dependencies: dependenciesFrom(HOLDING_SCORES),
+});
+
+/** 9. category-watch — a category whose SCORE is comfortably strong but whose cohort PERCENTILE
+ *  is bottom-quartile: the one case that discriminates categoryState's percentile rule from a
+ *  score-only derivation. `guest` scores 90 (well clear of both thresholds.break=45 and
+ *  thresholds.strong=70) but is modeled at the 12th percentile (< 25), so categoryState reads it
+ *  as 'watch' rather than 'ok'. That distinction is only visible downstream because
+ *  readingBand('watch', 90, thresholds) => 'watch' while readingBand('ok', 90, thresholds) =>
+ *  'holding' (score >= thresholds.strong) — a LOW-scoring category would read 'watch' under
+ *  either derivation and prove nothing here (see tests/report/category-state-watch.test.ts).
+ *
+ *  Every other category keeps cat()'s own default 40th percentile (40 < 25 is false), so this
+ *  fixture's only percentile override is `guest`. The remaining scores are unremarkable and
+ *  intentionally boring — no broken stage, no gated enabler — so archetype lands on 'capacity'
+ *  (already covered by CAPACITY_FACTS) and nothing about tier/hero-band/archetype coverage is
+ *  the point of this fixture; only the one category's engine-computed state is. Named distinctly
+ *  from WATCH_FACTS on purpose: WATCH_FACTS exercises the overall hero band reading 'watch' via
+ *  verdictBandFor(tier.id), a tier-level concept entirely independent of any category's own
+ *  CategoryState — conflating the two names here would be misleading even though nothing
+ *  mechanically stops both existing at once. */
+const CATEGORY_WATCH_SCORES: Record<string, number> = {
+  guest: 90, conn: 68, disc: 60, vol: 58, gen: 56, gov: 53, comm: 51, sys: 49,
+};
+const CATEGORY_WATCH_PERCENTILES: Record<string, number | null> = { guest: 12 };
+const CATEGORY_WATCH_DERIVED = constraintFrom(CATEGORY_WATCH_SCORES);
+export const CATEGORY_WATCH_FACTS: FactsPack = makeFacts({
+  archetype: archetypeFromDerived(CATEGORY_WATCH_DERIVED),
+  categories: categoriesFrom(CATEGORY_WATCH_SCORES, CATEGORY_WATCH_PERCENTILES),
+  overall: overallFrom(CATEGORY_WATCH_SCORES),
+  primary_constraint: CATEGORY_WATCH_DERIVED.primary_constraint,
+  gating: CATEGORY_WATCH_DERIVED.gating,
+  dependencies: dependenciesFrom(CATEGORY_WATCH_SCORES),
+});
+
 export const ALL_FIXTURES: ReadonlyArray<{ name: string; facts: FactsPack }> = [
   { name: 'capacity', facts: CAPACITY_FACTS },
   { name: 'constraint', facts: CONSTRAINT_FACTS },
@@ -335,4 +446,7 @@ export const ALL_FIXTURES: ReadonlyArray<{ name: string; facts: FactsPack }> = [
   { name: 'broken-stage-severe', facts: BROKEN_STAGE_SEVERE_FACTS },
   { name: 'high-dispersion', facts: HIGH_DISPERSION_FACTS },
   { name: 'themes-n3', facts: THEMES_N3_FACTS },
+  { name: 'watch', facts: WATCH_FACTS },
+  { name: 'holding', facts: HOLDING_FACTS },
+  { name: 'category-watch', facts: CATEGORY_WATCH_FACTS },
 ];

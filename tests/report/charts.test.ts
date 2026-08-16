@@ -68,6 +68,7 @@ describe('statGridModel', () => {
       expect(cell.id).toBe(cat.id);
       expect(cell.name).toBe(cat.name);
       expect(cell.score).toBe(cat.score);
+      expect(cell.percentile).toBe(cat.percentile);
       expect(cell.band).toBe(band);
       expect(cell.label).toBe(`${cat.name} · ${BAND_NAME[band]}`.toUpperCase());
     }
@@ -108,6 +109,7 @@ describe('rankListModel', () => {
         const item = facts.bottom_items[i]!;
         expect(row.rank).toBe(String(i + 1).padStart(2, '0'));
         expect(row.itemId).toBe(item.item_id);
+        expect(row.fullText).toBe(item.text);
         expect(row.mean).toBe(item.mean);
         expect(row.theme).toBe(item.theme);
         expect(row.themeLabel).toBe(String(item.theme).toUpperCase());
@@ -129,6 +131,8 @@ describe('rankListModel', () => {
     if (!model) return;
     expect(model.rows[0]!.text.length).toBeLessThanOrEqual(93);
     expect(model.rows[0]!.text.endsWith('...')).toBe(true);
+    expect(model.rows[0]!.fullText).toBe(long);
+    expect(model.rows[0]!.fullText.length).toBe(200);
   });
 
   it('is pure', () => {
@@ -215,6 +219,21 @@ describe('coverModel', () => {
       expect(model.band).toBe(verdictBandFor(facts.overall.tier.id));
       expect(model.headline).toBe(methodology.copy.xpg_read[facts.archetype][facts.overall.tier.id]);
       expect(model.caption).toEqual({ tierName: facts.overall.tier.name, score: facts.overall.capacity });
+    }
+  });
+
+  it('builds a worst-to-best tier ladder with exactly one active row', () => {
+    for (const { facts } of ALL_FIXTURES) {
+      const model = coverModel(facts, methodology);
+      expect(model.ladder.map((r) => r.tierId)).toEqual([
+        'at_risk', 'strained', 'healthy_stretched', 'healthy_ready',
+      ]);
+      expect(model.ladder.map((r) => r.band)).toEqual(['severe', 'broken', 'watch', 'holding']);
+      for (const row of model.ladder) {
+        expect(row.name).toBe(methodology.rules.tiers[row.tierId].name);
+        expect(row.active).toBe(row.tierId === facts.overall.tier.id);
+      }
+      expect(model.ladder.filter((r) => r.active)).toHaveLength(1);
     }
   });
 

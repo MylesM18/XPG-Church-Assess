@@ -106,6 +106,10 @@ export type StatCell = {
   name: string;
   score: number;
   band: BandKey;
+  /** Cohort percentile for the "vs. cohort" annotation (spec §6.3). Straight
+   * pass-through of CategoryFact.percentile; null when the cohort is too thin.
+   * WEB ONLY — the PDF stat grid does not render it. */
+  percentile: number | null;
   /** Caps label with the band spelled out (spec §3.1), e.g. 'VOLUNTEERS · HOLDING'. */
   label: string;
   x: number;
@@ -134,6 +138,7 @@ export function statGridModel(facts: FactsPack, methodology: Methodology): StatG
       id: c.id,
       name: c.name,
       score: c.score,
+      percentile: c.percentile,
       band,
       label: `${c.name} · ${BAND_NAME[band]}`.toUpperCase(),
       x,
@@ -160,6 +165,9 @@ export type RankRow = {
   rank: string;
   itemId: string;
   text: string;
+  /** The untruncated item.text. WEB ONLY — the rebuilt web rank list wraps, so
+   * it never needs RANK_TEXT_MAX. The PDF keeps reading `text` (spec §6.5). */
+  fullText: string;
   mean: number;
   theme: Theme;
   /** Caps theme label; renderers color it THEME_FILL[theme] (spec §2.6.2). */
@@ -192,6 +200,7 @@ export function rankListModel(facts: FactsPack): RankListModel | null {
       rank: String(i + 1).padStart(2, '0'),
       itemId: item.item_id,
       text,
+      fullText: item.text,
       mean: item.mean,
       theme: item.theme,
       themeLabel: String(item.theme).toUpperCase(),
@@ -281,14 +290,30 @@ export type CoverStripSeg = {
   w: number;
 };
 
+/** rules.tiers is a fixed four-key object, not an array (methodology/schema.ts:86-91),
+ * so the ladder's worst -> best row order is hand-ordered here. It matches
+ * STRIP_BANDS and verdictBandFor one-for-one. */
+export const LADDER_ORDER = ['at_risk', 'strained', 'healthy_stretched', 'healthy_ready'] as const;
+export type LadderTierId = (typeof LADDER_ORDER)[number];
+export type CoverLadderRow = {
+  tierId: LadderTierId;
+  name: string;
+  band: BandKey;
+  /** True for the church's own tier. Renderers set aria-current on this row. */
+  active: boolean;
+};
+
 export type CoverModel = {
   score: number;
   tierName: string;
   band: BandKey;
-  /** The s3 xpg_read line — the SAME string fallback-sections.ts:361 renders
+  /** The s3 xpg_read line — the SAME string fallback-sections.ts:371 renders
    * as s3's first bullet (§5-sanctioned reuse; no new prose is created). */
   headline: string;
   strip: { width: number; segments: CoverStripSeg[]; marker: { x: number } };
+  /** Four discrete tier steps, worst -> best (spec §6.2). WEB ONLY — the PDF
+   * keeps rendering `strip`. */
+  ladder: CoverLadderRow[];
   caption: { tierName: string; score: number };
 };
 
@@ -311,6 +336,12 @@ export function coverModel(facts: FactsPack, methodology: Methodology): CoverMod
       segments: STRIP_BANDS.map((b, i) => ({ band: b, name: BAND_NAME[b], x: i * segW, w: segW })),
       marker: { x: plotWidth(facts.overall.capacity, CHART_W) },
     },
+    ladder: LADDER_ORDER.map((tierId) => ({
+      tierId,
+      name: methodology.rules.tiers[tierId].name,
+      band: verdictBandFor(tierId),
+      active: tierId === facts.overall.tier.id,
+    })),
     caption: { tierName: facts.overall.tier.name, score: facts.overall.capacity },
   };
 }
@@ -318,7 +349,11 @@ export function coverModel(facts: FactsPack, methodology: Methodology): CoverMod
 const SCALE_MAX = 100;
 
 /** Score -> plot-space width. Clamped: a score outside 0-100 is a data bug, but a bar drawn
- *  off-canvas is a rendering bug on top of it, and only one of the two is worth shipping. */
+ *  off-canvas is a rendering bug on top of it, and only one of the two is worth shipping.
+ *
+ *  Same clamp-to-range as pct (lib/report/web-visuals.ts), in different units: that one
+ *  returns a CSS percentage for the web's HTML tracks, this one returns plot-space pixels.
+ *  A change to the clamp belongs in both. */
 function plotWidth(score: number, plotW: number): number {
   const clamped = Math.min(Math.max(score, 0), SCALE_MAX);
   return (clamped / SCALE_MAX) * plotW;

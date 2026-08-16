@@ -13,6 +13,7 @@ import { knownLabels } from '@/lib/report/anonymity'
 import { churchFactsFrom, reflectionRowsFor } from '@/lib/report/inputs-hash'
 import type { AssembledSection } from '@/lib/report/compose'
 import type { CoverModel } from '@/lib/report/charts'
+import type { WebVisuals } from '@/lib/report/web-visuals'
 import { responseHash } from '@/lib/report/response-hash'
 import { resolveReportSections } from '@/lib/report/resolve'
 import { readPersistedReport } from '@/lib/data/reports'
@@ -172,6 +173,7 @@ export default async function DiagnosisPage({
   let sections: AssembledSection[] = []
   let stale = false
   let cover: CoverModel | null = null
+  let visuals: WebVisuals | null = null
 
   if (resolution.scoreable) {
     // Mirrors app/app/[churchId]/actions.ts's `hash = responseHash(responses, diagnosis
@@ -204,6 +206,7 @@ export default async function DiagnosisPage({
     sections = resolved.sections
     stale = resolved.stale
     cover = resolved.cover
+    visuals = resolved.visuals
   }
 
   // The cover's date line: the run's completion month in the PDF cover's exact format
@@ -250,7 +253,7 @@ export default async function DiagnosisPage({
               </form>
             </ReportNotice>
           )}
-          {cover && (
+          {cover && visuals && (
             <>
               <ReportCover
                 cover={cover}
@@ -260,7 +263,7 @@ export default async function DiagnosisPage({
                 dateLabel={dateLabel}
               />
               <div className="flex flex-col gap-10">
-                <ReportSections sections={sections} band={cover.band} />
+                <ReportSections sections={sections} band={cover.band} visuals={visuals} />
               </div>
             </>
           )}

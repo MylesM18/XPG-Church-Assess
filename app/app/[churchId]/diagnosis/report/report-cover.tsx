@@ -1,50 +1,59 @@
-import type { CoverModel } from '@/lib/report/charts'
+import type { CoverModel, CoverLadderRow } from '@/lib/report/charts'
 import { BAND_FILL, BAND_TEXT, textOnBand } from '@/lib/report/charts'
-
-// The PDF's own ink hexes (lib/report/pdf/document.tsx) for the strip's marker + labels: the SVG
-// is a transcription of the PDF drawing, so it uses the PDF tokens, not the web @theme.
-const INK = '#1A1A18'
-const INK_SOFT = '#5A5A54'
 
 const CAPS_LABEL = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-ink-soft'
 
 /**
- * The cover's 4-segment band strip — the web transcription of document.tsx's CoverStrip.
- * Every coordinate comes off `cover.strip` (segments + marker.x); this component never
- * recomputes geometry. viewBox width = strip.width, height 44, exactly like the PDF; the SVG
- * scales to the column width.
+ * Four discrete tier steps, worst -> best (spec §6.2). The web cover shows which
+ * of four named tiers the church landed in; the PDF keeps rendering the
+ * continuous `cover.strip` gradient from the same model.
  *
- * One deliberate divergence from the PDF: the labels are fontSize 12, not the PDF's 7.5. The PDF
- * draws its strip at close to 1:1, but here the 500-unit viewBox scales down to the column (about
- * 327px on a 375px screen, a factor of 0.654), which would render 7.5 at roughly 4.9px. 12 units
- * lands near 7.9px there and still clears the segment width: HOLDING, the longest label, is well
- * under the 125 units a segment gets.
+ * The active row is not distinguished by colour alone: it is solid where the
+ * others are washed, it is physically larger, and it carries aria-current. The
+ * caption below the ladder already names the tier in words.
+ *
+ * The wash is a same-hex opacity layer, not a new colour — an aria-hidden fill
+ * span sits behind the label so lowering the fill's opacity never dims the text.
+ *
+ * An inactive row's label is the web @theme's own ink, read inline as `var(--color-ink)`
+ * because it sits in a ternary beside the computed textOnBand(row.band). It used to be the
+ * PDF's ink hex on the rationale that the ladder transcribes the PDF's tier language — but
+ * this is an HTML list, not an SVG transcription, and it renders beside theme-token chrome
+ * (the ink-soft caps labels above and below it) on the same screen.
  */
-function CoverStrip({ cover }: { cover: CoverModel }) {
-  const markerX = Math.max(1, Math.min(cover.strip.marker.x, cover.strip.width - 1)) - 1
+function TierLadder({ ladder }: { ladder: CoverLadderRow[] }) {
   return (
-    <svg
-      viewBox={`0 0 ${cover.strip.width} 44`}
-      className="h-auto w-full"
-      role="img"
-      aria-label="Health band scale with the overall score marked"
-    >
-      {cover.strip.segments.map((seg) => (
-        <g key={seg.band}>
-          <rect x={seg.x} y={8} width={seg.w} height={14} fill={BAND_FILL[seg.band]} />
-          <text x={seg.x} y={38} fill={INK_SOFT} fontSize={12} fontWeight={700}>
-            {seg.name.toUpperCase()}
-          </text>
-        </g>
+    <ul role="list" className="flex flex-col gap-px" aria-label="Health tiers, lowest to highest">
+      {ladder.map((row) => (
+        <li
+          key={row.tierId}
+          aria-current={row.active ? 'true' : undefined}
+          className={
+            row.active
+              ? 'relative -mx-1 flex items-center px-4 py-2.5'
+              : 'relative flex items-center px-3 py-2'
+          }
+        >
+          <span
+            aria-hidden
+            className="absolute inset-0"
+            style={{ backgroundColor: BAND_FILL[row.band], opacity: row.active ? 1 : 0.18 }}
+          />
+          <span
+            className="relative font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]"
+            style={{ color: row.active ? textOnBand(row.band) : 'var(--color-ink)' }}
+          >
+            {row.name}
+          </span>
+        </li>
       ))}
-      <rect x={markerX} y={0} width={2} height={30} fill={INK} />
-    </svg>
+    </ul>
   )
 }
 
 /**
  * Web mirror of the PDF cover page (lib/report/pdf/document.tsx, ReportDocument's first Page):
- * monogram, church name, kicker, date, hero score, CoverStrip, caption, band-filled foot with
+ * monogram, church name, kicker, date, hero score, TierLadder, caption, band-filled foot with
  * the headline, runline — same order, same content, same band colours (inline styles from the
  * shared seam so they are EXACT). The church name is a <p>, NOT a heading: the report's one
  * <h1> is the first section opener in sections.tsx (tests/a11y/shared-report-heading.test.ts).
@@ -81,7 +90,7 @@ export function ReportCover({
           {String(cover.score)}
         </p>
         <div className="mt-4">
-          <CoverStrip cover={cover} />
+          <TierLadder ladder={cover.ladder} />
         </div>
         <p className="mt-2 font-body text-base font-bold text-ink">
           {`${cover.caption.tierName} · ${cover.caption.score} of 100`}

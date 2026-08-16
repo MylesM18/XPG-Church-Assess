@@ -4,9 +4,20 @@ import type { AiSectionId } from '@/lib/ai/sections'
 import type { AssembledSection } from '@/lib/report/compose'
 import type { SectionBody } from '@/lib/report/fallback-sections'
 import { BAND_FILL, BAND_TEXT, BAND_NAME, textOnBand, areaIndexFrom } from '@/lib/report/charts'
-import type { AreaIndex, BandKey } from '@/lib/report/charts'
+import type { AreaIndex, BandKey, ChartModel } from '@/lib/report/charts'
 import { bookingCta } from '@/lib/report/cta'
+import type { PhaseRailModel, WebVisuals } from '@/lib/report/web-visuals'
 import { WebChart } from './charts'
+import {
+  WebCapacityBars,
+  WebChainRail,
+  WebConfidence,
+  WebConstraintCallout,
+  WebDumbbells,
+  WebPhaseRail,
+  WebSpread,
+  WebThemeSplit,
+} from './web-visuals'
 
 // Type ramp (Part B spec §4.1), the web mapping of the PDF's poster ramp: body 1rem/1.6 in INK
 // (the PDF sets body in INK; ink-soft is for caps labels only), AI sub-heads display 600
@@ -19,6 +30,10 @@ const SUBHEAD = 'font-display text-[1.0625rem] font-semibold text-ink'
 const CAPS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]'
 const OPENER_TITLE = 'font-display font-semibold leading-[1.2]'
 const OPENER_TITLE_SIZE = { fontSize: 'clamp(1.5rem, 4vw, 2.125rem)' } as const
+// The 2px opener rule is `bg-ink`, the web @theme's own token — the same utility the booking
+// CTA button below already uses. It used to be an inline PDF hex (#1A1A18) on the belief that
+// bg-ink was unproven; it is not, and a PDF ink beside the theme's ink-soft caps label on the
+// same opener was a visible warm/cool mismatch.
 
 /**
  * The uniform renderer: the { body, bullets } half of a SectionBody. Used for all 13
@@ -96,6 +111,20 @@ function S5View({ ai, fallback }: AiRendererProps) {
 }
 
 /**
+ * The six beats of an area read, labelled on the web only (spec §6.1). Six
+ * unlabelled paragraphs read as one undifferentiated block; the labels are
+ * chrome, and the paragraphs themselves are byte-identical to the PDF's.
+ */
+const S6_BEATS = [
+  { key: 'affirm', label: "What's working" },
+  { key: 'pivot', label: 'Where it turns' },
+  { key: 'evidence', label: 'The evidence' },
+  { key: 'not_statement', label: 'What this is not' },
+  { key: 'reframe', label: 'Another way to see it' },
+  { key: 'trajectory', label: 'If nothing changes' },
+] as const
+
+/**
  * Web mirror of the PDF's S6View: each dossier opens with a head — band tab (caps label on
  * BAND_FILL, textOnBand), area name, score in BAND_TEXT — looked up from `areaIndex`, the s3
  * stat grid indexed by category id (one source of truth, no recompute). An area missing from
@@ -124,12 +153,15 @@ function S6View({ ai, fallback, areaIndex }: AiRendererProps & { areaIndex: Area
                 </p>
               </div>
             )}
-            <p className={BODY}>{area.affirm}</p>
-            <p className={BODY}>{area.pivot}</p>
-            <p className={BODY}>{area.evidence}</p>
-            <p className={BODY}>{area.not_statement}</p>
-            <p className={BODY}>{area.reframe}</p>
-            <p className={BODY}>{area.trajectory}</p>
+            {S6_BEATS.map((beat) => (
+              <div
+                key={beat.key}
+                className="grid gap-1 border-t border-line pt-2 sm:grid-cols-[7rem_1fr] sm:gap-4"
+              >
+                <p className={`${CAPS} text-ink-soft`}>{beat.label}</p>
+                <p className={BODY}>{area[beat.key]}</p>
+              </div>
+            ))}
           </div>
         )
       })}
@@ -229,12 +261,161 @@ function SectionContent({ section, areaIndex }: { section: AssembledSection; are
 }
 
 /**
+ * Per-section visual placement (spec §5.2). Replaces the blind
+ * `section.charts.map` that used to render every chart in one slot above the
+ * body — the new layout needs some visuals above the prose and some below it,
+ * and needs to interleave the two rebuilt charts with a new HTML component.
+ *
+ * Sections with no explicit placement keep exactly today's behaviour: all of
+ * their charts, above the body, in model order.
+ *
+ * LITERAL COMPONENT TAGS ONLY, `never` in every default — see the doc comment at
+ * the top of SectionContent. A Map/lookup of component identifiers is a real
+ * react-hooks/static-components error in this repo, not a style preference.
+ */
+type AboveId = 's3' | 's4' | 's7' | 's9'
+type BelowId = 's4' | 's7' | 's8' | 'appendix'
+
+/**
+ * `as const satisfies readonly AboveId[]` / `readonly BelowId[]` is load-bearing, not tidiness.
+ * Typed as `readonly string[]` these arrays drifted from the unions silently: an id added here
+ * without a matching `case` below still passed the `.includes` guard, fell through to the
+ * `never` default, and RETURNED `section.id` — which React renders as a visible text node, i.e.
+ * a raw section id printed on a public page. `satisfies` makes tsc, not a reader, catch that.
+ *
+ * `.includes(section.id)` then needs the widening cast back to `readonly string[]`: section.id
+ * is a SectionId, which is deliberately WIDER than these unions (that is the whole point of the
+ * guard), and a `readonly AboveId[]`'s `includes` only accepts an AboveId. The cast is on the
+ * array, never on section.id — narrowing the argument instead would be the same silent lie this
+ * comment exists to prevent. Runtime behaviour is unchanged: same values, same order.
+ */
+const ABOVE_IDS = ['s3', 's4', 's7', 's9'] as const satisfies readonly AboveId[]
+const BELOW_IDS = ['s4', 's7', 's8', 'appendix'] as const satisfies readonly BelowId[]
+
+function chartOfKind(section: AssembledSection, kind: ChartModel['kind']) {
+  return section.charts.find((chart) => chart.kind === kind) ?? null
+}
+
+function SectionVisualsAbove({
+  section,
+  visuals,
+}: {
+  section: AssembledSection
+  visuals: WebVisuals
+}) {
+  if (!(ABOVE_IDS as readonly string[]).includes(section.id)) {
+    return (
+      <>
+        {section.charts.map((chart) => (
+          <WebChart key={chart.kind} model={chart} />
+        ))}
+      </>
+    )
+  }
+
+  const verdict = chartOfKind(section, 'verdict_block')
+  const statGrid = chartOfKind(section, 'stat_grid')
+
+  // The cast is bound to a local and the switch runs on THAT, so the `never` in the default arm
+  // needs no second cast. `switch (section.id as AboveId)` with `const exhaustive: never =
+  // section.id as never` type-checked no matter what: `as never` accepts anything, so adding a
+  // member to AboveId without a matching case still compiled and the default then RETURNED the
+  // raw id — a bare section id printed as visible text on a public page. Binding once makes tsc
+  // fail that instead. Runtime behaviour is identical: same value, same cases, same order.
+  const id = section.id as AboveId
+  switch (id) {
+    case 's3':
+      return (
+        <>
+          {verdict ? <WebChart model={verdict} /> : null}
+          <WebCapacityBars model={visuals.s3.capacity} />
+          {statGrid ? <WebChart model={statGrid} /> : null}
+        </>
+      )
+    case 's4':
+      return visuals.s4.constraint ? (
+        <WebConstraintCallout model={visuals.s4.constraint} />
+      ) : null
+    case 's7':
+      return visuals.s7.themeSplit ? <WebThemeSplit model={visuals.s7.themeSplit} /> : null
+    case 's9':
+      // chainModel cannot return null — it always returns a { stages } object — so the empty
+      // check is on the stages themselves, and it belongs HERE, with its seven siblings, not
+      // inside WebChainRail. rules.chain naming an id absent from facts.categories drops every
+      // stage (`if (!found) continue`), which would otherwise render the branch's only empty
+      // frame: a wrapper around an empty <ol>.
+      return visuals.s9.chain.stages.length > 0 ? <WebChainRail model={visuals.s9.chain} /> : null
+    default: {
+      const exhaustive: never = id
+      return exhaustive
+    }
+  }
+}
+
+/**
+ * The confidence meter's case is 'appendix', not 's13'. The MODEL's own key is
+ * `visuals.s13` (spec §5.1's 13th-section numbering), but the runtime SectionId of the
+ * last section is 'appendix' (methodology/schema.ts) — there is no 's13' section id, so
+ * a `case 's13'` here would never match and the meter would silently vanish. The id and
+ * the model key differ on purpose.
+ */
+function SectionVisualsBelow({
+  section,
+  visuals,
+}: {
+  section: AssembledSection
+  visuals: WebVisuals
+}) {
+  if (!(BELOW_IDS as readonly string[]).includes(section.id)) return null
+
+  const rankList = chartOfKind(section, 'rank_list')
+
+  // Bound to a local for the same reason as SectionVisualsAbove — see the comment there.
+  const id = section.id as BelowId
+  switch (id) {
+    case 's4':
+      return visuals.s4.dumbbells ? <WebDumbbells model={visuals.s4.dumbbells} /> : null
+    case 's7':
+      return rankList ? <WebChart model={rankList} /> : null
+    case 's8':
+      return visuals.s8.spread ? <WebSpread model={visuals.s8.spread} /> : null
+    case 'appendix':
+      return <WebConfidence model={visuals.s13.confidence} />
+    default: {
+      const exhaustive: never = id
+      return exhaustive
+    }
+  }
+}
+
+/**
+ * s10 renders its roadmap as the phase rail instead of a bullet list (spec §6.6).
+ * The body paragraph is untouched; the rail is handed the FULL bullet array and
+ * subtracts model.supersedes itself, so s10Bullets' extra `Do not work on yet:`
+ * line survives verbatim beneath the rail.
+ */
+function S10PhaseBody({
+  section,
+  model,
+}: {
+  section: AssembledSection
+  model: PhaseRailModel
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {section.fallback.body ? <p className={BODY}>{section.fallback.body}</p> : null}
+      <WebPhaseRail model={model} bullets={section.fallback.bullets} />
+    </div>
+  )
+}
+
+/**
  * Renders the 13 report sections as the web mirror of the PDF's content pages (Part B spec):
- * each section opens with a band-tinted opener (BAND_FILL[band] box, number 01..13 as a caps
- * label over the title in textOnBand), then its charts, then its content; the booking CTA
+ * each section opens with editorial chrome — a 3px BAND_FILL[band] tick, an `NN / TOTAL` caps
+ * eyebrow, the title, then a 2px ink rule — then its charts, then its content; the booking CTA
  * renders once, immediately after s12, where document.tsx puts it. Page chrome — the toolbar,
  * the notices, the cover, the shared-view footer — stays on the pages. `band` is the cover's
- * verdict band (`cover.band`): the colour IS the diagnosis, and every opener wears it.
+ * verdict band (`cover.band`): the colour IS the diagnosis, and every opener's tick wears it.
  *
  * Iterates `sections` in array order and NEVER re-sorts: assembleReport and
  * assembleFallbackOnly both return them in Object.keys(methodology.report.sections)
@@ -248,33 +429,39 @@ function SectionContent({ section, areaIndex }: { section: AssembledSection; are
  * branches. tests/a11y/shared-report-heading.test.ts counts `<h1` in this file's SOURCE
  * TEXT — a dynamic tag would produce zero literal matches and read as "no h1 anywhere"
  * on a public page whose document outline depends on it. The cover's church name is a <p>.
- *
- * Openers bleed to the viewport on narrow screens (-mx-6 inside the pages' px-6 main) with
- * their text kept on the body column (px-6), and sit inside the column with the PDF's 16px
- * inset (px-4) from sm up.
  */
-export function ReportSections({ sections, band }: { sections: AssembledSection[]; band: BandKey }) {
+export function ReportSections({ sections, band, visuals }: { sections: AssembledSection[]; band: BandKey; visuals: WebVisuals }) {
   const areaIndex = areaIndexFrom(sections)
   return (
     <>
       {sections.map((section, index) => (
         <Fragment key={section.id}>
           <section className="flex flex-col gap-6">
-            <div
-              className="-mx-6 px-6 py-3 sm:mx-0 sm:px-4"
-              style={{ backgroundColor: BAND_FILL[band], color: textOnBand(band) }}
-            >
-              <p className={CAPS}>{String(index + 1).padStart(2, '0')}</p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <span
+                  aria-hidden
+                  className="h-[22px] w-[3px] shrink-0"
+                  style={{ backgroundColor: BAND_FILL[band] }}
+                />
+                <p className={`${CAPS} text-ink-soft`}>
+                  {`${String(index + 1).padStart(2, '0')} / ${sections.length}`}
+                </p>
+              </div>
               {index === 0 ? (
                 <h1 className={OPENER_TITLE} style={OPENER_TITLE_SIZE}>{section.fallback.title}</h1>
               ) : (
                 <h2 className={OPENER_TITLE} style={OPENER_TITLE_SIZE}>{section.fallback.title}</h2>
               )}
+              <span aria-hidden className="h-[2px] w-full bg-ink" />
             </div>
-            {section.charts.map((chart) => (
-              <WebChart key={chart.kind} model={chart} />
-            ))}
-            <SectionContent section={section} areaIndex={areaIndex} />
+            <SectionVisualsAbove section={section} visuals={visuals} />
+            {section.id === 's10' && visuals.s10.phaseRail ? (
+              <S10PhaseBody section={section} model={visuals.s10.phaseRail} />
+            ) : (
+              <SectionContent section={section} areaIndex={areaIndex} />
+            )}
+            <SectionVisualsBelow section={section} visuals={visuals} />
           </section>
           {section.id === 's12' && (
             <div className="flex flex-col items-start gap-2">
