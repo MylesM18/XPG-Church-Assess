@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { loadMethodology } from '@/lib/methodology/load';
 import { roadmapEntries } from '@/lib/report/fallback-sections';
 import { webVisuals } from '@/lib/report/web-visuals';
-import { CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
+import { CAPACITY_FACTS, CONSTRAINT_FACTS, FOUNDATION_3_FACTS, makeFacts } from '../fixtures/facts';
 import { readingBand } from '@/lib/report/view';
 import { verdictBandFor } from '@/lib/report/charts';
 import { assembleFallbackOnly } from '@/lib/report/compose';
@@ -335,6 +335,58 @@ describe('webVisuals — s10 phase rail', () => {
       expect(model).toBeNull();
     } else {
       expect(model!.blocks.length).toBeGreaterThan(0);
+    }
+  });
+
+  // FIX ROUND 1 additions (Natalie's ruling — strengthen additively; the three tests
+  // above stay byte-identical). Both new findings were the same shape of bug: a fixture
+  // that structurally could never reach the branch the test claimed to exercise, so the
+  // assertion inside that branch never ran. Each addition below picks a fixture that is
+  // GUARANTEED (by construction, not by luck) to reach the branch under test, and asserts
+  // the guarantee explicitly before relying on it, so a regression in the fixture itself
+  // fails loudly instead of the test quietly passing on the wrong path again.
+
+  it('exercises the RULING for real: the Do-not-work-on-yet bullet survives, unsuperseded, when the constraint path actually appends one', () => {
+    // CONSTRAINT_FACTS (tests/fixtures/facts/index.ts) is archetype 'constraint' with conn
+    // (38, below the 45 break threshold) as the first broken chain stage, and rules.yaml's
+    // conn -> disc structural edge means facts.dependencies always carries an edge FROM the
+    // primary constraint's own category — the exact condition s10Bullets checks
+    // (fallback-sections.ts:276-280) before appending `Do not work on yet: ...`.
+    const sections = assembleFallbackOnly({ facts: CONSTRAINT_FACTS, methodology, reflections: [] });
+    const s10 = sections.find((s) => s.id === 's10')!;
+    const doNotWorkOnYet = s10.fallback.bullets.find((b) => b.startsWith('Do not work on yet:'));
+
+    // 1. Assert the bullet is actually present — fail loudly if the fixture ever stops
+    // producing it, rather than letting every assertion below pass vacuously on an empty set.
+    expect(doNotWorkOnYet).toBeDefined();
+
+    const model = webVisuals(CONSTRAINT_FACTS, methodology).s10.phaseRail;
+    expect(model).not.toBeNull();
+
+    // 2. It must not be one of the strings the rail claims to supersede.
+    expect(model!.supersedes).not.toContain(doNotWorkOnYet);
+
+    // 3. Subtracting supersedes from the real bullets must leave a non-empty remainder
+    // containing exactly this one bullet — the renderer's own subtraction, replayed here.
+    const remaining = s10.fallback.bullets.filter((b) => !model!.supersedes.includes(b));
+    expect(remaining.length).toBeGreaterThan(0);
+    expect(remaining).toEqual([doNotWorkOnYet]);
+  });
+
+  it('clamps opacity to 0.3 past the third block when more than three phase entries fire (foundation, multiple gated enablers)', () => {
+    // FOUNDATION_3_FACTS has THREE gated enablers (ruling 8: 3 gated => 9 roadmap entries,
+    // 3 phases x 3 enablers), so this is guaranteed to exceed PHASE_OPACITY's length of 3.
+    const entries = roadmapEntries(FOUNDATION_3_FACTS, methodology);
+    expect(entries.length).toBeGreaterThan(3);
+
+    const model = webVisuals(FOUNDATION_3_FACTS, methodology).s10.phaseRail;
+    expect(model).not.toBeNull();
+    expect(model!.blocks.length).toBe(entries.length);
+    expect(model!.blocks[0]!.opacity).toBe(1);
+    expect(model!.blocks[1]!.opacity).toBe(0.6);
+    expect(model!.blocks[2]!.opacity).toBe(0.3);
+    for (let i = 3; i < model!.blocks.length; i++) {
+      expect(model!.blocks[i]!.opacity).toBe(0.3);
     }
   });
 });
