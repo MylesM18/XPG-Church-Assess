@@ -21,6 +21,7 @@ import type { CategoryState } from '../engine/types';
 import type { FactsPack } from './facts';
 import { readingBand } from './view';
 import { verdictBandFor, type BandKey } from './charts';
+import { roadmapEntries } from './fallback-sections';
 
 /** Clamp a 0-100 score into a track percentage. */
 function pct(value: number): number {
@@ -130,6 +131,22 @@ export type ChainStage = {
 
 export type ChainModel = { stages: ChainStage[]; reads: string[] };
 
+/** 30 / 60 / 90 step the verdict band down in opacity — the same
+ * same-hex-reduced-opacity treatment the s3 throughput bar uses. No new colours. */
+const PHASE_OPACITY = [1, 0.6, 0.3];
+
+export type PhaseRailBlock = { numeral: string; dayLabel: string; text: string; opacity: number };
+
+export type PhaseRailModel = {
+  blocks: PhaseRailBlock[];
+  band: BandKey;
+  /** The exact s10 bullet strings this rail replaces. The renderer subtracts
+   * these from section.fallback.bullets and renders the remainder beneath the
+   * rail, so s10Bullets' extra `Do not work on yet: ...` line survives verbatim.
+   * Must stay byte-identical to the join in s10Bullets (fallback-sections.ts:274). */
+  supersedes: string[];
+};
+
 /** rules.enablers[].gates is `'all' | string[]` (methodology/schema.ts:57).
  * The 'all' literal must be handled explicitly — it is not an array. */
 function gatesStage(gates: 'all' | string[], stageId: string): boolean {
@@ -142,6 +159,7 @@ export type WebVisuals = {
   s7: { themeSplit: ThemeSplitModel | null };
   s8: { spread: SpreadModel | null };
   s9: { chain: ChainModel };
+  s10: { phaseRail: PhaseRailModel | null };
   s13: { confidence: ConfidenceModel };
 };
 
@@ -313,6 +331,22 @@ function chainModel(facts: FactsPack, methodology: Methodology): ChainModel {
   return { stages, reads: facts.dependencies.map((d) => d.read_sentence) };
 }
 
+function phaseRail(facts: FactsPack, methodology: Methodology): PhaseRailModel | null {
+  const entries = roadmapEntries(facts, methodology);
+  if (entries.length === 0) return null;
+
+  return {
+    blocks: entries.map((entry, i) => ({
+      numeral: entry.dayLabel.split(' ')[0] ?? entry.dayLabel,
+      dayLabel: entry.dayLabel,
+      text: entry.text,
+      opacity: PHASE_OPACITY[i] ?? PHASE_OPACITY[PHASE_OPACITY.length - 1]!,
+    })),
+    band: verdictBandFor(facts.overall.tier.id),
+    supersedes: entries.map((entry) => `${entry.dayLabel} — ${entry.text}`),
+  };
+}
+
 export function webVisuals(facts: FactsPack, methodology: Methodology): WebVisuals {
   return {
     s3: { capacity: capacityBars(facts) },
@@ -323,6 +357,7 @@ export function webVisuals(facts: FactsPack, methodology: Methodology): WebVisua
     s7: { themeSplit: themeSplit(facts) },
     s8: { spread: spreadModel(facts, methodology) },
     s9: { chain: chainModel(facts, methodology) },
+    s10: { phaseRail: phaseRail(facts, methodology) },
     s13: { confidence: confidenceModel(facts) },
   };
 }

@@ -4,6 +4,8 @@ import { roadmapEntries } from '@/lib/report/fallback-sections';
 import { webVisuals } from '@/lib/report/web-visuals';
 import { CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
 import { readingBand } from '@/lib/report/view';
+import { verdictBandFor } from '@/lib/report/charts';
+import { assembleFallbackOnly } from '@/lib/report/compose';
 import type { CategoryState } from '@/lib/engine/types';
 
 describe('roadmapEntries is exported for the web phase rail', () => {
@@ -288,5 +290,51 @@ describe('webVisuals — s9 dependency chain', () => {
     const stageWithComm = model.stages.find((s) => s.gates.some((g) => g.id === 'comm'))!;
     const comm = stageWithComm.gates.find((g) => g.id === 'comm')!;
     expect(comm.band).toBe('broken');
+  });
+});
+
+describe('webVisuals — s10 phase rail', () => {
+  const methodology = loadMethodology();
+
+  it('renders the identical roadmapEntries data, stepping the verdict band down', () => {
+    const model = webVisuals(CAPACITY_FACTS, methodology).s10.phaseRail;
+    const entries = roadmapEntries(CAPACITY_FACTS, methodology);
+    expect(model).not.toBeNull();
+    expect(model!.blocks.map((b) => b.text)).toEqual(entries.map((e) => e.text));
+    expect(model!.blocks.map((b) => b.dayLabel)).toEqual(entries.map((e) => e.dayLabel));
+    expect(model!.blocks.map((b) => b.numeral)).toEqual(
+      entries.map((e) => e.dayLabel.split(' ')[0]),
+    );
+    expect(model!.blocks.map((b) => b.opacity)).toEqual([1, 0.6, 0.3].slice(0, entries.length));
+    expect(model!.band).toBe(verdictBandFor(CAPACITY_FACTS.overall.tier.id));
+  });
+
+  it('supersedes exactly the phase bullets and leaves any other s10 bullet standing', () => {
+    const sections = assembleFallbackOnly({
+      facts: CAPACITY_FACTS,
+      methodology,
+      reflections: [],
+    });
+    const s10 = sections.find((s) => s.id === 's10')!;
+    const model = webVisuals(CAPACITY_FACTS, methodology).s10.phaseRail!;
+
+    for (const superseded of model.supersedes) {
+      expect(s10.fallback.bullets).toContain(superseded);
+    }
+    const remaining = s10.fallback.bullets.filter((b) => !model.supersedes.includes(b));
+    expect(remaining.length).toBe(s10.fallback.bullets.length - model.supersedes.length);
+    for (const bullet of remaining) {
+      expect(model.supersedes).not.toContain(bullet);
+    }
+  });
+
+  it('is omitted when there are no roadmap entries, so the bullets stand alone', () => {
+    const facts = makeFacts({ categories: [], bottom_items: [] });
+    const model = webVisuals(facts, methodology).s10.phaseRail;
+    if (roadmapEntries(facts, methodology).length === 0) {
+      expect(model).toBeNull();
+    } else {
+      expect(model!.blocks.length).toBeGreaterThan(0);
+    }
   });
 });
