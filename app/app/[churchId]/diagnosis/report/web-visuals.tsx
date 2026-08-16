@@ -5,6 +5,14 @@
  * role="list" is set explicitly on every list-shaped visual: Safari/VoiceOver
  * drops the implicit list role under display:grid (see charts.tsx:25-29).
  * Tracks and bars are aria-hidden; every value is also real text.
+ *
+ * CHROME COMES FROM THE WEB @theme, NOT THE PDF. Band colours (BAND_FILL /
+ * BAND_TEXT / THEME_FILL) are the shared seam and stay byte-identical across the two
+ * surfaces — everything else (ink, ink-soft, hairlines, the page ground) is the web's
+ * own token, as Tailwind utilities where the value is static and `var(--color-…)`
+ * where it sits alongside a computed one. These are HTML components, not SVG
+ * transcriptions of the PDF drawing, so a PDF hex here renders a warm grey beside the
+ * theme's cool one on the same screen.
  */
 import { BAND_FILL, BAND_TEXT, THEME_FILL, textOnBand } from '@/lib/report/charts';
 import type {
@@ -18,56 +26,50 @@ import type {
   ThemeSplitModel,
 } from '@/lib/report/web-visuals';
 
-const INK_SOFT = '#5A5A54';
-const RULE = '#D8D5CE';
-const CREAM = '#FAF7F0';
-const INK = '#1A1A18';
 /** Byte-identical to the LIST const in sections.tsx:17. Duplicated rather than
  * exported because that one is module-private chrome, not a shared token. */
 const LIST = 'list-disc space-y-1 pl-5 font-body text-base leading-[1.6] text-ink';
 
 const CAPS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]';
+/** CAPS in the theme's secondary ink — the same pairing sections.tsx uses for the
+ * opener eyebrow and the s6 beat labels. Bare CAPS is for labels that inherit their
+ * colour from a band ground instead. */
+const CAPS_SOFT = `${CAPS} text-ink-soft`;
 const NUM = 'font-display font-semibold leading-none';
 
+/**
+ * Data-quality meter for the appendix (spec §6). Deliberately NEUTRAL CHROME: track
+ * `bg-line`, fill `bg-ink-soft`, number `text-ink`. No band token appears anywhere in
+ * this component.
+ *
+ * Confidence measures how much data the report rests on, not how healthy the church
+ * is. Pinning it to a band — whether fixed (which painted a 38%-confidence church in
+ * the healthy palette) or banded off the verdict (which would imply data quality
+ * tracks church health) — makes it read as a verdict. The neutral pair still carries
+ * a strong contrast step, so the fill stays legible against its track.
+ */
 export function WebConfidence({ model }: { model: ConfidenceModel }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-3">
-        <p className={CAPS} style={{ color: INK_SOFT }}>
-          Confidence
-        </p>
-        <p className={`${NUM} text-[1.5rem]`} style={{ color: BAND_TEXT.holding }}>
-          {model.label}
-        </p>
+        <p className={CAPS_SOFT}>Confidence</p>
+        <p className={`${NUM} text-[1.5rem] text-ink`}>{model.label}</p>
       </div>
-      <div
-        aria-hidden
-        className="h-2 w-full overflow-hidden"
-        style={{ backgroundColor: RULE }}
-      >
-        <div
-          className="h-full"
-          style={{ width: `${model.pct}%`, backgroundColor: BAND_FILL.holding }}
-        />
+      <div aria-hidden className="h-2 w-full overflow-hidden bg-line">
+        <div className="h-full bg-ink-soft" style={{ width: `${model.pct}%` }} />
       </div>
-      <ul role="list" className="flex flex-col gap-1 border-t pt-3" style={{ borderColor: RULE }}>
+      <ul role="list" className="flex flex-col gap-1 border-t border-line pt-3">
         <li className="flex items-baseline justify-between gap-3">
-          <span className={CAPS} style={{ color: INK_SOFT }}>
-            Respondents
-          </span>
+          <span className={CAPS_SOFT}>Respondents</span>
           <span className="font-body text-[0.8125rem] text-ink">{model.respondents}</span>
         </li>
         <li className="flex items-baseline justify-between gap-3">
-          <span className={CAPS} style={{ color: INK_SOFT }}>
-            Areas assessed
-          </span>
+          <span className={CAPS_SOFT}>Areas assessed</span>
           <span className="font-body text-[0.8125rem] text-ink">{model.areas}</span>
         </li>
         {model.thinnest ? (
           <li className="flex items-baseline justify-between gap-3">
-            <span className={CAPS} style={{ color: INK_SOFT }}>
-              Thinnest coverage
-            </span>
+            <span className={CAPS_SOFT}>Thinnest coverage</span>
             <span className="font-body text-[0.8125rem] text-ink">
               {model.thinnest.name} · {model.thinnest.count}
             </span>
@@ -97,14 +99,12 @@ export function WebCapacityBars({ model }: { model: CapacityBarsModel }) {
         {bars.map((bar) => (
           <li key={bar.key} className="flex flex-col gap-1">
             <div className="flex items-baseline justify-between gap-3">
-              <span className={CAPS} style={{ color: INK_SOFT }}>
-                {bar.label}
-              </span>
+              <span className={CAPS_SOFT}>{bar.label}</span>
               <span className={`${NUM} text-[1.125rem]`} style={{ color: BAND_TEXT[model.band] }}>
                 {bar.value}
               </span>
             </div>
-            <div aria-hidden className="h-2 w-full overflow-hidden" style={{ backgroundColor: RULE }}>
+            <div aria-hidden className="h-2 w-full overflow-hidden bg-line">
               <div
                 className="h-full"
                 style={{
@@ -168,6 +168,10 @@ export function WebConstraintCallout({ model }: { model: ConstraintCalloutModel 
  * says), hollow dot = belief (what the room says), the segment between them is
  * the gap. Both numbers are printed as real text beneath — the dot positions are
  * an illustration of the gap, never the only place the values live.
+ *
+ * The hollow dot's fill is the PAGE GROUND (--color-paper, what html/body carry in
+ * globals.css), not a light grey that happens to look close: any other value shows up
+ * as a visible disc instead of a hole punched in the segment.
  */
 export function WebDumbbells({ model }: { model: DumbbellsModel }) {
   return (
@@ -178,23 +182,16 @@ export function WebDumbbells({ model }: { model: DumbbellsModel }) {
         return (
           <li key={row.id} className="flex flex-col gap-2">
             <div className="flex items-baseline justify-between gap-3">
-              <span className={CAPS} style={{ color: INK_SOFT }}>
-                {row.name}
-              </span>
+              <span className={CAPS_SOFT}>{row.name}</span>
               <span className="flex items-baseline gap-2">
-                <span className={CAPS} style={{ color: INK_SOFT }}>
-                  Gap
-                </span>
+                <span className={CAPS_SOFT}>Gap</span>
                 <span className={`${NUM} text-[1.125rem]`} style={{ color: BAND_TEXT[row.band] }}>
                   {row.gap}
                 </span>
               </span>
             </div>
             <div aria-hidden className="relative h-3 w-full">
-              <span
-                className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2"
-                style={{ backgroundColor: RULE }}
-              />
+              <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-line" />
               <span
                 className="absolute top-1/2 h-[3px] -translate-y-1/2"
                 style={{
@@ -211,12 +208,12 @@ export function WebDumbbells({ model }: { model: DumbbellsModel }) {
                 className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
                 style={{
                   left: `${row.beliefPct}%`,
-                  backgroundColor: CREAM,
+                  backgroundColor: 'var(--color-paper)',
                   borderColor: BAND_FILL[row.band],
                 }}
               />
             </div>
-            <p className="font-body text-[0.6875rem] tracking-[0.04em]" style={{ color: INK_SOFT }}>
+            <p className="font-body text-[0.6875rem] tracking-[0.04em] text-ink-soft">
               {`Evidence ${row.evidence} · Belief ${row.belief}`}
             </p>
           </li>
@@ -238,16 +235,14 @@ export function WebDumbbells({ model }: { model: DumbbellsModel }) {
 export function WebThemeSplit({ model }: { model: ThemeSplitModel }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className={CAPS} style={{ color: INK_SOFT }}>
-        {model.label}
-      </p>
+      <p className={CAPS_SOFT}>{model.label}</p>
       <ul role="list" className="flex flex-col gap-2">
         {model.rows.map((row) => (
           <li key={row.theme} className="grid grid-cols-[6rem_1fr_2rem] items-center gap-3">
             <span className={CAPS} style={{ color: THEME_FILL[row.theme] }}>
               {row.label}
             </span>
-            <span aria-hidden className="block h-2 w-full" style={{ backgroundColor: RULE }}>
+            <span aria-hidden className="block h-2 w-full bg-line">
               <span
                 className="block h-full"
                 style={{ width: `${row.pct}%`, backgroundColor: THEME_FILL[row.theme] }}
@@ -255,7 +250,9 @@ export function WebThemeSplit({ model }: { model: ThemeSplitModel }) {
             </span>
             <span
               className={`${NUM} text-right text-[1.125rem]`}
-              style={{ color: row.count === 0 ? INK_SOFT : THEME_FILL[row.theme] }}
+              style={{
+                color: row.count === 0 ? 'var(--color-ink-soft)' : THEME_FILL[row.theme],
+              }}
             >
               {row.count}
             </span>
@@ -284,17 +281,15 @@ export function WebSpread({ model }: { model: SpreadModel }) {
             key={`${row.id}-${i}`}
             className="grid items-center gap-1 sm:grid-cols-[9rem_1fr_2.5rem] sm:gap-3"
           >
-            <span className={CAPS} style={{ color: INK_SOFT }}>
-              {row.name}
-            </span>
-            <span aria-hidden className="relative block h-2 w-full" style={{ backgroundColor: RULE }}>
+            <span className={CAPS_SOFT}>{row.name}</span>
+            <span aria-hidden className="relative block h-2 w-full bg-line">
               <span
                 className="absolute inset-y-0 left-0"
                 style={{ width: `${row.pct}%`, backgroundColor: BAND_FILL[row.band] }}
               />
               <span
                 className="absolute -inset-y-1 border-l border-dashed"
-                style={{ left: `${model.thresholdPct}%`, borderColor: INK_SOFT }}
+                style={{ left: `${model.thresholdPct}%`, borderColor: 'var(--color-ink-soft)' }}
               />
             </span>
             <span
@@ -307,12 +302,8 @@ export function WebSpread({ model }: { model: SpreadModel }) {
         ))}
       </ul>
       <div className="flex items-baseline justify-between gap-3">
-        <span className={CAPS} style={{ color: INK_SOFT }}>
-          {model.thresholdLabel}
-        </span>
-        <span className={CAPS} style={{ color: INK_SOFT }}>
-          {model.axisMaxLabel}
-        </span>
+        <span className={CAPS_SOFT}>{model.thresholdLabel}</span>
+        <span className={CAPS_SOFT}>{model.axisMaxLabel}</span>
       </div>
     </div>
   );
@@ -325,16 +316,15 @@ export function WebSpread({ model }: { model: SpreadModel }) {
  *
  * Stage order is rules.chain, resolved in the model — never score order.
  * Each gate chip carries its own band, which can differ from its stage's.
+ *
+ * Never guards on an empty stage list: nullability belongs to the dispatcher
+ * (sections.tsx), which is where every sibling visual's null check already lives.
  */
 export function WebChainRail({ model }: { model: ChainModel }) {
   return (
     <div className="flex flex-col gap-5">
       <ol role="list" className="relative flex flex-col gap-5">
-        <span
-          aria-hidden
-          className="absolute bottom-3 left-3 top-3 w-px"
-          style={{ backgroundColor: RULE }}
-        />
+        <span aria-hidden className="absolute bottom-3 left-3 top-3 w-px bg-line" />
         {model.stages.map((stage) => (
           <li key={stage.id} className="relative flex flex-col gap-2 pl-10">
             <span
@@ -402,9 +392,10 @@ export function WebChainRail({ model }: { model: ChainModel }) {
  * prose and is rendered beneath as an ordinary bullet list. No parsing, no new
  * prose, nothing silently dropped.
  *
- * Text colour flips to ink below full opacity: textOnBand is computed for the band
- * at full strength, and cream on a 30%-strength ground is unreadable. Phase-keyed
- * opacity therefore means the 30-day blocks — and only those — wear textOnBand.
+ * Text colour flips to the theme's ink below full opacity: textOnBand is computed for
+ * the band at full strength, and cream on a 30%-strength ground is unreadable.
+ * Phase-keyed opacity therefore means the 30-day blocks — and only those — wear
+ * textOnBand.
  */
 export function WebPhaseRail({ model, bullets }: { model: PhaseRailModel; bullets: string[] }) {
   const remaining = bullets.filter((bullet) => !model.supersedes.includes(bullet));
@@ -420,7 +411,9 @@ export function WebPhaseRail({ model, bullets }: { model: PhaseRailModel; bullet
             />
             <div
               className="relative flex flex-col gap-1"
-              style={{ color: block.opacity === 1 ? textOnBand(model.band) : INK }}
+              style={{
+                color: block.opacity === 1 ? textOnBand(model.band) : 'var(--color-ink)',
+              }}
             >
               <div className="flex items-baseline gap-3">
                 <span className={`${NUM} text-[1.75rem]`}>{block.numeral}</span>

@@ -23,7 +23,12 @@ import { readingBand } from './view';
 import { verdictBandFor, type BandKey } from './charts';
 import { roadmapEntries, type Phase } from './fallback-sections';
 
-/** Clamp a 0-100 score into a track percentage. */
+/** Clamp a 0-100 score into a track percentage.
+ *
+ * Same clamp-to-range as plotWidth (lib/report/charts.ts), in different units: that one
+ * returns plot-space pixels for the PDF's SVG geometry, this one returns a CSS percentage
+ * for the web's HTML tracks. Kept separate on purpose — this module must not pull chart
+ * geometry into the web bundle — but a change to the clamp belongs in both. */
 function pct(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
@@ -129,7 +134,10 @@ export type ChainStage = {
   gates: ChainGate[];
 };
 
-export type ChainModel = { stages: ChainStage[]; reads: string[] };
+/** Stages only. There is deliberately no `reads` field: facts.dependencies' read_sentence
+ * strings already render as s9's fallback bullets (s9Bullets, lib/report/fallback-sections.ts),
+ * so carrying them here as well only invites a second, duplicate rendering of the same prose. */
+export type ChainModel = { stages: ChainStage[] };
 
 /** 30 / 60 / 90 step the verdict band down in opacity — the same
  * same-hex-reduced-opacity treatment the s3 throughput bar uses. No new colours.
@@ -150,7 +158,7 @@ export type PhaseRailModel = {
   /** The exact s10 bullet strings this rail replaces. The renderer subtracts
    * these from section.fallback.bullets and renders the remainder beneath the
    * rail, so s10Bullets' extra `Do not work on yet: ...` line survives verbatim.
-   * Must stay byte-identical to the join in s10Bullets (fallback-sections.ts:274). */
+   * Must stay byte-identical to the join in s10Bullets (fallback-sections.ts:284). */
   supersedes: string[];
 };
 
@@ -335,7 +343,7 @@ function chainModel(facts: FactsPack, methodology: Methodology): ChainModel {
     });
   }
 
-  return { stages, reads: facts.dependencies.map((d) => d.read_sentence) };
+  return { stages };
 }
 
 function phaseRail(facts: FactsPack, methodology: Methodology): PhaseRailModel | null {

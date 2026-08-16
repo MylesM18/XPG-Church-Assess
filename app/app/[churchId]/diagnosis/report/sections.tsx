@@ -30,9 +30,10 @@ const SUBHEAD = 'font-display text-[1.0625rem] font-semibold text-ink'
 const CAPS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]'
 const OPENER_TITLE = 'font-display font-semibold leading-[1.2]'
 const OPENER_TITLE_SIZE = { fontSize: 'clamp(1.5rem, 4vw, 2.125rem)' } as const
-// text-ink and text-ink-soft are real Tailwind tokens in this repo (charts.tsx uses both), but
-// there is no proven bg-ink, so the 2px section rule sets its colour inline.
-const INK = '#1A1A18'
+// The 2px opener rule is `bg-ink`, the web @theme's own token — the same utility the booking
+// CTA button below already uses. It used to be an inline PDF hex (#1A1A18) on the belief that
+// bg-ink was unproven; it is not, and a PDF ink beside the theme's ink-soft caps label on the
+// same opener was a visible warm/cool mismatch.
 
 /**
  * The uniform renderer: the { body, bullets } half of a SectionBody. Used for all 13
@@ -315,7 +316,14 @@ function SectionVisualsAbove({
   const verdict = chartOfKind(section, 'verdict_block')
   const statGrid = chartOfKind(section, 'stat_grid')
 
-  switch (section.id as AboveId) {
+  // The cast is bound to a local and the switch runs on THAT, so the `never` in the default arm
+  // needs no second cast. `switch (section.id as AboveId)` with `const exhaustive: never =
+  // section.id as never` type-checked no matter what: `as never` accepts anything, so adding a
+  // member to AboveId without a matching case still compiled and the default then RETURNED the
+  // raw id — a bare section id printed as visible text on a public page. Binding once makes tsc
+  // fail that instead. Runtime behaviour is identical: same value, same cases, same order.
+  const id = section.id as AboveId
+  switch (id) {
     case 's3':
       return (
         <>
@@ -331,9 +339,14 @@ function SectionVisualsAbove({
     case 's7':
       return visuals.s7.themeSplit ? <WebThemeSplit model={visuals.s7.themeSplit} /> : null
     case 's9':
-      return <WebChainRail model={visuals.s9.chain} />
+      // chainModel cannot return null — it always returns a { stages } object — so the empty
+      // check is on the stages themselves, and it belongs HERE, with its seven siblings, not
+      // inside WebChainRail. rules.chain naming an id absent from facts.categories drops every
+      // stage (`if (!found) continue`), which would otherwise render the branch's only empty
+      // frame: a wrapper around an empty <ol>.
+      return visuals.s9.chain.stages.length > 0 ? <WebChainRail model={visuals.s9.chain} /> : null
     default: {
-      const exhaustive: never = section.id as never
+      const exhaustive: never = id
       return exhaustive
     }
   }
@@ -357,7 +370,9 @@ function SectionVisualsBelow({
 
   const rankList = chartOfKind(section, 'rank_list')
 
-  switch (section.id as BelowId) {
+  // Bound to a local for the same reason as SectionVisualsAbove — see the comment there.
+  const id = section.id as BelowId
+  switch (id) {
     case 's4':
       return visuals.s4.dumbbells ? <WebDumbbells model={visuals.s4.dumbbells} /> : null
     case 's7':
@@ -367,7 +382,7 @@ function SectionVisualsBelow({
     case 'appendix':
       return <WebConfidence model={visuals.s13.confidence} />
     default: {
-      const exhaustive: never = section.id as never
+      const exhaustive: never = id
       return exhaustive
     }
   }
@@ -397,7 +412,7 @@ function S10PhaseBody({
 /**
  * Renders the 13 report sections as the web mirror of the PDF's content pages (Part B spec):
  * each section opens with editorial chrome — a 3px BAND_FILL[band] tick, an `NN / TOTAL` caps
- * eyebrow, the title, then a 2px INK rule — then its charts, then its content; the booking CTA
+ * eyebrow, the title, then a 2px ink rule — then its charts, then its content; the booking CTA
  * renders once, immediately after s12, where document.tsx puts it. Page chrome — the toolbar,
  * the notices, the cover, the shared-view footer — stays on the pages. `band` is the cover's
  * verdict band (`cover.band`): the colour IS the diagnosis, and every opener's tick wears it.
@@ -438,7 +453,7 @@ export function ReportSections({ sections, band, visuals }: { sections: Assemble
               ) : (
                 <h2 className={OPENER_TITLE} style={OPENER_TITLE_SIZE}>{section.fallback.title}</h2>
               )}
-              <span aria-hidden className="h-[2px] w-full" style={{ backgroundColor: INK }} />
+              <span aria-hidden className="h-[2px] w-full bg-ink" />
             </div>
             <SectionVisualsAbove section={section} visuals={visuals} />
             {section.id === 's10' && visuals.s10.phaseRail ? (

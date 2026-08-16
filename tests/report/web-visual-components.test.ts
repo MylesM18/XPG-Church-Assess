@@ -194,18 +194,18 @@ describe('WebThemeSplit', () => {
     expect(html).toContain(`style="width:0%;background-color:${THEME_FILL.theology}"`)
   })
 
-  it('colors a zero-count row\'s number INK_SOFT, not the theme colour', () => {
-    // Regression this catches: `row.count === 0 ? INK_SOFT : THEME_FILL[row.theme]`
+  it('colors a zero-count row\'s number ink-soft, not the theme colour', () => {
+    // Regression this catches: `row.count === 0 ? var(--color-ink-soft) : THEME_FILL[row.theme]`
     // inverted or dropped — the 0 would render in THEME_FILL.theology instead.
-    expect(html).toContain('style="color:#5A5A54">0<')
+    expect(html).toContain('style="color:var(--color-ink-soft)">0<')
     expect(html).not.toContain(`style="color:${THEME_FILL.theology}">0<`)
   })
 
-  it('colors a non-zero row\'s number THEME_FILL[row.theme], not INK_SOFT', () => {
-    // Regression this catches: the ternary always picking INK_SOFT (or the
+  it('colors a non-zero row\'s number THEME_FILL[row.theme], not ink-soft', () => {
+    // Regression this catches: the ternary always picking ink-soft (or the
     // branches swapped) — the 5 would render grey instead of themed.
     expect(html).toContain(`style="color:${THEME_FILL.systems}">5<`)
-    expect(html).not.toContain('style="color:#5A5A54">5<')
+    expect(html).not.toContain('style="color:var(--color-ink-soft)">5<')
   })
 })
 
@@ -230,7 +230,7 @@ describe('WebSpread', () => {
     // Regression this catches: the marker reading row.pct or model.axisMax
     // instead of model.thresholdPct — the dashed line would drift to the wrong
     // spot on the axis whenever thresholdPct differs from those other values.
-    expect(html).toContain(`style="left:${model.thresholdPct}%;border-color:#5A5A54"`)
+    expect(html).toContain(`style="left:${model.thresholdPct}%;border-color:var(--color-ink-soft)"`)
   })
 
   it('renders BOTH rows even though they share the same id — nothing is dropped, and each row keeps its OWN name bound to its OWN spread', () => {
@@ -287,7 +287,6 @@ describe('WebChainRail', () => {
         ],
       },
     ],
-    reads: [],
   }
   const html = renderToStaticMarkup(createElement(WebChainRail, { model }))
 
@@ -322,12 +321,11 @@ describe('WebChainRail', () => {
 
 describe('WebPhaseRail', () => {
   // Two blocks: one at full opacity (severe/broken/holding bands render CREAM
-  // text on it), one at reduced opacity (must flip to INK — cream on a
-  // 30%/60%-strength ground is unreadable). Band 'broken' is deliberately NOT
-  // 'watch', so textOnBand(band) resolves to CREAM (#FAF7F0) — distinct from
-  // INK (#1A1A18) — and the two colour-flip tests below cannot pass by
-  // coincidence the way they could if band were 'watch' (where textOnBand
-  // already returns ink).
+  // text on it), one at reduced opacity (must flip to the theme ink token — cream
+  // on a 30%/60%-strength ground is unreadable). Band 'broken' is deliberately NOT
+  // 'watch', so textOnBand(band) resolves to CREAM (#FAF7F0) rather than the PDF's
+  // ink hex, keeping the two colour-flip tests below meaningful in the same way they
+  // were when the reduced-opacity colour was itself a hex.
   const model: PhaseRailModel = {
     blocks: [
       { numeral: '30', dayLabel: '30 Days', text: 'Fix the volunteer pipeline.', opacity: 1 },
@@ -373,11 +371,11 @@ describe('WebPhaseRail', () => {
     expect(htmlNone).not.toContain('<ul')
   })
 
-  it('binds the colour flip to its OWN block: full-opacity -> textOnBand(band), reduced-opacity -> INK', () => {
+  it('binds the colour flip to its OWN block: full-opacity -> textOnBand(band), reduced-opacity -> the theme ink', () => {
     // With exactly two blocks and exactly two possible colours, unscoped
-    // `html.toContain('color:'+textOnBand(...))` / `html.toContain('color:#1A1A18')`
+    // `html.toContain('color:'+textOnBand(...))` / `html.toContain('color:var(--color-ink)')`
     // checks (as this test used to do) are satisfied even by an INVERTED ternary
-    // (`block.opacity === 1 ? INK : textOnBand(model.band)`) — both hex strings
+    // (`block.opacity === 1 ? var(--color-ink) : textOnBand(model.band)`) — both colour strings
     // still appear in the page, just swapped onto the wrong blocks. Splitting on
     // `<li` isolates each block's own markup (bullets: [] so the remaining-
     // bullets <ul> contributes no extra `<li>` to split on), then each half is
@@ -388,20 +386,20 @@ describe('WebPhaseRail', () => {
     expect(reducedOpacityChunk).toBeDefined()
 
     // Full-opacity (1) block: its own chunk carries its own opacity:1 marker
-    // AND textOnBand(model.band) — never INK.
+    // AND textOnBand(model.band) — never the theme ink.
     expect(fullOpacityChunk).toContain('opacity:1"')
     expect(fullOpacityChunk).toContain(`color:${textOnBand(model.band)}`)
-    expect(fullOpacityChunk).not.toContain('color:#1A1A18')
+    expect(fullOpacityChunk).not.toContain('color:var(--color-ink)')
 
     // Reduced-opacity (0.6) block: its own chunk carries its own opacity:0.6
-    // marker AND INK — never textOnBand(model.band). Regression this catches:
-    // `block.opacity === 1 ? textOnBand(model.band) : INK` inverted or dropped
-    // to always use textOnBand — the 60-day block would render CREAM text on
-    // its 60%-strength ground, which is the exact illegibility this ternary
-    // exists to prevent, and this is the only pair of assertions in this file
-    // that can actually catch that inversion.
+    // marker AND the theme ink — never textOnBand(model.band). Regression this
+    // catches: `block.opacity === 1 ? textOnBand(model.band) : var(--color-ink)`
+    // inverted or dropped to always use textOnBand — the 60-day block would render
+    // CREAM text on its 60%-strength ground, which is the exact illegibility this
+    // ternary exists to prevent, and this is the only pair of assertions in this
+    // file that can actually catch that inversion.
     expect(reducedOpacityChunk).toContain('opacity:0.6"')
-    expect(reducedOpacityChunk).toContain('color:#1A1A18')
+    expect(reducedOpacityChunk).toContain('color:var(--color-ink)')
     expect(reducedOpacityChunk).not.toContain(`color:${textOnBand(model.band)}`)
   })
 })
@@ -436,7 +434,9 @@ describe('WebPhaseRail — foundation archetype, nine roadmap entries', () => {
   // The day-label caption is the block's only element carrying the CAPS class; the numeral
   // beside it carries NUM, and the body text carries the body class. All three are distinct.
   const DAY_LABEL = /tracking-\[0\.1em\]">([^<]+)</
-  const INK_HEX = '#1A1A18'
+  // The reduced-opacity text colour: the web @theme's ink token, read inline because it sits in
+  // a ternary beside the computed textOnBand(band).
+  const INK_TOKEN = 'var(--color-ink)'
 
   it('is a genuine nine-block model, so nothing below passes vacuously on a three-block rail', () => {
     expect(model).not.toBeNull()
@@ -462,19 +462,22 @@ describe('WebPhaseRail — foundation archetype, nine roadmap entries', () => {
     expect(byDayLabel.get('90 days')).toEqual(['0.3', '0.3', '0.3'])
   })
 
-  it('flips text to INK on every reduced-opacity block, so ONLY the three 30-day blocks wear textOnBand', () => {
-    // Guard first: on the 'watch' band textOnBand already returns INK, which would make
-    // every assertion below trivially true. Fail loudly if this fixture ever lands there.
+  it('flips text to the theme ink on every reduced-opacity block, so ONLY the three 30-day blocks wear textOnBand', () => {
+    // Guard first: the two colours this component can emit must be distinct strings, or every
+    // assertion below is trivially true. (This used to be the live risk — with the reduced
+    // branch on the PDF's own ink hex, a fixture landing on the 'watch' band made
+    // textOnBand(band) that same hex. The branch now emits a token, so the two can no longer
+    // collide; the guard is kept so a future move back to a literal is caught.)
     const onBand = textOnBand(model!.band)
-    expect(onBand).not.toBe(INK_HEX)
+    expect(onBand).not.toBe(INK_TOKEN)
 
     for (const chunk of chunks) {
       const dayLabel = DAY_LABEL.exec(chunk)![1]
       if (dayLabel === '30 days') {
         expect(chunk).toContain(`color:${onBand}`)
-        expect(chunk).not.toContain(`color:${INK_HEX}`)
+        expect(chunk).not.toContain(`color:${INK_TOKEN}`)
       } else {
-        expect(chunk).toContain(`color:${INK_HEX}`)
+        expect(chunk).toContain(`color:${INK_TOKEN}`)
         expect(chunk).not.toContain(`color:${onBand}`)
       }
     }

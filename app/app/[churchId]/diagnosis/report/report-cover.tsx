@@ -1,10 +1,6 @@
 import type { CoverModel, CoverLadderRow } from '@/lib/report/charts'
 import { BAND_FILL, BAND_TEXT, textOnBand } from '@/lib/report/charts'
 
-// The PDF's own ink hex (lib/report/pdf/document.tsx) for the ladder's inactive-row text: the
-// ladder is a transcription of the PDF's tier language, so it uses the PDF token, not the web @theme.
-const INK = '#1A1A18'
-
 const CAPS_LABEL = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-ink-soft'
 
 /**
@@ -18,6 +14,12 @@ const CAPS_LABEL = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1
  *
  * The wash is a same-hex opacity layer, not a new colour — an aria-hidden fill
  * span sits behind the label so lowering the fill's opacity never dims the text.
+ *
+ * An inactive row's label is the web @theme's own ink, read inline as `var(--color-ink)`
+ * because it sits in a ternary beside the computed textOnBand(row.band). It used to be the
+ * PDF's ink hex on the rationale that the ladder transcribes the PDF's tier language — but
+ * this is an HTML list, not an SVG transcription, and it renders beside theme-token chrome
+ * (the ink-soft caps labels above and below it) on the same screen.
  */
 function TierLadder({ ladder }: { ladder: CoverLadderRow[] }) {
   return (
@@ -39,7 +41,7 @@ function TierLadder({ ladder }: { ladder: CoverLadderRow[] }) {
           />
           <span
             className="relative font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]"
-            style={{ color: row.active ? textOnBand(row.band) : INK }}
+            style={{ color: row.active ? textOnBand(row.band) : 'var(--color-ink)' }}
           >
             {row.name}
           </span>

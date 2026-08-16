@@ -307,7 +307,7 @@ export type CoverModel = {
   score: number;
   tierName: string;
   band: BandKey;
-  /** The s3 xpg_read line — the SAME string fallback-sections.ts:361 renders
+  /** The s3 xpg_read line — the SAME string fallback-sections.ts:371 renders
    * as s3's first bullet (§5-sanctioned reuse; no new prose is created). */
   headline: string;
   strip: { width: number; segments: CoverStripSeg[]; marker: { x: number } };
@@ -349,7 +349,11 @@ export function coverModel(facts: FactsPack, methodology: Methodology): CoverMod
 const SCALE_MAX = 100;
 
 /** Score -> plot-space width. Clamped: a score outside 0-100 is a data bug, but a bar drawn
- *  off-canvas is a rendering bug on top of it, and only one of the two is worth shipping. */
+ *  off-canvas is a rendering bug on top of it, and only one of the two is worth shipping.
+ *
+ *  Same clamp-to-range as pct (lib/report/web-visuals.ts), in different units: that one
+ *  returns a CSS percentage for the web's HTML tracks, this one returns plot-space pixels.
+ *  A change to the clamp belongs in both. */
 function plotWidth(score: number, plotW: number): number {
   const clamped = Math.min(Math.max(score, 0), SCALE_MAX);
   return (clamped / SCALE_MAX) * plotW;

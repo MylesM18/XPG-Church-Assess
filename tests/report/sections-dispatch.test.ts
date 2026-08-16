@@ -10,6 +10,7 @@ import { ReportSections, SectionBodyView } from '../../app/app/[churchId]/diagno
 import type { AssembledSection } from '../../lib/report/compose'
 import type { ChartModel } from '../../lib/report/charts'
 import type {
+  ChainModel,
   ConstraintCalloutModel,
   DumbbellsModel,
   PhaseRailModel,
@@ -28,7 +29,7 @@ const VISUALS: WebVisuals = {
   s4: { constraint: null, dumbbells: null },
   s7: { themeSplit: null },
   s8: { spread: null },
-  s9: { chain: { stages: [], reads: [] } },
+  s9: { chain: { stages: [] } },
   s10: { phaseRail: null },
   s13: { confidence: { pct: 0, label: '0%', respondents: 0, areas: 0, thinnest: null } },
 }
@@ -242,11 +243,13 @@ const BODY_CLASS = 'font-body text-base leading-[1.6] text-ink'
 const LIST_CLASS = 'list-disc space-y-1 pl-5 font-body text-base leading-[1.6] text-ink'
 const RAIL_TEXT_CLASS = 'font-body text-[0.9375rem] leading-[1.6]'
 const CAPS_CLASS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]'
-const CONFIDENCE_HEAD = `<p class="${CAPS_CLASS}" style="color:#5A5A54">Confidence</p>`
+const CAPS_SOFT_CLASS = `${CAPS_CLASS} text-ink-soft`
+const CONFIDENCE_HEAD = `<p class="${CAPS_SOFT_CLASS}">Confidence</p>`
 const STAT_GRID = 'aria-label="Area scores with health bands"'
 const RANK_LIST = 'aria-label="Weakest questions, ranked"'
-// Task 17's opener chrome: the 2px INK rule that now closes every opener, after the h1/h2.
-const OPENER_RULE = '<span aria-hidden="true" class="h-[2px] w-full" style="background-color:#1A1A18"></span>'
+// Task 17's opener chrome: the 2px ink rule that now closes every opener, after the h1/h2.
+// bg-ink, the web @theme token, replaced the inline PDF ink hex this used to anchor on.
+const OPENER_RULE = '<span aria-hidden="true" class="h-[2px] w-full bg-ink"></span>'
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const countOf = (html: string, needle: string) =>
@@ -375,6 +378,47 @@ describe('SectionVisualsAbove / SectionVisualsBelow', () => {
     expect(html).not.toContain(RAIL_TEXT_CLASS)
   })
 
+  // s9 is the one ABOVE branch whose model can never be null — chainModel always returns a
+  // { stages } object — so its emptiness check is on the stages, and it lives in the dispatcher
+  // with its seven siblings rather than inside WebChainRail. rules.chain naming an id that is
+  // absent from facts.categories drops every stage (`if (!found) continue`), which without this
+  // guard rendered the branch's only empty frame: a wrapper around an empty <ol>.
+  const CHAIN_WRAPPER = '<div class="flex flex-col gap-5">'
+  const CHAIN_OL = '<ol role="list" class="relative flex flex-col gap-5">'
+  const CHAIN_STAGE_NAME =
+    '<p class="font-display text-[1.0625rem] font-semibold text-ink">CHAIN STAGE NAME</p>'
+
+  it('renders the chain rail ABOVE the s9 body when the model has stages, exactly once', () => {
+    const chain: ChainModel = {
+      stages: [
+        { id: 'guest', ordinal: '01', name: 'CHAIN STAGE NAME', score: 55, band: 'watch', gates: [] },
+      ],
+    }
+    const html = renderOne(fallbackSection('s9', 'The system'), { ...VISUALS, s9: { chain } })
+    const body = `<p class="${BODY_CLASS}">body of s9</p>`
+    const at = [CHAIN_WRAPPER, CHAIN_OL, CHAIN_STAGE_NAME, body].map((needle) => html.indexOf(needle))
+    expect(at, 'the rail and the s9 body must all render').not.toContain(-1)
+    // ABOVE means above: rail wrapper, its <ol> and its one stage all precede the body.
+    expect(at).toEqual([...at].sort((a, b) => a - b))
+    for (const needle of [CHAIN_WRAPPER, CHAIN_OL, CHAIN_STAGE_NAME]) {
+      expect(countOf(html, needle), needle).toBe(1)
+    }
+  })
+
+  it('renders NO chain rail at all — not an empty <ol>, not a bare wrapper — when the model has no stages', () => {
+    // The shared VISUALS pins s9.chain.stages to []. Regression this catches: the guard dropped
+    // (back to an unconditional <WebChainRail/>), which puts CHAIN_WRAPPER and an empty CHAIN_OL
+    // on the page above s9's prose.
+    const html = renderOne(fallbackSection('s9', 'The system'), VISUALS)
+    expect(html).toContain(`<p class="${BODY_CLASS}">body of s9</p>`)
+    for (const needle of [CHAIN_WRAPPER, CHAIN_OL]) {
+      expect(html, `s9 must not render ${needle}`).not.toContain(needle)
+    }
+    // Contiguity, not just absence: the opener's closing </div> is immediately followed by the
+    // body, so the guarded branch emits nothing at all — no stray element, no text node.
+    expect(html).toContain(`</div><p class="${BODY_CLASS}">body of s9</p>`)
+  })
+
   it('renders the confidence meter for the appendix id only, exactly once', () => {
     // Guards the id correction directly: the MODEL key is visuals.s13, but the runtime
     // SectionId is 'appendix'. A `case 's13'` in SectionVisualsBelow renders 0 of these.
@@ -448,10 +492,10 @@ const CONSTRAINT_EYEBROW = `<p class="${CAPS_CLASS}">PRIMARY CONSTRAINT</p>`
 const DUMBBELLS_LIST = '<ul role="list" class="flex flex-col gap-4">'
 // WebDumbbells' own footnote line, the one element that prints both values as real text.
 const DUMBBELLS_VALUES =
-  `<p class="font-body text-[0.6875rem] tracking-[0.04em]" style="color:#5A5A54">` +
+  `<p class="font-body text-[0.6875rem] tracking-[0.04em] text-ink-soft">` +
   `Evidence 40 · Belief 80</p>`
-const SPREAD_THRESHOLD = `<span class="${CAPS_CLASS}" style="color:#5A5A54">THRESHOLD 1.5</span>`
-const SPREAD_ROW = `<span class="${CAPS_CLASS}" style="color:#5A5A54">SPREAD ROW NAME</span>`
+const SPREAD_THRESHOLD = `<span class="${CAPS_SOFT_CLASS}">THRESHOLD 1.5</span>`
+const SPREAD_ROW = `<span class="${CAPS_SOFT_CLASS}">SPREAD ROW NAME</span>`
 
 const renderOne = (section: AssembledSection, visuals: WebVisuals) =>
   renderToStaticMarkup(createElement(ReportSections, { visuals, band: BAND, sections: [section] }))

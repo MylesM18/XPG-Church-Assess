@@ -270,9 +270,12 @@ describe('webVisuals — s9 dependency chain', () => {
     expect(gov).toMatchObject({ name: 'Governance', score: 22, note: 'Gates everything' });
   });
 
-  it('carries the existing read sentences and never goes empty', () => {
-    const model = webVisuals(CAPACITY_FACTS, methodology).s9.chain;
-    expect(model.reads).toEqual(CAPACITY_FACTS.dependencies.map((d) => d.read_sentence));
+  // Was also asserting a `reads` field mirroring facts.dependencies[].read_sentence. That field
+  // is deleted: nothing rendered it (the chain rail's reads block was removed because those same
+  // strings already render as s9's fallback bullets, s9Bullets in lib/report/fallback-sections.ts),
+  // and an unrendered but tested payload only invites a future reader to wire it up and duplicate
+  // s9's prose. The never-null half of this test is unchanged.
+  it('never goes empty', () => {
     expect(webVisuals(makeFacts({ gating: [], dependencies: [] }), methodology).s9.chain)
       .not.toBeNull();
   });
@@ -351,7 +354,7 @@ describe('webVisuals — s10 phase rail', () => {
     // (38, below the 45 break threshold) as the first broken chain stage, and rules.yaml's
     // conn -> disc structural edge means facts.dependencies always carries an edge FROM the
     // primary constraint's own category — the exact condition s10Bullets checks
-    // (fallback-sections.ts:276-280) before appending `Do not work on yet: ...`.
+    // (fallback-sections.ts:285-289) before appending `Do not work on yet: ...`.
     const sections = assembleFallbackOnly({ facts: CONSTRAINT_FACTS, methodology, reflections: [] });
     const s10 = sections.find((s) => s.id === 's10')!;
     const doNotWorkOnYet = s10.fallback.bullets.find((b) => b.startsWith('Do not work on yet:'));

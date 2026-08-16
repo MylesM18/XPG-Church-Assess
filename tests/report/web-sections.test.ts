@@ -32,10 +32,9 @@ const CAPS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]'
 const BODY = 'font-body text-base leading-[1.6] text-ink'
 const SUBHEAD = 'font-display text-[1.0625rem] font-semibold text-ink'
 const LIST = 'list-disc space-y-1 pl-5 font-body text-base leading-[1.6] text-ink'
-// The opener eyebrow's and each s6 beat label's own class (Task 17): CAPS plus text-ink-soft.
+// The opener eyebrow's, each s6 beat label's and every web visual's caps-label class (Task 17):
+// CAPS plus text-ink-soft.
 const CAPS_SOFT = `${CAPS} text-ink-soft`
-// Task 17's ink rule colour, kept in sync by hand with sections.tsx's own INK const.
-const INK = '#1A1A18'
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const countOf = (html: string, needle: string) =>
   (html.match(new RegExp(escapeRe(needle), 'g')) ?? []).length
@@ -63,7 +62,7 @@ describe('ReportSections openers (web mirror of the PDF openers)', () => {
     expect((html.match(/font-size:clamp\(1\.5rem, 4vw, 2\.125rem\)/g) ?? []).length).toBe(sections.length)
   })
 
-  it('gives every opener a 3px BAND_FILL[band] tick and a 2px INK rule — the full-slab tint is gone', () => {
+  it('gives every opener a 3px BAND_FILL[band] tick and a 2px ink rule — the full-slab tint is gone', () => {
     // REPLACES the old opener-slab tint test (deleted, not weakened): that test proved every
     // section's opener <div> carried the FULL-SLAB background-color:BAND_FILL[band];color:
     // textOnBand(band) pair, exactly once per section, and that no opener carried any OTHER
@@ -72,14 +71,16 @@ describe('ReportSections openers (web mirror of the PDF openers)', () => {
     // entirely; the band survives only as a 3px tick. This test proves the SAME two guarantees
     // for the tick — exactly one correctly BAND_FILL[band]-coloured tick per section, and no
     // tick of any other colour — plus the new 2px INK rule, which is band-independent and so is
-    // checked once per section regardless of which band is passed in.
+    // checked once per section regardless of which band is passed in. The rule now carries its
+    // colour as the `bg-ink` @theme utility rather than an inline PDF hex, so its anchor is the
+    // full element string with no style attribute at all — same exactness, same count equality.
     //
     // SCOPED TO THE ELEMENT'S OWN class string, not a bare style-attribute count over the whole
     // page, for the same reason as the old test: several section visuals (e.g. WebChainRail's
     // stage ordinal chips) legitimately paint BAND_FILL/textOnBand pairs from their OWN model
     // band elsewhere in the same render.
     const TICK_CLASS = 'h-[22px] w-[3px] shrink-0'
-    const RULE_CLASS = 'h-[2px] w-full'
+    const RULE_CLASS = 'h-[2px] w-full bg-ink'
     for (const band of ['watch', 'holding'] as const) {
       const html = render(sections, band)
       const tick = `<span aria-hidden="true" class="${TICK_CLASS}" style="background-color:${BAND_FILL[band]}"></span>`
@@ -91,8 +92,8 @@ describe('ReportSections openers (web mirror of the PDF openers)', () => {
         'g',
       )
       expect((html.match(anyTick) ?? []).length, band).toBe(sections.length)
-      // The 2px INK rule renders once per section, independent of band.
-      const rule = `<span aria-hidden="true" class="${RULE_CLASS}" style="background-color:${INK}"></span>`
+      // The 2px ink rule renders once per section, independent of band.
+      const rule = `<span aria-hidden="true" class="${RULE_CLASS}"></span>`
       expect((html.match(new RegExp(escapeRe(rule), 'g')) ?? []).length, band).toBe(sections.length)
     }
   })
@@ -344,12 +345,12 @@ describe('per-section visual placement (Task 16 dispatchers)', () => {
   // WebConfidence's own eyebrow element. Deliberately NOT the bare word 'Confidence' — the
   // appendix's fallback bullets literally include 'Confidence: 0.85.', which would make a
   // substring check pass with the meter entirely absent.
-  const CONFIDENCE_HEAD = `<p class="${CAPS}" style="color:#5A5A54">Confidence</p>`
+  const CONFIDENCE_HEAD = `<p class="${CAPS_SOFT}">Confidence</p>`
   // WebCapacityBars' first bar label.
-  const CAPACITY_LABEL = `<span class="${CAPS}" style="color:#5A5A54">Capacity</span>`
+  const CAPACITY_LABEL = `<span class="${CAPS_SOFT}">Capacity</span>`
   const STAT_GRID = 'aria-label="Area scores with health bands"'
   const RANK_LIST = 'aria-label="Weakest questions, ranked"'
-  const THEME_SPLIT = `<p class="${CAPS}" style="color:#5A5A54">THEME OF THE WEAKEST INDICATORS</p>`
+  const THEME_SPLIT = `<p class="${CAPS_SOFT}">THEME OF THE WEAKEST INDICATORS</p>`
   const only = (id: string) => sections.filter((s) => s.id === id)
   const bodyOf = (id: string) =>
     `<p class="${BODY}">${escapeHtml(sections.find((s) => s.id === id)!.fallback.body)}</p>`
