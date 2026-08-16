@@ -235,7 +235,7 @@ function s9Bullets(facts: FactsPack): string[] {
  * *count* — see tests/report/fallback-sections.test.ts's dedicated "action_library path" checks,
  * which assert the exact enabler text against report.yaml, not just presence.
  */
-function roadmapEntries(facts: FactsPack, methodology: Methodology): Array<{ dayLabel: string; text: string }> {
+export function roadmapEntries(facts: FactsPack, methodology: Methodology): Array<{ dayLabel: string; text: string }> {
   const lib = methodology.report.action_library;
   const entries: Array<{ dayLabel: string; text: string }> = [];
 
