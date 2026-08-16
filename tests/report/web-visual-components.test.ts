@@ -4,14 +4,22 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
   WebCapacityBars,
+  WebChainRail,
   WebConstraintCallout,
   WebDumbbells,
+  WebPhaseRail,
+  WebSpread,
+  WebThemeSplit,
 } from '../../app/app/[churchId]/diagnosis/report/web-visuals'
-import { BAND_FILL, textOnBand } from '@/lib/report/charts'
+import { BAND_FILL, BAND_TEXT, THEME_FILL, textOnBand } from '@/lib/report/charts'
 import type {
   CapacityBarsModel,
+  ChainModel,
   ConstraintCalloutModel,
   DumbbellsModel,
+  PhaseRailModel,
+  SpreadModel,
+  ThemeSplitModel,
 } from '@/lib/report/web-visuals'
 
 const escapeHtml = (s: string) =>
@@ -156,5 +164,202 @@ describe('WebDumbbells', () => {
     // these two values, which the brief rules out explicitly.
     expect(html).toContain(escapeHtml('Evidence 30 · Belief 70'))
     expect(html).toContain(escapeHtml('Evidence 80 · Belief 25'))
+  })
+})
+
+describe('WebThemeSplit', () => {
+  // theology: zero-count row. systems: non-zero row. Both must render — a
+  // dropped zero row would hide the finding that a theme never appeared.
+  const model: ThemeSplitModel = {
+    rows: [
+      { theme: 'theology', label: 'THEOLOGY', count: 0, pct: 0 },
+      { theme: 'systems', label: 'SYSTEMS', count: 5, pct: 100 },
+    ],
+    total: 5,
+    label: 'THEME OF THE WEAKEST INDICATORS',
+  }
+  const html = renderToStaticMarkup(createElement(WebThemeSplit, { model }))
+
+  it('renders a zero-count row: label present, track present (even at 0% width), themed like any other row', () => {
+    // Regression this catches: the zero row being filtered out of `rows` before
+    // render (e.g. a `.filter(r => r.count > 0)` sneaking in) — both the label
+    // and the (empty) track would vanish along with it.
+    expect(html).toContain(`style="color:${THEME_FILL.theology}">THEOLOGY<`)
+    expect(html).toContain(`style="width:0%;background-color:${THEME_FILL.theology}"`)
+  })
+
+  it('colors a zero-count row\'s number INK_SOFT, not the theme colour', () => {
+    // Regression this catches: `row.count === 0 ? INK_SOFT : THEME_FILL[row.theme]`
+    // inverted or dropped — the 0 would render in THEME_FILL.theology instead.
+    expect(html).toContain('style="color:#5A5A54">0<')
+    expect(html).not.toContain(`style="color:${THEME_FILL.theology}">0<`)
+  })
+
+  it('colors a non-zero row\'s number THEME_FILL[row.theme], not INK_SOFT', () => {
+    // Regression this catches: the ternary always picking INK_SOFT (or the
+    // branches swapped) — the 5 would render grey instead of themed.
+    expect(html).toContain(`style="color:${THEME_FILL.systems}">5<`)
+    expect(html).not.toContain('style="color:#5A5A54">5<')
+  })
+})
+
+describe('WebSpread', () => {
+  // Two rows share id 'gov' on purpose: category_id is not guaranteed unique
+  // across dispersion rows, and the list key includes the index specifically
+  // so neither row is silently dropped.
+  const model: SpreadModel = {
+    rows: [
+      { id: 'gov', name: 'Governance Cadence', spread: 3.2, pct: 64, band: 'watch' },
+      { id: 'gov', name: 'Communication Rhythm', spread: 4.5, pct: 90, band: 'severe' },
+    ],
+    axisMax: 5,
+    axisMaxLabel: '5',
+    threshold: 2.1,
+    thresholdPct: 42,
+    thresholdLabel: 'THRESHOLD 2.1',
+  }
+  const html = renderToStaticMarkup(createElement(WebSpread, { model }))
+
+  it('places the threshold marker at left:model.thresholdPct%', () => {
+    // Regression this catches: the marker reading row.pct or model.axisMax
+    // instead of model.thresholdPct — the dashed line would drift to the wrong
+    // spot on the axis whenever thresholdPct differs from those other values.
+    expect(html).toContain(`style="left:${model.thresholdPct}%;border-color:#5A5A54"`)
+  })
+
+  it('renders BOTH rows even though they share the same id — nothing is dropped by a naive id-keyed dedup', () => {
+    // Regression this catches: keying the list on `row.id` alone (e.g. a
+    // `<li key={row.id}>` instead of `${row.id}-${i}`) would not, by itself,
+    // break renderToStaticMarkup output — but a de-dup written against that
+    // assumption (e.g. building a Map<id, row> before rendering) would silently
+    // drop the second 'gov' row. This proves both names and both spread values
+    // are present in one render.
+    expect(html).toContain(escapeHtml('Governance Cadence'))
+    expect(html).toContain(escapeHtml('Communication Rhythm'))
+    expect(html).toContain('>3.2<')
+    expect(html).toContain('>4.5<')
+  })
+})
+
+describe('WebChainRail', () => {
+  // Stage 1 has no gates (exercises the null branch). Stage 2 has one gate
+  // whose band ('severe') deliberately differs from its stage's band
+  // ('broken') — a gate chip must never inherit its stage's colour.
+  const model: ChainModel = {
+    stages: [
+      { id: 's1', ordinal: '01', name: 'Discipleship Pathway', score: 70, band: 'holding', gates: [] },
+      {
+        id: 's2',
+        ordinal: '02',
+        name: 'Community Formation',
+        score: 40,
+        band: 'broken',
+        gates: [
+          {
+            id: 'g1',
+            name: 'Volunteer Pipeline',
+            score: 22,
+            note: 'Only 12% of members serve regularly.',
+            band: 'severe',
+          },
+        ],
+      },
+    ],
+    reads: [],
+  }
+  const html = renderToStaticMarkup(createElement(WebChainRail, { model }))
+
+  it('renders no gates <ul> at all for a stage with an empty gates array', () => {
+    // Regression this catches: `stage.gates.length === 0 ? null : (...)`
+    // dropped or inverted, which would emit an empty `<ul role="list">` for
+    // stage 1. The count below is exactly 2 — the outer stages <ol> plus the
+    // ONE gates <ul> that stage 2 (non-empty) legitimately renders; a stray
+    // empty gates list for stage 1 would push it to 3.
+    expect((html.match(/role="list"/g) ?? []).length).toBe(2)
+  })
+
+  it('renders the gates <ul> with its chip for a stage with a non-empty gates array', () => {
+    expect(html).toContain(escapeHtml('Volunteer Pipeline'))
+    expect(html).toContain(escapeHtml('Only 12% of members serve regularly.'))
+  })
+
+  it("colors a gate chip by the gate's OWN band, not its stage's band", () => {
+    // Regression this catches: the gate chip reading `stage.band` (via a copy-
+    // paste from the stage badge above it) instead of `gate.band` — the chip
+    // would render broken's colours instead of severe's.
+    expect(html).toContain(
+      `style="background-color:${BAND_FILL.broken};color:${textOnBand('broken')}">02<`,
+    )
+    expect(html).toContain(`style="border-color:${BAND_FILL.severe}"`)
+    expect(html).toContain(`style="color:${BAND_TEXT.severe}">Volunteer Pipeline<`)
+    // The two bands' fills are distinct hexes, so the assertions above cannot
+    // pass by the stage and gate colours coincidentally matching.
+    expect(BAND_FILL.broken).not.toBe(BAND_FILL.severe)
+  })
+})
+
+describe('WebPhaseRail', () => {
+  // Two blocks: one at full opacity (severe/broken/holding bands render CREAM
+  // text on it), one at reduced opacity (must flip to INK — cream on a
+  // 30%/60%-strength ground is unreadable). Band 'broken' is deliberately NOT
+  // 'watch', so textOnBand(band) resolves to CREAM (#FAF7F0) — distinct from
+  // INK (#1A1A18) — and the two colour-flip tests below cannot pass by
+  // coincidence the way they could if band were 'watch' (where textOnBand
+  // already returns ink).
+  const model: PhaseRailModel = {
+    blocks: [
+      { numeral: '30', dayLabel: '30 Days', text: 'Fix the volunteer pipeline.', opacity: 1 },
+      { numeral: '60', dayLabel: '60 Days', text: 'Launch a new small group track.', opacity: 0.6 },
+    ],
+    band: 'broken',
+    supersedes: [
+      '30 Days — Fix the volunteer pipeline.',
+      '60 Days — Launch a new small group track.',
+    ],
+  }
+  const bullets = [
+    '30 Days — Fix the volunteer pipeline.',
+    '60 Days — Launch a new small group track.',
+    'Do not work on yet: launch a new campus.',
+  ]
+  const html = renderToStaticMarkup(createElement(WebPhaseRail, { model, bullets }))
+
+  it('drops every bullet that IS in model.supersedes', () => {
+    // Regression this catches: the filter inverted (`.filter(b =>
+    // model.supersedes.includes(b))`) or removed entirely — the superseded
+    // bullets would show up a second time, duplicating what the rail already
+    // displays.
+    expect(html).not.toContain(escapeHtml('30 Days — Fix the volunteer pipeline.'))
+    expect(html).not.toContain(escapeHtml('60 Days — Launch a new small group track.'))
+  })
+
+  it('keeps the one bullet that is NOT in model.supersedes, in the bullet list beneath', () => {
+    // Regression this catches: the filter dropped (bullets ignored entirely)
+    // or the `remaining` list never rendered — the "Do not work on yet" line
+    // (real deterministic prose s10Bullets appended) would be silently lost.
+    expect(html).toContain('list-disc')
+    expect(html).toContain(escapeHtml('Do not work on yet: launch a new campus.'))
+  })
+
+  it('emits no <ul> at all when nothing remains after filtering', () => {
+    const supersedeAll: PhaseRailModel = { ...model, supersedes: bullets }
+    const htmlNone = renderToStaticMarkup(createElement(WebPhaseRail, { model: supersedeAll, bullets }))
+    // Regression this catches: `remaining.length === 0 ? null : (...)` dropped,
+    // which would emit an empty `<ul class="list-disc ...">` — "never an empty
+    // frame" applies here too. The blocks list is an <ol>, so any `<ul` found
+    // can only be the (wrongly) non-null remaining list.
+    expect(htmlNone).not.toContain('<ul')
+  })
+
+  it('uses textOnBand(model.band) as text colour for a full-opacity (1) block', () => {
+    expect(html).toContain(`color:${textOnBand(model.band)}`)
+  })
+
+  it('uses INK (#1A1A18), not textOnBand, as text colour for a reduced-opacity (<1) block', () => {
+    // Regression this catches: `block.opacity === 1 ? textOnBand(model.band) :
+    // INK` inverted or dropped to always use textOnBand — the 60-day block
+    // would render CREAM text on its 60%-strength ground, which is the exact
+    // illegibility this ternary exists to prevent.
+    expect(html).toContain('color:#1A1A18')
   })
 })

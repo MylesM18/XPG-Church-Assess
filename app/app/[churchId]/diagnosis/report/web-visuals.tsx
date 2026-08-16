@@ -6,17 +6,25 @@
  * drops the implicit list role under display:grid (see charts.tsx:25-29).
  * Tracks and bars are aria-hidden; every value is also real text.
  */
-import { BAND_FILL, BAND_TEXT, textOnBand } from '@/lib/report/charts';
+import { BAND_FILL, BAND_TEXT, THEME_FILL, textOnBand } from '@/lib/report/charts';
 import type {
   CapacityBarsModel,
+  ChainModel,
   ConfidenceModel,
   ConstraintCalloutModel,
   DumbbellsModel,
+  PhaseRailModel,
+  SpreadModel,
+  ThemeSplitModel,
 } from '@/lib/report/web-visuals';
 
 const INK_SOFT = '#5A5A54';
 const RULE = '#D8D5CE';
 const CREAM = '#FAF7F0';
+const INK = '#1A1A18';
+/** Byte-identical to the LIST const in sections.tsx:17. Duplicated rather than
+ * exported because that one is module-private chrome, not a shared token. */
+const LIST = 'list-disc space-y-1 pl-5 font-body text-base leading-[1.6] text-ink';
 
 const CAPS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]';
 const NUM = 'font-display font-semibold leading-none';
@@ -215,5 +223,211 @@ export function WebDumbbells({ model }: { model: DumbbellsModel }) {
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * Which of the four themes the weakest indicators cluster in (spec §6.5).
+ *
+ * All four rows always render, including zero-count ones: "theology never
+ * appeared" is a finding, and dropping the row would hide it. A zero row keeps
+ * its label and an empty track, with the 0 in ink-soft rather than theme colour.
+ *
+ * No closing summary sentence — the label above is the whole frame.
+ */
+export function WebThemeSplit({ model }: { model: ThemeSplitModel }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className={CAPS} style={{ color: INK_SOFT }}>
+        {model.label}
+      </p>
+      <ul role="list" className="flex flex-col gap-2">
+        {model.rows.map((row) => (
+          <li key={row.theme} className="grid grid-cols-[6rem_1fr_2rem] items-center gap-3">
+            <span className={CAPS} style={{ color: THEME_FILL[row.theme] }}>
+              {row.label}
+            </span>
+            <span aria-hidden className="block h-2 w-full" style={{ backgroundColor: RULE }}>
+              <span
+                className="block h-full"
+                style={{ width: `${row.pct}%`, backgroundColor: THEME_FILL[row.theme] }}
+              />
+            </span>
+            <span
+              className={`${NUM} text-right text-[1.125rem]`}
+              style={{ color: row.count === 0 ? INK_SOFT : THEME_FILL[row.theme] }}
+            >
+              {row.count}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * How far apart respondents were, per flagged area (spec §6.6).
+ *
+ * facts.dispersion is FLAGGED-ONLY, so every bar here has already cleared the
+ * threshold. The dashed marker is therefore a floor every bar crosses, and it is
+ * labelled with the bare number — never "above", "below", or pass/fail language.
+ *
+ * The list key includes the index: two rows can legitimately share a category_id.
+ */
+export function WebSpread({ model }: { model: SpreadModel }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <ul role="list" className="flex flex-col gap-2">
+        {model.rows.map((row, i) => (
+          <li
+            key={`${row.id}-${i}`}
+            className="grid items-center gap-1 sm:grid-cols-[9rem_1fr_2.5rem] sm:gap-3"
+          >
+            <span className={CAPS} style={{ color: INK_SOFT }}>
+              {row.name}
+            </span>
+            <span aria-hidden className="relative block h-2 w-full" style={{ backgroundColor: RULE }}>
+              <span
+                className="absolute inset-y-0 left-0"
+                style={{ width: `${row.pct}%`, backgroundColor: BAND_FILL[row.band] }}
+              />
+              <span
+                className="absolute -inset-y-1 border-l border-dashed"
+                style={{ left: `${model.thresholdPct}%`, borderColor: INK_SOFT }}
+              />
+            </span>
+            <span
+              className={`${NUM} text-[1.125rem] sm:text-right`}
+              style={{ color: BAND_TEXT[row.band] }}
+            >
+              {row.spread}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className={CAPS} style={{ color: INK_SOFT }}>
+          {model.thresholdLabel}
+        </span>
+        <span className={CAPS} style={{ color: INK_SOFT }}>
+          {model.axisMaxLabel}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The five-stage dependency chain as a VERTICAL rail (spec §6.5). Vertical
+ * because gate chips have to sit beside the stage they gate, and a horizontal
+ * rail has nowhere to put them on a phone.
+ *
+ * Stage order is rules.chain, resolved in the model — never score order.
+ * Each gate chip carries its own band, which can differ from its stage's.
+ */
+export function WebChainRail({ model }: { model: ChainModel }) {
+  return (
+    <div className="flex flex-col gap-5">
+      <ol role="list" className="relative flex flex-col gap-5">
+        <span
+          aria-hidden
+          className="absolute bottom-3 left-3 top-3 w-px"
+          style={{ backgroundColor: RULE }}
+        />
+        {model.stages.map((stage) => (
+          <li key={stage.id} className="relative flex flex-col gap-2 pl-10">
+            <span
+              className="absolute left-0 top-0 flex h-6 w-6 items-center justify-center font-body text-[0.625rem] font-bold tracking-[0.04em]"
+              style={{ backgroundColor: BAND_FILL[stage.band], color: textOnBand(stage.band) }}
+            >
+              {stage.ordinal}
+            </span>
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="font-display text-[1.0625rem] font-semibold text-ink">{stage.name}</p>
+              <p className={`${NUM} text-[1.25rem]`} style={{ color: BAND_TEXT[stage.band] }}>
+                {stage.score}
+              </p>
+            </div>
+            {stage.gates.length === 0 ? null : (
+              <ul role="list" className="flex flex-col gap-2">
+                {stage.gates.map((gate) => (
+                  <li
+                    key={gate.id}
+                    className="flex flex-col gap-0.5 border-l-2 pl-2"
+                    style={{ borderColor: BAND_FILL[gate.band] }}
+                  >
+                    <span className="flex items-baseline gap-2">
+                      <span className={CAPS} style={{ color: BAND_TEXT[gate.band] }}>
+                        {gate.name}
+                      </span>
+                      <span
+                        className="font-body text-[0.6875rem] font-bold"
+                        style={{ color: BAND_TEXT[gate.band] }}
+                      >
+                        {gate.score}
+                      </span>
+                    </span>
+                    <span className="font-body text-[0.8125rem] leading-[1.5] text-ink">
+                      {gate.note}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/**
+ * The 30/60/90 roadmap as three colour-keyed blocks (spec §6.6). This is the one
+ * visual that REPLACES a section body rather than sitting beside it, so it also
+ * owns the bullets it does not supersede.
+ *
+ * s10Bullets renders the three phase entries AND may append a
+ * `Do not work on yet: ...` bullet that roadmapEntries() never produced. The
+ * model's `supersedes` holds the exact strings this rail stands in for; anything
+ * left over is real deterministic prose and is rendered beneath as an ordinary
+ * bullet list. No parsing, no new prose, nothing silently dropped.
+ *
+ * Text colour flips to ink below full opacity: textOnBand is computed for the
+ * band at full strength, and cream on a 30%-strength ground is unreadable.
+ */
+export function WebPhaseRail({ model, bullets }: { model: PhaseRailModel; bullets: string[] }) {
+  const remaining = bullets.filter((bullet) => !model.supersedes.includes(bullet));
+  return (
+    <div className="flex flex-col gap-4">
+      <ol role="list" className="flex flex-col gap-px">
+        {model.blocks.map((block) => (
+          <li key={block.dayLabel} className="relative px-5 py-4">
+            <span
+              aria-hidden
+              className="absolute inset-0"
+              style={{ backgroundColor: BAND_FILL[model.band], opacity: block.opacity }}
+            />
+            <div
+              className="relative flex flex-col gap-1"
+              style={{ color: block.opacity === 1 ? textOnBand(model.band) : INK }}
+            >
+              <div className="flex items-baseline gap-3">
+                <span className={`${NUM} text-[1.75rem]`}>{block.numeral}</span>
+                <span className={CAPS}>{block.dayLabel}</span>
+              </div>
+              <p className="font-body text-[0.9375rem] leading-[1.6]">{block.text}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      {remaining.length === 0 ? null : (
+        <ul className={LIST}>
+          {remaining.map((bullet) => (
+            <li key={bullet}>{bullet}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
