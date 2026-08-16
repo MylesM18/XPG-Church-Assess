@@ -383,26 +383,36 @@ export function WebChainRail({ model }: { model: ChainModel }) {
 }
 
 /**
- * The 30/60/90 roadmap as three colour-keyed blocks (spec §6.6). This is the one
- * visual that REPLACES a section body rather than sitting beside it, so it also
- * owns the bullets it does not supersede.
+ * The 30/60/90 roadmap as colour-keyed blocks (spec §6.6). This is the one visual
+ * that REPLACES a section body rather than sitting beside it, so it also owns the
+ * bullets it does not supersede.
  *
- * s10Bullets renders the three phase entries AND may append a
- * `Do not work on yet: ...` bullet that roadmapEntries() never produced. The
- * model's `supersedes` holds the exact strings this rail stands in for; anything
- * left over is real deterministic prose and is rendered beneath as an ordinary
- * bullet list. No parsing, no new prose, nothing silently dropped.
+ * NOT always three blocks: the foundation archetype emits one block per (phase,
+ * gated enabler) pair, so three gated enablers render nine. The model keys opacity
+ * off the PHASE, so however many blocks there are, every 30-day block is full
+ * strength, every 60-day block is 0.6 and every 90-day block is 0.3.
  *
- * Text colour flips to ink below full opacity: textOnBand is computed for the
- * band at full strength, and cream on a 30%-strength ground is unreadable.
+ * The list key includes the index for that same reason: with nine blocks drawn from
+ * three phases, `key={block.dayLabel}` would give nine siblings only three distinct
+ * keys — the identical hazard WebSpread's `${row.id}-${i}` key exists to avoid.
+ *
+ * s10Bullets renders the phase entries AND may append a `Do not work on yet: ...`
+ * bullet that roadmapEntries() never produced. The model's `supersedes` holds the
+ * exact strings this rail stands in for; anything left over is real deterministic
+ * prose and is rendered beneath as an ordinary bullet list. No parsing, no new
+ * prose, nothing silently dropped.
+ *
+ * Text colour flips to ink below full opacity: textOnBand is computed for the band
+ * at full strength, and cream on a 30%-strength ground is unreadable. Phase-keyed
+ * opacity therefore means the 30-day blocks — and only those — wear textOnBand.
  */
 export function WebPhaseRail({ model, bullets }: { model: PhaseRailModel; bullets: string[] }) {
   const remaining = bullets.filter((bullet) => !model.supersedes.includes(bullet));
   return (
     <div className="flex flex-col gap-4">
       <ol role="list" className="flex flex-col gap-px">
-        {model.blocks.map((block) => (
-          <li key={block.dayLabel} className="relative px-5 py-4">
+        {model.blocks.map((block, i) => (
+          <li key={`${block.dayLabel}-${i}`} className="relative px-5 py-4">
             <span
               aria-hidden
               className="absolute inset-0"

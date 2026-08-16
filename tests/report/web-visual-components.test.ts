@@ -1,4 +1,7 @@
 // `.ts` not `.tsx` (vitest.config.ts includes tests/**/*.test.ts only) — JSX as createElement.
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -12,6 +15,9 @@ import {
   WebThemeSplit,
 } from '../../app/app/[churchId]/diagnosis/report/web-visuals'
 import { BAND_FILL, BAND_TEXT, THEME_FILL, textOnBand } from '@/lib/report/charts'
+import { loadMethodology } from '@/lib/methodology/load'
+import { webVisuals } from '@/lib/report/web-visuals'
+import { FOUNDATION_3_FACTS } from '../fixtures/facts'
 import type {
   CapacityBarsModel,
   ChainModel,
@@ -397,5 +403,119 @@ describe('WebPhaseRail', () => {
     expect(reducedOpacityChunk).toContain('opacity:0.6"')
     expect(reducedOpacityChunk).toContain('color:#1A1A18')
     expect(reducedOpacityChunk).not.toContain(`color:${textOnBand(model.band)}`)
+  })
+})
+
+/**
+ * The foundation archetype's NINE-entry rail — the case every hand-built model above is
+ * structurally unable to reach, and the reason the phase-opacity defect survived a whole
+ * branch of reviews: the only foundation-archetype coverage asserted the MODEL and never
+ * rendered it.
+ *
+ * roadmapEntries (lib/report/fallback-sections.ts) loops `for phase { for gatedEnabler }`,
+ * so FOUNDATION_3_FACTS (3 gated enablers x 3 phases, per ruling 8) yields nine entries
+ * ordered [30/A, 30/B, 30/C, 60/A, ...]. Opacity must therefore encode the PHASE, not the
+ * array position: all three 30-day blocks share one opacity, all three 60-day blocks the
+ * next, all three 90-day blocks the third.
+ *
+ * Regression this catches: `PHASE_OPACITY[i]` keyed on array index, which rendered three
+ * consecutive "30 days" blocks at 1 / 0.6 / 0.3 and flattened all six 60- and 90-day
+ * blocks to 0.3 — the ramp stopped encoding phase at all.
+ *
+ * Every assertion below is scoped to a single block's own <li> chunk. A value appearing
+ * SOMEWHERE in this markup proves nothing: nine blocks draw from a three-value palette,
+ * so unscoped `toContain` checks pass on almost any misassignment.
+ */
+describe('WebPhaseRail — foundation archetype, nine roadmap entries', () => {
+  const model = webVisuals(FOUNDATION_3_FACTS, loadMethodology()).s10.phaseRail
+  // bullets: [] so the remaining-bullets <ul> contributes no extra <li> to split on.
+  const html = renderToStaticMarkup(createElement(WebPhaseRail, { model: model!, bullets: [] }))
+  const chunks = html.split('<li').slice(1)
+
+  const OPACITY = /opacity:([\d.]+)"/
+  // The day-label caption is the block's only element carrying the CAPS class; the numeral
+  // beside it carries NUM, and the body text carries the body class. All three are distinct.
+  const DAY_LABEL = /tracking-\[0\.1em\]">([^<]+)</
+  const INK_HEX = '#1A1A18'
+
+  it('is a genuine nine-block model, so nothing below passes vacuously on a three-block rail', () => {
+    expect(model).not.toBeNull()
+    expect(model!.blocks.length).toBe(9)
+    expect(chunks.length).toBe(9)
+  })
+
+  it('gives every 30-day block one opacity, every 60-day block the next, every 90-day block the third', () => {
+    const byDayLabel = new Map<string, string[]>()
+    for (const chunk of chunks) {
+      const dayLabel = DAY_LABEL.exec(chunk)?.[1]
+      const opacity = OPACITY.exec(chunk)?.[1]
+      // Both are read out of the SAME chunk, so each opacity is bound to the day label
+      // printed beside it — a cross-block mixup cannot survive this pairing.
+      expect(dayLabel).toBeDefined()
+      expect(opacity).toBeDefined()
+      byDayLabel.set(dayLabel!, [...(byDayLabel.get(dayLabel!) ?? []), opacity!])
+    }
+
+    expect([...byDayLabel.keys()].sort()).toEqual(['30 days', '60 days', '90 days'])
+    expect(byDayLabel.get('30 days')).toEqual(['1', '1', '1'])
+    expect(byDayLabel.get('60 days')).toEqual(['0.6', '0.6', '0.6'])
+    expect(byDayLabel.get('90 days')).toEqual(['0.3', '0.3', '0.3'])
+  })
+
+  it('flips text to INK on every reduced-opacity block, so ONLY the three 30-day blocks wear textOnBand', () => {
+    // Guard first: on the 'watch' band textOnBand already returns INK, which would make
+    // every assertion below trivially true. Fail loudly if this fixture ever lands there.
+    const onBand = textOnBand(model!.band)
+    expect(onBand).not.toBe(INK_HEX)
+
+    for (const chunk of chunks) {
+      const dayLabel = DAY_LABEL.exec(chunk)![1]
+      if (dayLabel === '30 days') {
+        expect(chunk).toContain(`color:${onBand}`)
+        expect(chunk).not.toContain(`color:${INK_HEX}`)
+      } else {
+        expect(chunk).toContain(`color:${INK_HEX}`)
+        expect(chunk).not.toContain(`color:${onBand}`)
+      }
+    }
+  })
+
+  it('renders nine separate list items, each carrying its OWN day label bound to its OWN text', () => {
+    // Stand-in for key uniqueness. React puts no keys in static markup, and React 19's
+    // server renderer emits no duplicate-key warning either (verified empirically — the
+    // reconciler's duplicate-key check is client-side), so the observable property is that
+    // all nine blocks survive as nine <li>s with their own content. This proves nothing
+    // about the key EXPRESSION on its own; the source assertion below covers that.
+    expect(chunks.length).toBe(model!.blocks.length)
+    model!.blocks.forEach((block, i) => {
+      expect(chunks[i]).toContain(`>${escapeHtml(block.dayLabel)}<`)
+      expect(chunks[i]).toContain(`>${escapeHtml(block.text)}<`)
+    })
+    // The nine texts are nine distinct action_library strings, so the per-chunk pairing
+    // above cannot be satisfied by a component that renders one block nine times.
+    expect(new Set(model!.blocks.map((b) => b.text)).size).toBe(9)
+  })
+
+  it('keys each block on the index too — three distinct day labels cannot key nine siblings', () => {
+    // SOURCE-READING assertion (same approach as tests/a11y/shared-report-heading.test.ts):
+    // duplicate React keys are invisible in rendered markup, so the only place to catch
+    // `key={block.dayLabel}` is the source. Written against the map callback's own
+    // parameter name rather than a literal key string, so renaming `i` does not break it.
+    const source = fs.readFileSync(
+      path.join(
+        fileURLToPath(new URL('../..', import.meta.url)),
+        'app', 'app', '[churchId]', 'diagnosis', 'report', 'web-visuals.tsx',
+      ),
+      'utf8',
+    )
+    const railBody = source.slice(source.indexOf('export function WebPhaseRail'))
+    const mapCall = /model\.blocks\.map\(\(\s*(\w+)\s*,\s*(\w+)\s*\)\s*=>/.exec(railBody)
+    expect(mapCall).not.toBeNull()
+
+    const indexParam = mapCall![2]!
+    const liStart = railBody.indexOf('<li')
+    const liTagHead = railBody.slice(liStart, railBody.indexOf('className', liStart))
+    expect(liTagHead).toContain('key=')
+    expect(liTagHead).toContain(`\${${indexParam}}`)
   })
 })

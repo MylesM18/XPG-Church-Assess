@@ -373,20 +373,39 @@ describe('webVisuals — s10 phase rail', () => {
     expect(remaining).toEqual([doNotWorkOnYet]);
   });
 
-  it('clamps opacity to 0.3 past the third block when more than three phase entries fire (foundation, multiple gated enablers)', () => {
+  // REWRITTEN (whole-branch fix wave). This test previously asserted the index-keyed ramp
+  // ("clamps opacity to 0.3 past the third block"): blocks[0..2] = 1 / 0.6 / 0.3 and every
+  // block from index 3 on = 0.3. That pinned the DEFECT, not the intent — on the nine-entry
+  // foundation rail it meant three consecutive "30 days" blocks stepping down through the
+  // whole ramp while all six 60- and 90-day blocks sat flat at 0.3, so opacity no longer
+  // encoded phase. Opacity is now keyed off the entry's own phase, and this test asserts
+  // that property instead: one opacity per phase, shared by every entry in that phase.
+  it('keys opacity to the PHASE, not the array position, when more than three phase entries fire (foundation, multiple gated enablers)', () => {
     // FOUNDATION_3_FACTS has THREE gated enablers (ruling 8: 3 gated => 9 roadmap entries,
-    // 3 phases x 3 enablers), so this is guaranteed to exceed PHASE_OPACITY's length of 3.
+    // 3 phases x 3 enablers), so this is guaranteed to exceed the ramp's three values.
     const entries = roadmapEntries(FOUNDATION_3_FACTS, methodology);
     expect(entries.length).toBeGreaterThan(3);
 
     const model = webVisuals(FOUNDATION_3_FACTS, methodology).s10.phaseRail;
     expect(model).not.toBeNull();
     expect(model!.blocks.length).toBe(entries.length);
-    expect(model!.blocks[0]!.opacity).toBe(1);
-    expect(model!.blocks[1]!.opacity).toBe(0.6);
-    expect(model!.blocks[2]!.opacity).toBe(0.3);
-    for (let i = 3; i < model!.blocks.length; i++) {
-      expect(model!.blocks[i]!.opacity).toBe(0.3);
-    }
+
+    // Pair each block's opacity with its OWN entry's phase by index, so a block that took
+    // another phase's opacity cannot pass. The three values and their order are unchanged.
+    const expected: Record<string, number> = { align: 1, build: 0.6, scale: 0.3 };
+    const byPhase = new Map<string, number[]>();
+    model!.blocks.forEach((block, i) => {
+      const { phase } = entries[i]!;
+      expect(block.opacity).toBe(expected[phase]);
+      byPhase.set(phase, [...(byPhase.get(phase) ?? []), block.opacity]);
+    });
+
+    // All three phases really are present with more than one entry each — otherwise the
+    // per-block check above could be satisfied by a three-entry rail that never exercises
+    // the many-entries-per-phase case this test exists for.
+    expect([...byPhase.keys()].sort()).toEqual(['align', 'build', 'scale']);
+    expect(byPhase.get('align')).toEqual([1, 1, 1]);
+    expect(byPhase.get('build')).toEqual([0.6, 0.6, 0.6]);
+    expect(byPhase.get('scale')).toEqual([0.3, 0.3, 0.3]);
   });
 });

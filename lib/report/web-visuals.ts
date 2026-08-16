@@ -21,7 +21,7 @@ import type { CategoryState } from '../engine/types';
 import type { FactsPack } from './facts';
 import { readingBand } from './view';
 import { verdictBandFor, type BandKey } from './charts';
-import { roadmapEntries } from './fallback-sections';
+import { roadmapEntries, type Phase } from './fallback-sections';
 
 /** Clamp a 0-100 score into a track percentage. */
 function pct(value: number): number {
@@ -132,8 +132,15 @@ export type ChainStage = {
 export type ChainModel = { stages: ChainStage[]; reads: string[] };
 
 /** 30 / 60 / 90 step the verdict band down in opacity — the same
- * same-hex-reduced-opacity treatment the s3 throughput bar uses. No new colours. */
-const PHASE_OPACITY = [1, 0.6, 0.3];
+ * same-hex-reduced-opacity treatment the s3 throughput bar uses. No new colours.
+ *
+ * Keyed by PHASE, never by the entry's position in roadmapEntries: the foundation archetype
+ * emits one entry per (phase, gated enabler) pair, so three gated enablers produce NINE
+ * entries ordered [30/A, 30/B, 30/C, 60/A, ...]. An index-keyed ramp gave those three
+ * consecutive 30-day blocks 1 / 0.6 / 0.3 and flattened all six 60- and 90-day blocks to
+ * 0.3, so opacity stopped encoding phase entirely. Phase-keyed, every 30-day block is full
+ * strength, every 60-day block is 0.6 and every 90-day block is 0.3, however many there are. */
+const PHASE_OPACITY: Record<Phase, number> = { align: 1, build: 0.6, scale: 0.3 };
 
 export type PhaseRailBlock = { numeral: string; dayLabel: string; text: string; opacity: number };
 
@@ -336,11 +343,11 @@ function phaseRail(facts: FactsPack, methodology: Methodology): PhaseRailModel |
   if (entries.length === 0) return null;
 
   return {
-    blocks: entries.map((entry, i) => ({
+    blocks: entries.map((entry) => ({
       numeral: entry.dayLabel.split(' ')[0] ?? entry.dayLabel,
       dayLabel: entry.dayLabel,
       text: entry.text,
-      opacity: PHASE_OPACITY[i] ?? PHASE_OPACITY[PHASE_OPACITY.length - 1]!,
+      opacity: PHASE_OPACITY[entry.phase],
     })),
     band: verdictBandFor(facts.overall.tier.id),
     supersedes: entries.map((entry) => `${entry.dayLabel} — ${entry.text}`),

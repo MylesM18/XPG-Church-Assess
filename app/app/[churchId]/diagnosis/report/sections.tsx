@@ -275,8 +275,21 @@ function SectionContent({ section, areaIndex }: { section: AssembledSection; are
 type AboveId = 's3' | 's4' | 's7' | 's9'
 type BelowId = 's4' | 's7' | 's8' | 'appendix'
 
-const ABOVE_IDS: readonly string[] = ['s3', 's4', 's7', 's9']
-const BELOW_IDS: readonly string[] = ['s4', 's7', 's8', 'appendix']
+/**
+ * `as const satisfies readonly AboveId[]` / `readonly BelowId[]` is load-bearing, not tidiness.
+ * Typed as `readonly string[]` these arrays drifted from the unions silently: an id added here
+ * without a matching `case` below still passed the `.includes` guard, fell through to the
+ * `never` default, and RETURNED `section.id` — which React renders as a visible text node, i.e.
+ * a raw section id printed on a public page. `satisfies` makes tsc, not a reader, catch that.
+ *
+ * `.includes(section.id)` then needs the widening cast back to `readonly string[]`: section.id
+ * is a SectionId, which is deliberately WIDER than these unions (that is the whole point of the
+ * guard), and a `readonly AboveId[]`'s `includes` only accepts an AboveId. The cast is on the
+ * array, never on section.id — narrowing the argument instead would be the same silent lie this
+ * comment exists to prevent. Runtime behaviour is unchanged: same values, same order.
+ */
+const ABOVE_IDS = ['s3', 's4', 's7', 's9'] as const satisfies readonly AboveId[]
+const BELOW_IDS = ['s4', 's7', 's8', 'appendix'] as const satisfies readonly BelowId[]
 
 function chartOfKind(section: AssembledSection, kind: ChartModel['kind']) {
   return section.charts.find((chart) => chart.kind === kind) ?? null
@@ -289,7 +302,7 @@ function SectionVisualsAbove({
   section: AssembledSection
   visuals: WebVisuals
 }) {
-  if (!ABOVE_IDS.includes(section.id)) {
+  if (!(ABOVE_IDS as readonly string[]).includes(section.id)) {
     return (
       <>
         {section.charts.map((chart) => (
@@ -340,7 +353,7 @@ function SectionVisualsBelow({
   section: AssembledSection
   visuals: WebVisuals
 }) {
-  if (!BELOW_IDS.includes(section.id)) return null
+  if (!(BELOW_IDS as readonly string[]).includes(section.id)) return null
 
   const rankList = chartOfKind(section, 'rank_list')
 
