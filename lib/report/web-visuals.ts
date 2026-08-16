@@ -16,7 +16,7 @@
  * Attached to ResolvedReportSections beside `cover`, NEVER to section.charts:
  * tests/report/chart-parity.test.ts hard-codes the three known chart kinds.
  */
-import type { Methodology } from '../methodology/schema';
+import type { Methodology, Theme } from '../methodology/schema';
 import type { CategoryState } from '../engine/types';
 import type { FactsPack } from './facts';
 import { readingBand } from './view';
@@ -87,9 +87,38 @@ export type DumbbellRow = {
 
 export type DumbbellsModel = { rows: DumbbellRow[] };
 
+/** Canonical key order, used only to break count ties (spec §6.5). */
+const THEME_ORDER: Theme[] = ['systems', 'culture', 'theology', 'relational'];
+
+export type ThemeSplitRow = { theme: Theme; label: string; count: number; pct: number };
+
+export type ThemeSplitModel = {
+  rows: ThemeSplitRow[];
+  total: number;
+  /** Not "the six" — bottom_items can be fewer than six. */
+  label: string;
+};
+
+export type SpreadRow = { id: string; name: string; spread: number; pct: number; band: BandKey };
+
+export type SpreadModel = {
+  rows: SpreadRow[];
+  /** Self-scaling axis: max(ceil(largest spread), 4). Never clips. A true 0-10
+   * axis would stub every bar (spread is a 0-10 population SD at 2dp). */
+  axisMax: number;
+  axisMaxLabel: string;
+  threshold: number;
+  thresholdPct: number;
+  /** dispersion is flagged-only, so this marker is a floor every bar crosses.
+   * Never "above"/"below", never pass/fail language. */
+  thresholdLabel: string;
+};
+
 export type WebVisuals = {
   s3: { capacity: CapacityBarsModel };
   s4: { constraint: ConstraintCalloutModel | null; dumbbells: DumbbellsModel | null };
+  s7: { themeSplit: ThemeSplitModel | null };
+  s8: { spread: SpreadModel | null };
   s13: { confidence: ConfidenceModel };
 };
 
@@ -183,6 +212,45 @@ function dumbbells(facts: FactsPack, methodology: Methodology): DumbbellsModel |
   };
 }
 
+function themeSplit(facts: FactsPack): ThemeSplitModel | null {
+  const total = THEME_ORDER.reduce((sum, theme) => sum + facts.pattern_counts[theme], 0);
+  if (total === 0) return null;
+
+  const rows = THEME_ORDER.map((theme) => ({
+    theme,
+    label: theme.toUpperCase(),
+    count: facts.pattern_counts[theme],
+    pct: (facts.pattern_counts[theme] / total) * 100,
+  })).sort((a, b) =>
+    b.count - a.count || THEME_ORDER.indexOf(a.theme) - THEME_ORDER.indexOf(b.theme),
+  );
+
+  return { rows, total, label: 'THEME OF THE WEAKEST INDICATORS' };
+}
+
+function spreadModel(facts: FactsPack, methodology: Methodology): SpreadModel | null {
+  if (facts.dispersion.length === 0) return null;
+
+  const largest = Math.max(...facts.dispersion.map((d) => d.spread));
+  const axisMax = Math.max(Math.ceil(largest), 4);
+  const threshold = methodology.rules.thresholds.dispersion;
+
+  return {
+    rows: facts.dispersion.map((d) => ({
+      id: d.category_id,
+      name: d.name,
+      spread: d.spread,
+      pct: (d.spread / axisMax) * 100,
+      band: categoryLookup(facts, methodology, d.category_id)?.band ?? 'severe',
+    })),
+    axisMax,
+    axisMaxLabel: String(axisMax),
+    threshold,
+    thresholdPct: (threshold / axisMax) * 100,
+    thresholdLabel: `THRESHOLD ${threshold.toFixed(1)}`,
+  };
+}
+
 export function webVisuals(facts: FactsPack, methodology: Methodology): WebVisuals {
   return {
     s3: { capacity: capacityBars(facts) },
@@ -190,6 +258,8 @@ export function webVisuals(facts: FactsPack, methodology: Methodology): WebVisua
       constraint: constraintCallout(facts, methodology),
       dumbbells: dumbbells(facts, methodology),
     },
+    s7: { themeSplit: themeSplit(facts) },
+    s8: { spread: spreadModel(facts, methodology) },
     s13: { confidence: confidenceModel(facts) },
   };
 }

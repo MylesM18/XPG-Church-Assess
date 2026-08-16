@@ -158,3 +158,73 @@ describe('webVisuals — s4 blind-spot dumbbells', () => {
     expect(webVisuals(makeFacts({ blind_spots: [] }), methodology).s4.dumbbells).toBeNull();
   });
 });
+
+describe('webVisuals — s7 theme split', () => {
+  const methodology = loadMethodology();
+
+  it('always renders all four themes, descending by count, ties in canonical order', () => {
+    const facts = makeFacts({
+      pattern_counts: { systems: 1, culture: 3, theology: 0, relational: 1 },
+    });
+    const model = webVisuals(facts, methodology).s7.themeSplit;
+    expect(model).not.toBeNull();
+    expect(model!.total).toBe(5);
+    expect(model!.rows).toHaveLength(4);
+    expect(model!.rows.map((r) => r.theme)).toEqual(['culture', 'systems', 'relational', 'theology']);
+    expect(model!.rows.map((r) => r.count)).toEqual([3, 1, 1, 0]);
+    expect(model!.rows[0]!.pct).toBeCloseTo(60, 5);
+    expect(model!.rows[3]!.pct).toBeCloseTo(0, 5);
+    expect(model!.rows[0]!.label).toBe('CULTURE');
+    expect(model!.label).toBe('THEME OF THE WEAKEST INDICATORS');
+  });
+
+  it('is omitted when the total is zero', () => {
+    const facts = makeFacts({
+      bottom_items: [],
+      pattern_counts: { systems: 0, culture: 0, theology: 0, relational: 0 },
+    });
+    expect(webVisuals(facts, methodology).s7.themeSplit).toBeNull();
+  });
+});
+
+describe('webVisuals — s8 disagreement spread', () => {
+  const methodology = loadMethodology();
+
+  it('self-scales the axis to at least 4 and reads the threshold from methodology', () => {
+    const cat = CAPACITY_FACTS.categories[0]!;
+    const facts = makeFacts({
+      dispersion: [{ category_id: cat.id, name: cat.name, spread: 2.4 }],
+    });
+    const model = webVisuals(facts, methodology).s8.spread;
+    expect(model).not.toBeNull();
+    expect(model!.axisMax).toBe(4);
+    expect(model!.axisMaxLabel).toBe('4');
+    expect(model!.threshold).toBe(methodology.rules.thresholds.dispersion);
+    expect(model!.thresholdLabel).toBe('THRESHOLD 2.0');
+    expect(model!.thresholdPct).toBeCloseTo(50, 5);
+    expect(model!.rows[0]!.pct).toBeCloseTo(60, 5);
+    expect(model!.rows[0]!.band).toBe(
+      readingBand(cat.state as CategoryState, cat.score, methodology.rules.thresholds),
+    );
+  });
+
+  it('grows the axis past 4 and never clips the largest bar', () => {
+    const cat = CAPACITY_FACTS.categories[0]!;
+    const facts = makeFacts({
+      dispersion: [
+        { category_id: cat.id, name: cat.name, spread: 5.2 },
+        { category_id: cat.id, name: cat.name, spread: 3.1 },
+      ],
+    });
+    const model = webVisuals(facts, methodology).s8.spread;
+    expect(model!.axisMax).toBe(6);
+    for (const row of model!.rows) {
+      expect(row.pct).toBeLessThanOrEqual(100);
+    }
+    expect(model!.rows[0]!.pct).toBeCloseTo((5.2 / 6) * 100, 5);
+  });
+
+  it('is omitted when nothing was flagged', () => {
+    expect(webVisuals(makeFacts({ dispersion: [] }), methodology).s8.spread).toBeNull();
+  });
+});
