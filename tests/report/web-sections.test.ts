@@ -14,7 +14,7 @@ import { areaIndexFrom, BAND_FILL, BAND_NAME, BAND_TEXT, textOnBand } from '@/li
 import type { BandKey, ChartModel } from '@/lib/report/charts'
 import { bookingCta } from '@/lib/report/cta'
 import { webVisuals } from '@/lib/report/web-visuals'
-import { CAPACITY_FACTS } from '../fixtures/facts'
+import { CAPACITY_FACTS, HOLDING_FACTS, WATCH_FACTS } from '../fixtures/facts'
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const methodology = loadMethodology()
@@ -216,6 +216,24 @@ describe('WebVerdictBlock (rebuilt in HTML) + the WebStatGrid percentile line', 
     (c): c is Extract<ChartModel, { kind: 'verdict_block' }> => c.kind === 'verdict_block',
   )
   const PCTL_CAPS = 'mt-1 font-body text-[0.625rem] font-bold uppercase tracking-[0.1em] text-ink-soft'
+  // Shared by both stat-grid <ul>s on the page (this fixture's s3 grid AND the verdict block's
+  // own context-stats <ul>) — always used scoped to one <ul>...</ul>, never over the whole page.
+  const STAT_GRID_LI = '<li class="flex flex-col border-b border-r border-line p-3">'
+
+  // WATCH_FACTS / HOLDING_FACTS (tests/fixtures/facts/index.ts) are the only two fixtures whose
+  // capacity clears 70 — every other fixture tops out around capacity 60 — so they are the only
+  // source for the 'watch'/'holding' hero bands and, on WATCH_FACTS, the null-percentile branch.
+  const watchSections = assembleFallbackOnly({ facts: WATCH_FACTS, methodology, reflections: [] })
+  const watchGrid = watchSections
+    .find((s) => s.id === 's3')!
+    .charts.find((c): c is Extract<ChartModel, { kind: 'stat_grid' }> => c.kind === 'stat_grid')!
+  const watchVerdict = watchSections
+    .find((s) => s.id === 's3')!
+    .charts.find((c): c is Extract<ChartModel, { kind: 'verdict_block' }> => c.kind === 'verdict_block')!
+  const holdingSections = assembleFallbackOnly({ facts: HOLDING_FACTS, methodology, reflections: [] })
+  const holdingVerdict = holdingSections
+    .find((s) => s.id === 's3')!
+    .charts.find((c): c is Extract<ChartModel, { kind: 'verdict_block' }> => c.kind === 'verdict_block')!
 
   it('renders the percentile line as real text for every cell whose percentile is non-null (the only direction this fixture can exercise — see the dedicated test below)', () => {
     expect(grid, 's3 must carry a stat grid').toBeDefined()
@@ -231,30 +249,66 @@ describe('WebVerdictBlock (rebuilt in HTML) + the WebStatGrid percentile line', 
     expect(count).toBe(nonNull.length)
   })
 
-  it('the null branch (no PCTL line, no empty frame, no "n/a") cannot be exercised by any current fixture — documented rather than fabricated', () => {
-    // tests/fixtures/facts/index.ts:58 hard-codes `percentile: 40` inside the shared `cat()`
-    // helper every fixture builds categories through (the same comment there flags this as a
-    // known fix-round-1 gap: CategoryState 'watch' has the identical hole). ALL_FIXTURES
-    // therefore never produces a null percentile, so the "entirely ABSENT" half of this
-    // assertion has no real render path to exercise without either fabricating a synthetic
-    // model or hand-breaking a FactsPack fixture — the same call the coordinator made for
-    // phaseRail's unreachable 0-entry branch in task-9-report.md's "Conclusion". This test
-    // documents that fact directly against the fixture source (not a fabricated one) so a
-    // future fixture change that introduces a null percentile fails it and surfaces the gap.
-    expect(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', 'facts', 'index.ts'), 'utf8')).toContain(
-      'percentile: 40,',
-    )
+  it('renders the TH PCTL line for a non-null percentile and omits it entirely — no empty element, no placeholder — for a null one, scoped per stat cell', () => {
+    // REPLACES the old guard test, which only asserted the literal string 'percentile: 40,'
+    // existed in tests/fixtures/facts/index.ts — a source-text check with no render path at
+    // all: it would not have failed if charts.tsx's `cell.percentile === null ? null : (<p>
+    // ...</p>)` were replaced with an unconditional render. cat() now takes an optional
+    // percentile (defaulting to the same 40 every other fixture still gets) and WATCH_FACTS's
+    // categoriesFrom call overrides it to null for `sys` only — the first fixture that produces
+    // a null percentile at all — so this is the first real render coverage of that branch in
+    // either direction.
+    const nullCells = watchGrid.cells.filter((c) => c.percentile === null)
+    const nonNullCells = watchGrid.cells.filter((c) => c.percentile !== null)
+    expect(nullCells.map((c) => c.id), 'fixture must exercise the null branch').toEqual(['sys'])
+    expect(nonNullCells.length, 'fixture must also exercise the non-null branch').toBe(watchGrid.cells.length - 1)
+
+    const html = render(watchSections, 'watch')
+    // Scoped to the s3 stat grid's own <ul>...</ul>: WebVerdictBlock's stats <li> shares the
+    // exact same class string (STAT_GRID_LI), so splitting the whole page would interleave
+    // cells from both grids.
+    const ulStart = html.lastIndexOf('<ul', html.indexOf('aria-label="Area scores with health bands"'))
+    const ulEnd = html.indexOf('</ul>', ulStart)
+    const scoped = html.slice(ulStart, ulEnd)
+    const chunks = scoped.split(STAT_GRID_LI).slice(1)
+    expect(chunks.length).toBe(watchGrid.cells.length)
+    watchGrid.cells.forEach((cell, i) => {
+      const chunk = chunks[i]!
+      if (cell.percentile === null) {
+        expect(chunk, cell.id).not.toContain(PCTL_CAPS)
+      } else {
+        expect(chunk, cell.id).toContain(`<p class="${PCTL_CAPS}">${cell.percentile}TH PCTL</p>`)
+      }
+    })
   })
 
-  it('renders the hero score and tier caption as real text, hero colour from BAND_TEXT[model.hero.band]', () => {
-    expect(verdict, 's3 must carry a verdict block').toBeDefined()
-    const html = render(sections, 'holding')
-    const hero = verdict!.hero
+  it("renders the hero score and tier caption as real text, hero colour from BAND_TEXT[model.hero.band] — proven non-vacuous against 'watch', the one band where BAND_TEXT and BAND_FILL diverge", () => {
+    // REPLACES the old assertion, which rendered CAPACITY_FACTS — tier 'strained' -> hero band
+    // 'broken', where BAND_TEXT.broken === BAND_FILL.broken are the literal same hex — so it
+    // would have passed identically had sections.tsx read BAND_FILL instead of BAND_TEXT.
+    // WATCH_FACTS is 'healthy_stretched' -> hero band 'watch', where BAND_TEXT.watch '#906722'
+    // and BAND_FILL.watch '#C08A2E' differ, so a BAND_FILL swap in the source actually fails
+    // this test (verified by mutation — see the task report).
+    expect(WATCH_FACTS.overall.tier.id, 'fixture precondition').toBe('healthy_stretched')
+    expect(watchVerdict.hero.band, 'fixture precondition').toBe('watch')
+    expect(BAND_TEXT.watch, 'the premise this fixture exists to prove').not.toBe(BAND_FILL.watch)
+    const html = render(watchSections, 'watch')
+    const hero = watchVerdict.hero
     expect(html).toContain(
       `<p class="font-display font-semibold leading-none" style="font-size:clamp(3.5rem, 12vw, 5.25rem);color:${BAND_TEXT[hero.band]}">${hero.score}</p>`,
     )
     expect(html).toContain(
       `<p class="font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-ink-soft">${escapeHtml(`${hero.tierName} · Overall Health`.toUpperCase())}</p>`,
+    )
+  })
+
+  it("also renders the holding fixture's hero in BAND_TEXT.holding, confirming both new fixtures land in the tier they were built for", () => {
+    expect(WATCH_FACTS.overall.tier.id).toBe('healthy_stretched')
+    expect(HOLDING_FACTS.overall.tier.id).toBe('healthy_ready')
+    expect(holdingVerdict.hero.band, 'fixture precondition').toBe('holding')
+    const html = render(holdingSections, 'holding')
+    expect(html).toContain(
+      `<p class="font-display font-semibold leading-none" style="font-size:clamp(3.5rem, 12vw, 5.25rem);color:${BAND_TEXT.holding}">${holdingVerdict.hero.score}</p>`,
     )
   })
 
