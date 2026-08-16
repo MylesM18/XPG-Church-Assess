@@ -290,6 +290,19 @@ export type CoverStripSeg = {
   w: number;
 };
 
+/** rules.tiers is a fixed four-key object, not an array (methodology/schema.ts:86-91),
+ * so the ladder's worst -> best row order is hand-ordered here. It matches
+ * STRIP_BANDS and verdictBandFor one-for-one. */
+export const LADDER_ORDER = ['at_risk', 'strained', 'healthy_stretched', 'healthy_ready'] as const;
+export type LadderTierId = (typeof LADDER_ORDER)[number];
+export type CoverLadderRow = {
+  tierId: LadderTierId;
+  name: string;
+  band: BandKey;
+  /** True for the church's own tier. Renderers set aria-current on this row. */
+  active: boolean;
+};
+
 export type CoverModel = {
   score: number;
   tierName: string;
@@ -298,6 +311,9 @@ export type CoverModel = {
    * as s3's first bullet (§5-sanctioned reuse; no new prose is created). */
   headline: string;
   strip: { width: number; segments: CoverStripSeg[]; marker: { x: number } };
+  /** Four discrete tier steps, worst -> best (spec §6.2). WEB ONLY — the PDF
+   * keeps rendering `strip`. */
+  ladder: CoverLadderRow[];
   caption: { tierName: string; score: number };
 };
 
@@ -320,6 +336,12 @@ export function coverModel(facts: FactsPack, methodology: Methodology): CoverMod
       segments: STRIP_BANDS.map((b, i) => ({ band: b, name: BAND_NAME[b], x: i * segW, w: segW })),
       marker: { x: plotWidth(facts.overall.capacity, CHART_W) },
     },
+    ladder: LADDER_ORDER.map((tierId) => ({
+      tierId,
+      name: methodology.rules.tiers[tierId].name,
+      band: verdictBandFor(tierId),
+      active: tierId === facts.overall.tier.id,
+    })),
     caption: { tierName: facts.overall.tier.name, score: facts.overall.capacity },
   };
 }

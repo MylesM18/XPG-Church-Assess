@@ -222,6 +222,21 @@ describe('coverModel', () => {
     }
   });
 
+  it('builds a worst-to-best tier ladder with exactly one active row', () => {
+    for (const { facts } of ALL_FIXTURES) {
+      const model = coverModel(facts, methodology);
+      expect(model.ladder.map((r) => r.tierId)).toEqual([
+        'at_risk', 'strained', 'healthy_stretched', 'healthy_ready',
+      ]);
+      expect(model.ladder.map((r) => r.band)).toEqual(['severe', 'broken', 'watch', 'holding']);
+      for (const row of model.ladder) {
+        expect(row.name).toBe(methodology.rules.tiers[row.tierId].name);
+        expect(row.active).toBe(row.tierId === facts.overall.tier.id);
+      }
+      expect(model.ladder.filter((r) => r.active)).toHaveLength(1);
+    }
+  });
+
   it('is pure', () => {
     expect(coverModel(CAPACITY_FACTS, methodology)).toEqual(coverModel(CAPACITY_FACTS, methodology));
   });
