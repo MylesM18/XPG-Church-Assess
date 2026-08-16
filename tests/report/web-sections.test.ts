@@ -143,6 +143,76 @@ describe('web s6 dossier heads (parity with the PDF)', () => {
   })
 })
 
+describe('WebVerdictBlock (rebuilt in HTML) + the WebStatGrid percentile line', () => {
+  const s3 = sections.find((s) => s.id === 's3')
+  const grid = s3?.charts.find((c): c is Extract<ChartModel, { kind: 'stat_grid' }> => c.kind === 'stat_grid')
+  const verdict = s3?.charts.find(
+    (c): c is Extract<ChartModel, { kind: 'verdict_block' }> => c.kind === 'verdict_block',
+  )
+  const PCTL_CAPS = 'mt-1 font-body text-[0.625rem] font-bold uppercase tracking-[0.1em] text-ink-soft'
+
+  it('renders the percentile line as real text for every cell whose percentile is non-null (the only direction this fixture can exercise — see the dedicated test below)', () => {
+    expect(grid, 's3 must carry a stat grid').toBeDefined()
+    const html = render(sections, 'holding')
+    const nonNull = grid!.cells.filter((c) => c.percentile !== null)
+    expect(nonNull.length, 'this fixture pins percentile:40 on every category').toBe(grid!.cells.length)
+    for (const c of nonNull) {
+      expect(html, c.id).toContain(`<p class="${PCTL_CAPS}">${c.percentile}TH PCTL</p>`)
+    }
+    // Occurrence-count equality, not a presence check: fails if a cell's line goes missing AND
+    // if a stray extra line appears.
+    const count = (html.match(new RegExp(escapeRe(`<p class="${PCTL_CAPS}">`), 'g')) ?? []).length
+    expect(count).toBe(nonNull.length)
+  })
+
+  it('the null branch (no PCTL line, no empty frame, no "n/a") cannot be exercised by any current fixture — documented rather than fabricated', () => {
+    // tests/fixtures/facts/index.ts:58 hard-codes `percentile: 40` inside the shared `cat()`
+    // helper every fixture builds categories through (the same comment there flags this as a
+    // known fix-round-1 gap: CategoryState 'watch' has the identical hole). ALL_FIXTURES
+    // therefore never produces a null percentile, so the "entirely ABSENT" half of this
+    // assertion has no real render path to exercise without either fabricating a synthetic
+    // model or hand-breaking a FactsPack fixture — the same call the coordinator made for
+    // phaseRail's unreachable 0-entry branch in task-9-report.md's "Conclusion". This test
+    // documents that fact directly against the fixture source (not a fabricated one) so a
+    // future fixture change that introduces a null percentile fails it and surfaces the gap.
+    expect(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', 'facts', 'index.ts'), 'utf8')).toContain(
+      'percentile: 40,',
+    )
+  })
+
+  it('renders the hero score and tier caption as real text, hero colour from BAND_TEXT[model.hero.band]', () => {
+    expect(verdict, 's3 must carry a verdict block').toBeDefined()
+    const html = render(sections, 'holding')
+    const hero = verdict!.hero
+    expect(html).toContain(
+      `<p class="font-display font-semibold leading-none" style="font-size:clamp(3.5rem, 12vw, 5.25rem);color:${BAND_TEXT[hero.band]}">${hero.score}</p>`,
+    )
+    expect(html).toContain(
+      `<p class="font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-ink-soft">${escapeHtml(`${hero.tierName} · Overall Health`.toUpperCase())}</p>`,
+    )
+  })
+
+  it('renders exactly one <li> per model.stats entry, each with value and label as real text, inside role="list" aria-label="Context statistics"', () => {
+    const html = render(sections, 'holding')
+    const ulOpen = '<ul role="list" class="grid grid-cols-2 border-l border-t border-line" aria-label="Context statistics">'
+    const ulStart = html.indexOf(ulOpen)
+    expect(ulStart, 'the verdict block <ul> was not found').toBeGreaterThan(-1)
+    // Scoped to this <ul>...</ul> only: WebStatGrid's cells share the identical <li> class string,
+    // so counting over the whole page would double-count with the sibling stat grid below it.
+    const ulEnd = html.indexOf('</ul>', ulStart)
+    const scoped = html.slice(ulStart, ulEnd)
+    const liOpen = '<li class="flex flex-col border-b border-r border-line p-3">'
+    const liCount = (scoped.match(new RegExp(escapeRe(liOpen), 'g')) ?? []).length
+    expect(liCount).toBe(verdict!.stats.length)
+    for (const stat of verdict!.stats) {
+      const li =
+        `${liOpen}<p class="font-display text-2xl font-semibold leading-none text-ink">${stat.value}</p>` +
+        `<p class="mt-1 font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-ink-soft">${escapeHtml(stat.label.toUpperCase())}</p></li>`
+      expect(scoped, stat.label).toContain(li)
+    }
+  })
+})
+
 describe('source-read guard: web report files are glyph-clean; the PDF keeps one title read', () => {
   const read = (...p: string[]) => fs.readFileSync(path.join(ROOT, ...p), 'utf8')
   const webFiles = ['sections.tsx', 'report-cover.tsx', 'toolbar.tsx']
