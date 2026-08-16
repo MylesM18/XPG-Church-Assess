@@ -109,6 +109,7 @@ describe('rankListModel', () => {
         const item = facts.bottom_items[i]!;
         expect(row.rank).toBe(String(i + 1).padStart(2, '0'));
         expect(row.itemId).toBe(item.item_id);
+        expect(row.fullText).toBe(item.text);
         expect(row.mean).toBe(item.mean);
         expect(row.theme).toBe(item.theme);
         expect(row.themeLabel).toBe(String(item.theme).toUpperCase());
@@ -130,6 +131,8 @@ describe('rankListModel', () => {
     if (!model) return;
     expect(model.rows[0]!.text.length).toBeLessThanOrEqual(93);
     expect(model.rows[0]!.text.endsWith('...')).toBe(true);
+    expect(model.rows[0]!.fullText).toBe(long);
+    expect(model.rows[0]!.fullText.length).toBe(200);
   });
 
   it('is pure', () => {

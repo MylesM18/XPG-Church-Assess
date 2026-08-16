@@ -165,6 +165,9 @@ export type RankRow = {
   rank: string;
   itemId: string;
   text: string;
+  /** The untruncated item.text. WEB ONLY — the rebuilt web rank list wraps, so
+   * it never needs RANK_TEXT_MAX. The PDF keeps reading `text` (spec §6.5). */
+  fullText: string;
   mean: number;
   theme: Theme;
   /** Caps theme label; renderers color it THEME_FILL[theme] (spec §2.6.2). */
@@ -197,6 +200,7 @@ export function rankListModel(facts: FactsPack): RankListModel | null {
       rank: String(i + 1).padStart(2, '0'),
       itemId: item.item_id,
       text,
+      fullText: item.text,
       mean: item.mean,
       theme: item.theme,
       themeLabel: String(item.theme).toUpperCase(),
