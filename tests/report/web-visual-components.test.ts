@@ -385,11 +385,25 @@ describe('WebPhaseRail', () => {
     expect(fullOpacityChunk).toBeDefined()
     expect(reducedOpacityChunk).toBeDefined()
 
+    // ANCHORS ARE THE WHOLE style ATTRIBUTE, opening `style="` through closing quote, because a
+    // bare `color:…` needle aliases in one direction that matters: `color:` is a SUFFIX of
+    // `background-color:`, so `toContain('color:var(--color-ink)')` is satisfied by an element
+    // that paints that value as a BACKGROUND and sets no text colour at all. Pinning `style="`
+    // on the left rules that out, and the closing quote on the right rules out a declaration
+    // that merely starts the attribute. `color` is the only property in this element's style
+    // object, so the full attribute is exactly one declaration.
+    //
+    // (Token prefixing is NOT the hazard here, despite appearances: `var(--color-ink)` is not a
+    // prefix of `var(--color-ink-soft)` — the closing paren terminates it — so an ink -> ink-soft
+    // swap was already caught. Verified by mutation both ways; see the task report.)
+    const onBandAttr = `style="color:${textOnBand(model.band)}"`
+    const inkAttr = 'style="color:var(--color-ink)"'
+
     // Full-opacity (1) block: its own chunk carries its own opacity:1 marker
     // AND textOnBand(model.band) — never the theme ink.
     expect(fullOpacityChunk).toContain('opacity:1"')
-    expect(fullOpacityChunk).toContain(`color:${textOnBand(model.band)}`)
-    expect(fullOpacityChunk).not.toContain('color:var(--color-ink)')
+    expect(fullOpacityChunk).toContain(onBandAttr)
+    expect(fullOpacityChunk).not.toContain(inkAttr)
 
     // Reduced-opacity (0.6) block: its own chunk carries its own opacity:0.6
     // marker AND the theme ink — never textOnBand(model.band). Regression this
@@ -399,8 +413,8 @@ describe('WebPhaseRail', () => {
     // ternary exists to prevent, and this is the only pair of assertions in this
     // file that can actually catch that inversion.
     expect(reducedOpacityChunk).toContain('opacity:0.6"')
-    expect(reducedOpacityChunk).toContain('color:var(--color-ink)')
-    expect(reducedOpacityChunk).not.toContain(`color:${textOnBand(model.band)}`)
+    expect(reducedOpacityChunk).toContain(inkAttr)
+    expect(reducedOpacityChunk).not.toContain(onBandAttr)
   })
 })
 
@@ -435,8 +449,19 @@ describe('WebPhaseRail — foundation archetype, nine roadmap entries', () => {
   // beside it carries NUM, and the body text carries the body class. All three are distinct.
   const DAY_LABEL = /tracking-\[0\.1em\]">([^<]+)</
   // The reduced-opacity text colour: the web @theme's ink token, read inline because it sits in
-  // a ternary beside the computed textOnBand(band).
-  const INK_TOKEN = 'var(--color-ink)'
+  // a ternary beside the computed textOnBand(band). Anchored as the WHOLE style attribute, not a
+  // bare `color:…` needle — `color:` is a suffix of `background-color:`, so the loose form is
+  // satisfied by an element painting that value as a BACKGROUND with no text colour at all. See
+  // the fuller note in the two-block colour-flip test above.
+  const INK_ATTR = 'style="color:var(--color-ink)"'
+  // What `var(--color-ink)` actually resolves to, read from the theme itself so the guard in the
+  // colour-flip test can compare LIKE FOR LIKE (hex against hex) and therefore actually fail.
+  const INK_VALUE = /--color-ink:\s*(#[0-9A-Fa-f]+)/.exec(
+    fs.readFileSync(
+      path.join(fileURLToPath(new URL('../..', import.meta.url)), 'app', 'globals.css'),
+      'utf8',
+    ),
+  )?.[1]
 
   it('is a genuine nine-block model, so nothing below passes vacuously on a three-block rail', () => {
     expect(model).not.toBeNull()
@@ -463,22 +488,25 @@ describe('WebPhaseRail — foundation archetype, nine roadmap entries', () => {
   })
 
   it('flips text to the theme ink on every reduced-opacity block, so ONLY the three 30-day blocks wear textOnBand', () => {
-    // Guard first: the two colours this component can emit must be distinct strings, or every
-    // assertion below is trivially true. (This used to be the live risk — with the reduced
-    // branch on the PDF's own ink hex, a fixture landing on the 'watch' band made
-    // textOnBand(band) that same hex. The branch now emits a token, so the two can no longer
-    // collide; the guard is kept so a future move back to a literal is caught.)
+    // Guard first: the two colours this component can PAINT must differ, or every assertion
+    // below is trivially true — on a band whose textOnBand equals the theme ink, both branches
+    // of the ternary render the same pixel and the loop proves nothing. Compared LIKE FOR LIKE,
+    // hex against hex: textOnBand returns a hex, so the reduced branch's token is resolved
+    // through app/globals.css first. (Comparing the hex against the literal string
+    // 'var(--color-ink)' could never fail — that is decoration, not a guard.)
     const onBand = textOnBand(model!.band)
-    expect(onBand).not.toBe(INK_TOKEN)
+    expect(INK_VALUE, 'app/globals.css must define --color-ink').toBeDefined()
+    expect(onBand.toUpperCase()).not.toBe(INK_VALUE!.toUpperCase())
 
+    const onBandAttr = `style="color:${onBand}"`
     for (const chunk of chunks) {
       const dayLabel = DAY_LABEL.exec(chunk)![1]
       if (dayLabel === '30 days') {
-        expect(chunk).toContain(`color:${onBand}`)
-        expect(chunk).not.toContain(`color:${INK_TOKEN}`)
+        expect(chunk).toContain(onBandAttr)
+        expect(chunk).not.toContain(INK_ATTR)
       } else {
-        expect(chunk).toContain(`color:${INK_TOKEN}`)
-        expect(chunk).not.toContain(`color:${onBand}`)
+        expect(chunk).toContain(INK_ATTR)
+        expect(chunk).not.toContain(onBandAttr)
       }
     }
   })
