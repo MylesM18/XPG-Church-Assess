@@ -30,6 +30,9 @@ const SUBHEAD = 'font-display text-[1.0625rem] font-semibold text-ink'
 const CAPS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]'
 const OPENER_TITLE = 'font-display font-semibold leading-[1.2]'
 const OPENER_TITLE_SIZE = { fontSize: 'clamp(1.5rem, 4vw, 2.125rem)' } as const
+// text-ink and text-ink-soft are real Tailwind tokens in this repo (charts.tsx uses both), but
+// there is no proven bg-ink, so the 2px section rule sets its colour inline.
+const INK = '#1A1A18'
 
 /**
  * The uniform renderer: the { body, bullets } half of a SectionBody. Used for all 13
@@ -107,6 +110,20 @@ function S5View({ ai, fallback }: AiRendererProps) {
 }
 
 /**
+ * The six beats of an area read, labelled on the web only (spec §6.1). Six
+ * unlabelled paragraphs read as one undifferentiated block; the labels are
+ * chrome, and the paragraphs themselves are byte-identical to the PDF's.
+ */
+const S6_BEATS = [
+  { key: 'affirm', label: "What's working" },
+  { key: 'pivot', label: 'Where it turns' },
+  { key: 'evidence', label: 'The evidence' },
+  { key: 'not_statement', label: 'What this is not' },
+  { key: 'reframe', label: 'Another way to see it' },
+  { key: 'trajectory', label: 'If nothing changes' },
+] as const
+
+/**
  * Web mirror of the PDF's S6View: each dossier opens with a head — band tab (caps label on
  * BAND_FILL, textOnBand), area name, score in BAND_TEXT — looked up from `areaIndex`, the s3
  * stat grid indexed by category id (one source of truth, no recompute). An area missing from
@@ -135,12 +152,15 @@ function S6View({ ai, fallback, areaIndex }: AiRendererProps & { areaIndex: Area
                 </p>
               </div>
             )}
-            <p className={BODY}>{area.affirm}</p>
-            <p className={BODY}>{area.pivot}</p>
-            <p className={BODY}>{area.evidence}</p>
-            <p className={BODY}>{area.not_statement}</p>
-            <p className={BODY}>{area.reframe}</p>
-            <p className={BODY}>{area.trajectory}</p>
+            {S6_BEATS.map((beat) => (
+              <div
+                key={beat.key}
+                className="grid gap-1 border-t border-line pt-2 sm:grid-cols-[7rem_1fr] sm:gap-4"
+              >
+                <p className={`${CAPS} text-ink-soft`}>{beat.label}</p>
+                <p className={BODY}>{area[beat.key]}</p>
+              </div>
+            ))}
           </div>
         )
       })}
@@ -363,11 +383,11 @@ function S10PhaseBody({
 
 /**
  * Renders the 13 report sections as the web mirror of the PDF's content pages (Part B spec):
- * each section opens with a band-tinted opener (BAND_FILL[band] box, number 01..13 as a caps
- * label over the title in textOnBand), then its charts, then its content; the booking CTA
+ * each section opens with editorial chrome — a 3px BAND_FILL[band] tick, an `NN / TOTAL` caps
+ * eyebrow, the title, then a 2px INK rule — then its charts, then its content; the booking CTA
  * renders once, immediately after s12, where document.tsx puts it. Page chrome — the toolbar,
  * the notices, the cover, the shared-view footer — stays on the pages. `band` is the cover's
- * verdict band (`cover.band`): the colour IS the diagnosis, and every opener wears it.
+ * verdict band (`cover.band`): the colour IS the diagnosis, and every opener's tick wears it.
  *
  * Iterates `sections` in array order and NEVER re-sorts: assembleReport and
  * assembleFallbackOnly both return them in Object.keys(methodology.report.sections)
@@ -381,10 +401,6 @@ function S10PhaseBody({
  * branches. tests/a11y/shared-report-heading.test.ts counts `<h1` in this file's SOURCE
  * TEXT — a dynamic tag would produce zero literal matches and read as "no h1 anywhere"
  * on a public page whose document outline depends on it. The cover's church name is a <p>.
- *
- * Openers bleed to the viewport on narrow screens (-mx-6 inside the pages' px-6 main) with
- * their text kept on the body column (px-6), and sit inside the column with the PDF's 16px
- * inset (px-4) from sm up.
  */
 export function ReportSections({ sections, band, visuals }: { sections: AssembledSection[]; band: BandKey; visuals: WebVisuals }) {
   const areaIndex = areaIndexFrom(sections)
@@ -393,16 +409,23 @@ export function ReportSections({ sections, band, visuals }: { sections: Assemble
       {sections.map((section, index) => (
         <Fragment key={section.id}>
           <section className="flex flex-col gap-6">
-            <div
-              className="-mx-6 px-6 py-3 sm:mx-0 sm:px-4"
-              style={{ backgroundColor: BAND_FILL[band], color: textOnBand(band) }}
-            >
-              <p className={CAPS}>{String(index + 1).padStart(2, '0')}</p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <span
+                  aria-hidden
+                  className="h-[22px] w-[3px] shrink-0"
+                  style={{ backgroundColor: BAND_FILL[band] }}
+                />
+                <p className={`${CAPS} text-ink-soft`}>
+                  {`${String(index + 1).padStart(2, '0')} / ${sections.length}`}
+                </p>
+              </div>
               {index === 0 ? (
                 <h1 className={OPENER_TITLE} style={OPENER_TITLE_SIZE}>{section.fallback.title}</h1>
               ) : (
                 <h2 className={OPENER_TITLE} style={OPENER_TITLE_SIZE}>{section.fallback.title}</h2>
               )}
+              <span aria-hidden className="h-[2px] w-full" style={{ backgroundColor: INK }} />
             </div>
             <SectionVisualsAbove section={section} visuals={visuals} />
             {section.id === 's10' && visuals.s10.phaseRail ? (

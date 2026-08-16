@@ -245,6 +245,8 @@ const CAPS_CLASS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1
 const CONFIDENCE_HEAD = `<p class="${CAPS_CLASS}" style="color:#5A5A54">Confidence</p>`
 const STAT_GRID = 'aria-label="Area scores with health bands"'
 const RANK_LIST = 'aria-label="Weakest questions, ranked"'
+// Task 17's opener chrome: the 2px INK rule that now closes every opener, after the h1/h2.
+const OPENER_RULE = '<span aria-hidden="true" class="h-[2px] w-full" style="background-color:#1A1A18"></span>'
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const countOf = (html: string, needle: string) =>
@@ -482,9 +484,10 @@ describe('s4 / s8 placement branches (non-null models)', () => {
     expect(countOf(html, SPREAD_ROW)).toBe(1)
     expect(countOf(html, SPREAD_THRESHOLD)).toBe(1)
     // s8 has no ABOVE branch at all: SectionVisualsAbove's early return runs and s8 carries no
-    // charts, so nothing precedes the body.
+    // charts, so nothing precedes the body except the opener's OWN remaining chrome (Task 17's
+    // 2px ink rule, which closes every opener after its h1/h2) and the opener div's close.
     const opener = html.indexOf('</h1>')
-    expect(html.slice(opener, html.indexOf(body))).toBe('</h1></div>')
+    expect(html.slice(opener, html.indexOf(body))).toBe(`</h1>${OPENER_RULE}</div>`)
   })
 
   it('renders nothing at all for the same three branches when their models are null', () => {

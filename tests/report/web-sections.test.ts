@@ -32,17 +32,27 @@ const CAPS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]'
 const BODY = 'font-body text-base leading-[1.6] text-ink'
 const SUBHEAD = 'font-display text-[1.0625rem] font-semibold text-ink'
 const LIST = 'list-disc space-y-1 pl-5 font-body text-base leading-[1.6] text-ink'
+// The opener eyebrow's and each s6 beat label's own class (Task 17): CAPS plus text-ink-soft.
+const CAPS_SOFT = `${CAPS} text-ink-soft`
+// Task 17's ink rule colour, kept in sync by hand with sections.tsx's own INK const.
+const INK = '#1A1A18'
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const countOf = (html: string, needle: string) =>
   (html.match(new RegExp(escapeRe(needle), 'g')) ?? []).length
 
 describe('ReportSections openers (web mirror of the PDF openers)', () => {
-  it('numbers the sections 01..NN in array order, in the caps label', () => {
+  it('numbers the sections 01..NN in array order, in the NN / TOTAL eyebrow', () => {
+    // Was: '<p class="CAPS">(\d\d)</p>', asserting a bare 01..13 caps label. Task 17 replaces the
+    // label's content with 'NN / TOTAL' and its class with CAPS_SOFT — this proves the same
+    // array-order guarantee for the new text, AND that the '/ TOTAL' half is sections.length on
+    // every single eyebrow, not just the first (a regression this would catch: a hard-coded
+    // '/ 13' surviving a shorter section list).
     const html = render(sections, 'watch')
-    const re = new RegExp(`<p class="${escapeRe(CAPS)}">(\\d\\d)</p>`, 'g')
-    const numbers = [...html.matchAll(re)].map((m) => m[1])
-    expect(numbers).toEqual(sections.map((_, i) => String(i + 1).padStart(2, '0')))
-    expect(numbers.length).toBe(13)
+    const re = new RegExp(`<p class="${escapeRe(CAPS_SOFT)}">(\\d\\d) / (\\d+)</p>`, 'g')
+    const matches = [...html.matchAll(re)]
+    expect(matches.map((m) => m[1])).toEqual(sections.map((_, i) => String(i + 1).padStart(2, '0')))
+    expect(matches.every((m) => m[2] === String(sections.length))).toBe(true)
+    expect(matches.length).toBe(13)
   })
 
   it('renders <h1> for index 0 only and <h2> for the rest, both with the fluid opener size', () => {
@@ -53,24 +63,37 @@ describe('ReportSections openers (web mirror of the PDF openers)', () => {
     expect((html.match(/font-size:clamp\(1\.5rem, 4vw, 2\.125rem\)/g) ?? []).length).toBe(sections.length)
   })
 
-  it('tints every opener with BAND_FILL[band] and textOnBand(band) — both textOnBand outcomes', () => {
-    // SCOPED TO THE OPENER ELEMENT (its own class string), not a bare style-attribute count over
-    // the whole page. Since Task 16 the section visuals render inside this markup too, and
-    // several of them legitimately paint the same BAND_FILL/textOnBand pair from their OWN model
-    // band — WebChainRail's stage ordinal chips are the concrete case (4 watch-banded stages in
-    // CAPACITY_FACTS). Pairing the style with the opener div's class is strictly stronger than
-    // the old count: it proves the tint is on the opener, not merely somewhere in the document.
-    const OPENER_CLASS = '-mx-6 px-6 py-3 sm:mx-0 sm:px-4'
+  it('gives every opener a 3px BAND_FILL[band] tick and a 2px INK rule — the full-slab tint is gone', () => {
+    // REPLACES the old opener-slab tint test (deleted, not weakened): that test proved every
+    // section's opener <div> carried the FULL-SLAB background-color:BAND_FILL[band];color:
+    // textOnBand(band) pair, exactly once per section, and that no opener carried any OTHER
+    // tint (by matching "any styled opener" and requiring that count to equal the
+    // correctly-styled count — no room left for a wrongly-banded one). Task 17 deletes that slab
+    // entirely; the band survives only as a 3px tick. This test proves the SAME two guarantees
+    // for the tick — exactly one correctly BAND_FILL[band]-coloured tick per section, and no
+    // tick of any other colour — plus the new 2px INK rule, which is band-independent and so is
+    // checked once per section regardless of which band is passed in.
+    //
+    // SCOPED TO THE ELEMENT'S OWN class string, not a bare style-attribute count over the whole
+    // page, for the same reason as the old test: several section visuals (e.g. WebChainRail's
+    // stage ordinal chips) legitimately paint BAND_FILL/textOnBand pairs from their OWN model
+    // band elsewhere in the same render.
+    const TICK_CLASS = 'h-[22px] w-[3px] shrink-0'
+    const RULE_CLASS = 'h-[2px] w-full'
     for (const band of ['watch', 'holding'] as const) {
       const html = render(sections, band)
-      const opener =
-        `<div class="${OPENER_CLASS}" style="background-color:${BAND_FILL[band]};color:${textOnBand(band)}">`
-      expect((html.match(new RegExp(escapeRe(opener), 'g')) ?? []).length, band).toBe(sections.length)
-      // No opener may carry any OTHER tint: an opener that fell back to a different band would
-      // keep the count above correct only if a second opener double-rendered, but this catches
-      // the simpler regression of an opener rendered with the wrong band outright.
-      const anyOpener = new RegExp(`${escapeRe(`<div class="${OPENER_CLASS}" style="`)}[^"]*"`, 'g')
-      expect((html.match(anyOpener) ?? []).length, band).toBe(sections.length)
+      const tick = `<span aria-hidden="true" class="${TICK_CLASS}" style="background-color:${BAND_FILL[band]}"></span>`
+      expect((html.match(new RegExp(escapeRe(tick), 'g')) ?? []).length, band).toBe(sections.length)
+      // No tick may carry any OTHER colour: the "any styled tick" count must equal the
+      // correctly-coloured count above, exactly as the old opener test proved for the slab.
+      const anyTick = new RegExp(
+        `${escapeRe(`<span aria-hidden="true" class="${TICK_CLASS}" style="`)}[^"]*"${escapeRe('></span>')}`,
+        'g',
+      )
+      expect((html.match(anyTick) ?? []).length, band).toBe(sections.length)
+      // The 2px INK rule renders once per section, independent of band.
+      const rule = `<span aria-hidden="true" class="${RULE_CLASS}" style="background-color:${INK}"></span>`
+      expect((html.match(new RegExp(escapeRe(rule), 'g')) ?? []).length, band).toBe(sections.length)
     }
   })
 
@@ -156,6 +179,33 @@ describe('web s6 dossier heads (parity with the PDF)', () => {
     const html = render(noGrid, 'holding')
     expect(html).toContain('Volunteer culture is holding.')
     expect(html).not.toContain(`>${BAND_NAME[cell.band].toUpperCase()}</span>`)
+  })
+
+  it('labels all six s6 beats, in the brief order, each label paired with its own unchanged paragraph', () => {
+    // New coverage (Task 17): tests/report/sections-dispatch.test.ts already guards that the six
+    // beats' PROSE renders in order (affirm, pivot, evidence, not_statement, reframe,
+    // trajectory) — that test is untouched and still passes, proving the prose didn't move. What
+    // it does not check is the new LABEL chrome at all. This test proves: all six labels render,
+    // in the brief's order; each is paired with its OWN paragraph (label immediately followed by
+    // its beat's text, not merely present somewhere on the page); and the six paragraph texts
+    // are the exact same fixture strings `withAiS6` above already declares — i.e. unchanged.
+    const html = render(withAiS6, 'holding')
+    const beats = [
+      ["What's working", 'Volunteer culture is holding.'],
+      ['Where it turns', 'Shift from recruiting to retaining.'],
+      ['The evidence', 'Scores stayed above seventy.'],
+      ['What this is not', 'This is not a burnout story.'],
+      ['Another way to see it', 'Treat volunteers as the engine.'],
+      ['If nothing changes', 'Watch the next two quarters.'],
+    ] as const
+    for (const [label, text] of beats) {
+      const pair = `<p class="${CAPS_SOFT}">${escapeHtml(label)}</p><p class="${BODY}">${escapeHtml(text)}</p>`
+      expect(html, label).toContain(pair)
+      expect(countOf(html, pair), label).toBe(1)
+    }
+    const positions = beats.map(([label]) => html.indexOf(`<p class="${CAPS_SOFT}">${escapeHtml(label)}</p>`))
+    expect(positions.every((p) => p > -1)).toBe(true)
+    expect(positions).toEqual([...positions].sort((a, b) => a - b))
   })
 })
 
