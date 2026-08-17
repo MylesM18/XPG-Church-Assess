@@ -277,14 +277,14 @@ categories:
           hi: "Generosity funds vision and mission beyond our own walls."
       - id: GEN6
         theme: systems
-        text: "Does your church's money visibly reach your community — benevolence, local partners, real needs met?"
+        text: "Does your church's money visibly reach the community around you — local partners, real needs met?"
         signal: evidence
         since: "0.3.0"
         anchors:
           lo: "Rarely. Nearly everything we collect stays inside our own operations."
           mid: "We give some, reactively, when needs find us."
           hi: "A deliberate share of our budget serves the community, and we could name the partners and needs it funds."
-        reflection: "Name one need in your community your church's generosity met this year."
+        reflection: "Name one need in the community around you that your church's generosity met this year."
   - id: gov
     name: "Governance / Accountability"
     kind: enabler
@@ -332,14 +332,14 @@ categories:
           hi: "It provides genuine accountability, wisdom, and support."
       - id: GOV6
         theme: systems
-        text: "Is your community's good anyone's actual responsibility at the leadership level?"
+        text: "Does anyone in leadership actually own your church's engagement with the surrounding community?"
         signal: evidence
         since: "0.3.0"
         anchors:
           lo: "No. Outreach happens if someone's passionate; leadership doesn't own it."
           mid: "Leadership values it and blesses efforts, but no one owns it and it's rarely on the agenda."
           hi: "Someone owns community engagement, and it shows up in our planning and decisions."
-        reflection: "Who, if anyone, owns your church's presence in the community? How did that come to be?"
+        reflection: "Who, if anyone, owns your church's presence in the community around you? How did that come to be?"
   - id: comm
     name: "Communication"
     kind: enabler
@@ -397,14 +397,14 @@ categories:
         reflection: "What do you think your community would say your church is known for? Be honest."
       - id: COM7
         theme: relational
-        text: "Do you actually know your community's current needs, or assume them?"
+        text: "Do you actually know the current needs of the community around you, or assume them?"
         signal: evidence
         since: "0.3.0"
         anchors:
           lo: "We assume. Our outreach reflects what we like to do."
           mid: "We know some needs through relationships, but we've never really asked."
           hi: "We've listened deliberately — asked neighbors, schools, or partners — and it shapes what we do."
-        reflection: "How did your church last learn something new about what your community needs?"
+        reflection: "How did your church last learn something new about what the community around you needs?"
   - id: sys
     name: "Org Structure / Systems"
     kind: enabler
@@ -452,7 +452,7 @@ categories:
           hi: "Our systems would scale with us."
       - id: SYS6
         theme: systems
-        text: "Do your community efforts run on systems — owned partnerships, follow-up, a rhythm — or on bursts of enthusiasm?"
+        text: "Do your efforts in the community around you run on systems — owned partnerships, follow-up, a rhythm — or on bursts of enthusiasm?"
         signal: evidence
         since: "0.3.0"
         anchors:
