@@ -10,9 +10,14 @@ already built, tested, and shipped on the branch — the app's invitation and re
 `/sign-in` page now carry the refined XP Gathering identity. What remains can only be done in
 **Resend / Vercel / Supabase / Google Cloud Console** with owner access, so it lives here.
 
-> **This task did NOT change any authentication or redirect logic.** The magic-link OTP flow, the
-> Google OAuth flow, and `/auth/callback` are untouched. Everything below is **branding and
-> configuration only.**
+> **As first written (2026-08-06) this task changed no authentication or redirect logic** — it was
+> branding and configuration only.
+>
+> **⚠️ Amended 2026-08-17.** A later change moved the emailed sign-in link off
+> `oydjoikfwvzttyhvfxcn.supabase.co` and onto our own `/auth/confirm` route, so **Part B is no
+> longer branding-only**. The two templates now carry a different link (B1), the allow-list note
+> reads differently (B3), and the Gmail pre-fetch caveat is now mitigated rather than open (B4).
+> Part A and Part C are unaffected. If you already pasted the older templates, re-paste them.
 
 Three parts, independent — do them in any order:
 
@@ -89,11 +94,21 @@ Two template files live beside this doc, same visual design, different copy for 
 3. **Message body (HTML):** replace the entire contents with the template in
    **`docs/owner/magic-link-template.html`** (also inlined below). It is the *same* branded shell as
    the app's other emails, with the button and the small "Button not working?" fallback both pointing
-   at Supabase's own `{{ .ConfirmationURL }}` token (the CTA reads **"Sign in to your assessment"**).
-   Neither prints the URL as visible text — it is the href only, so the ~250-character signed link
-   never lands in the reader's face. **Keep the
-   `{{ .ConfirmationURL }}` token exactly as-is** — Supabase substitutes the real one-time link when
-   it sends.
+   at **our own** `/auth/confirm` route (the CTA reads **"Sign in to your assessment"**). Neither
+   prints the URL as visible text — it is the href only, so the signed link never lands in the
+   reader's face.
+
+   **Paste the link exactly as written**, in both tabs, all four tokens intact:
+
+   ```
+   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next={{ .RedirectTo }}
+   ```
+
+   Supabase substitutes the real values when it sends. Two things not to "tidy":
+   - The href **must start with `{{ .SiteURL }}`**. Beginning it with any other template variable
+     trips a known Go `html/template` sanitization bug that renders the entire link as `#ZgotmplZ`.
+   - `type=email` stays `email` in **both** tabs. It is the generic type that verifies the Magic
+     Link and the Confirm-signup token alike, so neither template has to guess which one it is.
 4. **Save**.
 
 <details>
@@ -124,8 +139,8 @@ Two template files live beside this doc, same visual design, different copy for 
 <td style="padding:28px 40px 0;">
 <h1 style="margin:0 0 16px;font-family:Georgia, 'Times New Roman', Times, serif;font-size:24px;font-weight:500;line-height:1.3;color:#1A1C22;">Your sign-in link</h1>
 <p style="margin:0 0 16px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:16px;line-height:1.6;color:#1A1C22;">Click the button below to securely sign in to the 360 Church Health Assessment.</p><p style="margin:0 0 16px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:16px;line-height:1.6;color:#1A1C22;">This link signs you in without a password. It can be used once and expires shortly — if it no longer works, just request a new link from the sign-in page.</p>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 4px;"><tr><td align="center" bgcolor="#1A1C22" style="border-radius:8px;"><a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:13px 26px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:15px;font-weight:600;line-height:1;color:#FBF9F5;text-decoration:none;border-radius:8px;">Sign in to your assessment</a></td></tr></table>
-<p style="margin:16px 0 0;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:13px;line-height:1.5;color:#565962;">Button not working? <a href="{{ .ConfirmationURL }}" style="color:#565962;text-decoration:underline;">Use this link instead</a></p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 4px;"><tr><td align="center" bgcolor="#1A1C22" style="border-radius:8px;"><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next={{ .RedirectTo }}" style="display:inline-block;padding:13px 26px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:15px;font-weight:600;line-height:1;color:#FBF9F5;text-decoration:none;border-radius:8px;">Sign in to your assessment</a></td></tr></table>
+<p style="margin:16px 0 0;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:13px;line-height:1.5;color:#565962;">Button not working? <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next={{ .RedirectTo }}" style="color:#565962;text-decoration:underline;">Use this link instead</a></p>
 </td>
 </tr>
 <tr>
@@ -160,8 +175,8 @@ Two template files live beside this doc, same visual design, different copy for 
 
 The auth email **cannot** carry the church name, the member's role, or any other personalization.
 The sign-in call sends no user metadata (auth-js fills `data: {}`), so the only values Supabase can
-interpolate are generic ones: `{{ .ConfirmationURL }}`, `{{ .Token }}`, `{{ .SiteURL }}`,
-`{{ .Email }}`. No dashboard setting changes this — it would take a code change to thread church and
+interpolate are generic ones: `{{ .SiteURL }}`, `{{ .TokenHash }}`, `{{ .RedirectTo }}`,
+`{{ .Token }}`, `{{ .Email }}`. No dashboard setting changes this — it would take a code change to thread church and
 role through as user metadata.
 
 Church- and role-specific wording already lives where it belongs: the app's **own** invitation email
@@ -170,8 +185,15 @@ branded "here's your sign-in link" and keep the personality in the invitation.
 
 ### B3. Add the redirect allow-list URLs
 
-The sign-in code sends users to `…/auth/callback?next=…` after they click the link, so that path
-must be allow-listed or Supabase will reject the redirect.
+Both sign-in flows hand Supabase a `redirect_to` on this app's domain, and a value that misses the
+allow-list is silently discarded (see the warning below). The two flows now send **different**
+shapes:
+
+- **Magic link / Confirm signup** — the app sends the member's **real destination**: usually
+  `https://www.360churchhealthassessment.com/get-started`, or a deep link such as
+  `…/accept-invitation/<token>`. Supabase renders it into the emailed link as `{{ .RedirectTo }}`,
+  and `/auth/confirm` forwards the member there once the token verifies.
+- **Google OAuth** — unchanged: `…/auth/callback?next=…`.
 
 - Supabase Dashboard → **Authentication → URL Configuration**:
   - **Site URL:** `https://www.360churchhealthassessment.com`
@@ -179,8 +201,9 @@ must be allow-listed or Supabase will reject the redirect.
     - `https://www.360churchhealthassessment.com/**`
     - `https://www.360churchhealthassessment.com/auth/callback`
 
-  (The `/**` wildcard is the entry that actually matters. The app emits a **query-bearing** URL —
-  `…/auth/callback?next=…` — and a bare `…/auth/callback` entry with no wildcard does not match it.
+  (The `/**` wildcard is the entry that actually matters. The app emits both **query-bearing** and
+  **deep** URLs — `…/auth/callback?next=…` for Google, `…/accept-invitation/<token>` for an invited
+  member — and a bare `…/auth/callback` entry with no wildcard matches neither.
   If `redirect_to` fails to match the allow-list, **Supabase silently ignores it and sends the user
   to the Site URL instead, raising no error** — which lands an invited member on the marketing home
   page rather than their assessment. Also add the apex `https://360churchhealthassessment.com/**`
@@ -197,17 +220,25 @@ silently falls back to the Site URL.
 - Vercel → Production env: set **`APP_URL`** to exactly `https://www.360churchhealthassessment.com`
   (same origin as the Site URL), then **redeploy**.
 
-### B4. Known caveat — Gmail link pre-fetch / `otp_expired` (unchanged, just re-flagged)
+### B4. Gmail link pre-fetch / `otp_expired` — now mitigated (amended 2026-08-17)
 
 Some inbox providers and corporate mail scanners (notably **Gmail**) **pre-fetch links inside
-emails**. Because a magic link is a **one-time** token, a pre-fetch can silently consume it before
-the recipient clicks, and the real click then lands on `/sign-in` with an `otp_expired` /
-`?error=auth` signal. **This is a pre-existing property of Supabase magic links and is not caused by
-this rebrand.** The app already surfaces the reason clearly on `/sign-in` and the user can simply
-request a fresh link. See the prior investigation notes (`project_xpg_auth_redirect_bug`). A durable
-fix — if ever pursued — would be a separate change to the verification flow (e.g. a `token_hash` /
-`verifyOtp` server route) and is **out of scope for this branding task; auth logic was not
-modified.**
+emails**. Because a magic link is a **one-time** token, a pre-fetch could silently consume it before
+the recipient clicked, and the real click then landed on `/sign-in` with an `otp_expired` /
+`?error=auth` signal. See the prior investigation notes (`project_xpg_auth_redirect_bug`).
+
+The `/auth/confirm` link in B1 closes this. **Be clear about why, because the obvious explanation is
+wrong:** moving to `token_hash` on its own would **not** have fixed it — a `token_hash` link is
+still a single-use GET, and a prefetcher burns it identically. What fixes it is that
+**`/auth/confirm` verifies nothing on GET.** It renders a "Signing you in…" card whose form is
+POSTed to `/auth/confirm/verify`, and that POST is the only thing that spends the token. Prefetchers
+issue GETs, never POSTs, so a scanner that fetches the link leaves the token unspent. The page
+auto-submits on load, so a real member sees roughly a half-second flash; a **Continue** button is
+there for anyone whose browser never runs the script.
+
+Residual risk: a scanner that both executes JavaScript **and** follows the resulting POST would
+still consume the token. The app keeps surfacing the reason on `/sign-in` so a member in that case
+can request a fresh link.
 
 ---
 
@@ -281,10 +312,11 @@ the marketing home page (see B3).
 - [ ] **A** — Resend domain `360churchhealthassessment.com` verified (DNS).
 - [ ] **A** — `INVITE_FROM` + `REMINDER_FROM` (or single `EMAIL_FROM`) set in Vercel **Production**; `RESEND_API_KEY` present; **redeployed**.
 - [ ] **A** — Sent myself a real invitation; it arrived branded.
-- [ ] **B** — **"Confirm signup"** template pasted (`{{ .ConfirmationURL }}` intact); subject set.
+- [ ] **B** — **"Confirm signup"** template pasted (the `/auth/confirm` link intact, all four `{{ … }}` tokens, `type=email`); subject set.
       ← *this is the one first-time invitees actually receive*
-- [ ] **B** — **"Magic Link"** template pasted (`{{ .ConfirmationURL }}` intact); subject set.
+- [ ] **B** — **"Magic Link"** template pasted (same `/auth/confirm` link, also `type=email`); subject set.
       ← *returning users*
+- [ ] **B** — Hovered the button in a delivered test email and confirmed it reads `https://www.360churchhealthassessment.com/auth/confirm?…`, **not** `#ZgotmplZ` and not `*.supabase.co`.
 - [ ] **B** — Supabase sender **name** = "XP Gathering" (optionally custom SMTP via Resend).
 - [ ] **B** — Site URL + redirect URLs added, **including the `/**` wildcard entry**.
 - [ ] **B** — `APP_URL` set in Vercel **Production** to the same origin as the Site URL; **redeployed**.

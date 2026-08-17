@@ -128,14 +128,22 @@ say so plainly rather than implying the flow is verified end to end.
 | --- | --- |
 | `lib/auth/resolve-next.ts` | ✅ add `resolveNextFromRedirectTo` + private `guardPath` |
 | `tests/auth/resolve-next.test.ts` | ✅ 8 new cases (13 total, green) |
-| `app/auth/confirm/page.tsx` | ⬜ interstitial |
-| `app/auth/confirm/verify/route.ts` | ⬜ POST verifier |
-| `app/sign-in/page.tsx` | ⬜ `emailRedirectTo` → `${origin}${next}`; Google path untouched |
-| `docs/owner/magic-link-template.html` | ⬜ new href (button + fallback anchor) |
-| `docs/owner/confirm-signup-template.html` | ⬜ new href (button + fallback anchor) |
-| `docs/owner/email-auth-owner-setup-2026-08-06.md` | ⬜ inlined template copy, §B3 note, §B4 caveat, checklist |
+| `app/auth/confirm/page.tsx` | ✅ interstitial |
+| `app/auth/confirm/auto-submit.tsx` | ✅ client component that submits it on mount |
+| `app/auth/confirm/verify/route.ts` | ✅ POST verifier |
+| `app/sign-in/page.tsx` | ✅ `emailRedirectTo` → `${origin}${next}`; Google path untouched |
+| `docs/owner/magic-link-template.html` | ✅ new href (button + fallback anchor) |
+| `docs/owner/confirm-signup-template.html` | ✅ new href (button + fallback anchor) |
+| `docs/owner/email-auth-owner-setup-2026-08-06.md` | ✅ inlined template copy, §B3 note, §B4 caveat, checklist |
 
-The three template copies must stay byte-consistent with each other.
+| `tests/auth/confirm-interstitial.test.ts` | ✅ 10 cases — pins the GET as inert |
+| `tests/auth/confirm-verify-route.test.ts` | ✅ 11 cases — POST-only, 303, shared guard |
+| `tests/auth/sign-in-magic-link-redirect.test.ts` | ✅ 6 cases — magic link vs OAuth destinations |
+| `tests/email/auth-template-links.test.ts` | ✅ 16 cases — link, both anchors, three-copy sync, doc prose |
+
+The three template copies must stay byte-consistent with each other — `tests/email/auth-template-links.test.ts` compares the owner doc's inlined block against `magic-link-template.html` verbatim.
+
+**Status 2026-08-17:** all rows built. Gates at the implementing commit: `npx tsc --noEmit` exit 0, `npx vitest run` 1511 passed / 206 files, `npx eslint` clean. Not verified end to end — see §7.
 
 ## 9. Invariants inherited from PR #70 — do not break
 
