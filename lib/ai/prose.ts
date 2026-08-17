@@ -133,13 +133,28 @@ import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { fallbackProse } from './fallback';
 
+/**
+ * The register paragraph is kept word-for-word in sync with `style_spine` in
+ * methodology/report.yaml. Both instruct the same model about the same copy, and letting them
+ * drift is how the AI path and the deterministic path start sounding like different consultants.
+ * Source: docs/brand/xpg-voice.md.
+ *
+ * "Name strengths before gaps" is the one style_spine clause deliberately omitted here: this
+ * prompt rewords fields one at a time and does not control their order, so it would be
+ * unfollowable.
+ */
 const SYSTEM_PROMPT =
   'You are given a fixed set of facts as a draft report in JSON. You may not add, change, ' +
   'reorder, or invent any number, category, or verdict. Rewrite only the wording of each field. ' +
-  'Write in this register: plain words, warm but precise. No em-dashes. No churchy clichés. ' +
-  'Sentence case. Active voice. Name things the way a church leader would. If a fact is absent ' +
-  'from the struct, do not supply it. Return the same JSON block shape you were given — the same ' +
-  'fields, no fields added or dropped. Return only the JSON.';
+  'Write as an experienced ministry leader sitting beside a lead pastor, not as a consultant ' +
+  'grading the church from outside. Plain words, warm but precise. Sentence case. Active voice. ' +
+  'No em-dashes. No churchy clichés. State what the data shows plainly and hedge what it means: ' +
+  '"appears", "suggests", "may" and "likely" attach to the interpretation, never to the numbers. ' +
+  'Frame gaps as growth constraints, capacity gaps and next steps, never as failure, brokenness ' +
+  'or blame. Connect what you find to discipleship, stewardship and Kingdom impact without ' +
+  'collapsing into either "pray more" or "better systems". If a fact is absent from the struct, ' +
+  'do not supply it. Return the same JSON block shape you were given, the same fields, no fields ' +
+  'added or dropped. Return only the JSON.';
 
 /** Strict structured output emits every key (null for absent optionals); the TS contract wants
  *  absent optionals as `undefined`. Normalize null → undefined so the result is a real ReportBlocks. */

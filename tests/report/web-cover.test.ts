@@ -37,6 +37,17 @@ describe('ReportCover', () => {
     expect(html).toContain(`color:${textOnBand(cover.band)}`)
   })
 
+  // The hero numeral is the first number a leader sees, and unlabelled it reads as "a score"
+  // rather than "the OVERALL score". The label is uppercased at the render site from the shared
+  // model field, never hardcoded here or in the PDF — tests/report/pdf-document.test.ts asserts
+  // the identical string on the PDF cover, so the two surfaces cannot drift.
+  it('labels the hero numeral OVERALL, immediately above the score', () => {
+    const html = render('January 2026')
+    expect(cover.scoreLabel).toBe('Overall')
+    expect(html).toContain(`>${cover.scoreLabel.toUpperCase()}<`)
+    expect(html.indexOf('>OVERALL<')).toBeLessThan(html.indexOf(`>${cover.score}<`))
+  })
+
   it('renders the monogram, church name (as a <p>, never a heading), kicker, date and runline', () => {
     const html = render('January 2026')
     expect(html).toContain('>GC<')

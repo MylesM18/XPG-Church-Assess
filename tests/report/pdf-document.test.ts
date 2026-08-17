@@ -202,6 +202,10 @@ describe('ReportDocument', () => {
     expect(coverTexts).toContain('July 2026');
     expect(coverTexts).toContain(DOC_ARGS.cover.headline);
     expect(coverTexts.some((t) => t.includes('of 100'))).toBe(true);
+    // Same label, same source field, same uppercasing as the web cover
+    // (tests/report/web-cover.test.ts). Asserted on both surfaces so neither can drift alone.
+    expect(DOC_ARGS.cover.scoreLabel).toBe('Overall');
+    expect(coverTexts).toContain('OVERALL');
   });
 
   // Replaces the old "renders the church name and the verdict" + "renders all eight area
@@ -233,7 +237,7 @@ describe('ReportDocument', () => {
   // Replaces "labels a healthy area Strong, not Holding" + "shows the state-aware reading band
   // (Watch)...aligned with the dossier". Those tested a cover AreaTable that no longer exists;
   // the surviving equivalent is fallback-sections.ts's bandRead(), which still drives an s6
-  // ("Areas requiring investment") bullet per category from the same methodology.copy.dossier.
+  // ("Areas to strengthen") bullet per category from the same methodology.copy.dossier.
   // reading table. 'gen' is a chain (stage) category that lands in s6's bottom-5 slice under this
   // fixture's scores (sorted desc: guest 72, gov 70, conn 68, disc 66, sys 64, vol 61, gen 58,
   // comm 55 — gen is index 6, inside facts.categories.slice(3)).

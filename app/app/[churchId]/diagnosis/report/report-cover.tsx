@@ -83,6 +83,7 @@ export function ReportCover({
       {dateLabel !== null && <p className="mt-0.5 font-body text-base text-ink-soft">{dateLabel}</p>}
 
       <div className="mt-12 flex flex-col">
+        <p className={CAPS_LABEL}>{cover.scoreLabel.toUpperCase()}</p>
         <p
           className="font-display font-semibold"
           style={{ fontSize: 'clamp(3.5rem, 14vw, 7rem)', lineHeight: 1, color: BAND_TEXT[cover.band] }}

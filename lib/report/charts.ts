@@ -305,6 +305,11 @@ export type CoverLadderRow = {
 
 export type CoverModel = {
   score: number;
+  /** Label rendered with the hero numeral so it reads as the church's OVERALL score rather than
+   *  a section score. Lives on the model, not in either renderer, so the web cover
+   *  (report-cover.tsx) and the PDF cover (pdf/document.tsx) cannot drift apart. Both uppercase
+   *  it at the render site, matching what the verdict-block renderers already do with tierName. */
+  scoreLabel: string;
   tierName: string;
   band: BandKey;
   /** The s3 xpg_read line — the SAME string fallback-sections.ts:371 renders
@@ -328,6 +333,7 @@ export function coverModel(facts: FactsPack, methodology: Methodology): CoverMod
   const band = verdictBandFor(facts.overall.tier.id);
   return {
     score: facts.overall.capacity,
+    scoreLabel: 'Overall',
     tierName: facts.overall.tier.name,
     band,
     headline: methodology.copy.xpg_read[facts.archetype][facts.overall.tier.id],

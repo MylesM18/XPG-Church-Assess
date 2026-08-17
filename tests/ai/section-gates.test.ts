@@ -305,7 +305,7 @@ describe('gate 3 — required and banned mentions', () => {
     expect(gateSection('s2', { ...goodS2, summary: goodS2.summary.replace(constraintFacts.overall.tier.name, 'fine') }, ctx)).toBe('required mention');
   });
   it('rejects capacity framing inside a constraint report', () => {
-    expect(gateSection('s2', { ...goodS2, what_this_is_not: 'Nothing in your chain is broken.' }, ctx)).toBe('banned phrase');
+    expect(gateSection('s2', { ...goodS2, what_this_is_not: 'Every stage is carrying its load.' }, ctx)).toBe('banned phrase');
   });
   it('accepts a stage name, which is shared vocabulary and never banned', () => {
     const withStage = { ...goodS2, what_this_is_not: `This is not a verdict on ${constraintFacts.categories[0]!.name}.` };
@@ -357,19 +357,18 @@ describe('gate 3 — sub-70 register calibration (product owner ruling, fix roun
   // The regression guard for THIS round's fix: before the capacity-archetype guard, this exact
   // input was wrongly rejected as 'banned phrase' by the sub-70 loop.
   //
-  // Deliberately uses the banned_phrases.constraint ENTRY verbatim ("nothing in your chain is
-  // broken"), not report.yaml's real capacity S2 template text ("Nothing in the chain is
-  // broken" — no "your", methodology/report.yaml:31). Those two strings differ and do not
-  // substring-match each other. Verified empirically: with the capacity-archetype guard
-  // temporarily removed, a section using the real template's "no your" wording still returned
-  // null — the mutation was invisible, i.e. that wording can never have exercised this branch
-  // at all. Only text containing the actual banned-phrase wording proves the guard does
-  // anything; see the mutation table in task-7-report.md for the confirming run.
-  it('accepts "nothing in your chain is broken" in a CAPACITY report scoring below 70 — the regression this fix closes', () => {
+  // Deliberately uses a banned_phrases.constraint ENTRY verbatim ("every stage is carrying its
+  // load"), which is also the real capacity S2 template's own thesis wording
+  // (methodology/report.yaml). That is exactly the collision this guard exists for: the phrase
+  // a capacity report is REQUIRED to use is on the list the sub-70 loop would otherwise apply
+  // to it. Verified empirically: with the capacity-archetype guard temporarily removed this
+  // input is rejected as 'banned phrase'. Only text containing the actual banned-phrase wording
+  // proves the guard does anything; see the mutation table in task-7-report.md.
+  it('accepts "every stage is carrying its load" in a CAPACITY report scoring below 70 — the regression this fix closes', () => {
     expect(lowCapacityFacts.archetype).toBe('capacity');
     expect(lowCapacityFacts.overall.capacity).toBeLessThan(70);
     const s2 = {
-      summary: `Overall health sits at ${lowCapacityFacts.overall.capacity} out of 100, in the ${lowCapacityFacts.overall.tier.name} band. Nothing in your chain is broken.`,
+      summary: `Overall health sits at ${lowCapacityFacts.overall.capacity} out of 100, in the ${lowCapacityFacts.overall.tier.name} band. Every stage is carrying its load.`,
       what_this_is_not: 'This is not a verdict on anyone.',
       context_bullets: [],
     };
@@ -379,15 +378,15 @@ describe('gate 3 — sub-70 register calibration (product owner ruling, fix roun
   // Mutation-isolation: neither test above can prove the sub-70 loop is still reachable.
   // 'constraint' is a permanent no-op (gate 3's first loop reads the same array first).
   // 'capacity' is now explicitly guarded off. Only 'foundation' exercises the loop: its first
-  // loop checks banned_phrases.foundation (healthy and ready to grow / your primary constraint
-  // / is the constraint / this is a capacity conversation), which does NOT contain "every stage
-  // is strong" — that phrase lives only in banned_phrases.constraint, so only the sub-70 loop
-  // can catch it here.
-  it('rejects "every stage is strong" in a FOUNDATION report scoring below 70 — proves the sub-70 loop is still reachable', () => {
+  // loop checks banned_phrases.foundation (primary growth constraint / the area limiting the
+  // rest / every stage is carrying its load / a question of capacity), which does NOT contain
+  // "nothing is capping you" — that phrase lives only in banned_phrases.constraint, so only the
+  // sub-70 loop can catch it here.
+  it('rejects "nothing is capping you" in a FOUNDATION report scoring below 70 — proves the sub-70 loop is still reachable', () => {
     expect(lowCapacityFoundationFacts.archetype).toBe('foundation');
     expect(lowCapacityFoundationFacts.overall.capacity).toBeLessThan(70);
     const s2 = {
-      summary: `Overall health sits at ${lowCapacityFoundationFacts.overall.capacity} out of 100, in the ${lowCapacityFoundationFacts.overall.tier.name} band. Every stage is strong except the gate.`,
+      summary: `Overall health sits at ${lowCapacityFoundationFacts.overall.capacity} out of 100, in the ${lowCapacityFoundationFacts.overall.tier.name} band. Nothing is capping you except the gate.`,
       what_this_is_not: 'This is not a verdict on anyone.',
       context_bullets: [],
     };

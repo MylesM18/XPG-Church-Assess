@@ -1,67 +1,67 @@
-version: "0.1.0"
+version: "0.2.0"
 blocks:
-  verdict: "Your primary constraint is {primary_name}. It scored {primary_score} out of 100, below the point where a stage is working. Everything after it in the chain will look weak until this is fixed."
-  verdict_no_constraint: "Nothing in your chain is broken. Every stage is strong. This is a capacity conversation, not a repair one."
+  verdict: "The data points to {primary_name} as your primary growth constraint. It scored {primary_score} out of 100, under the level where this stage reliably carries what comes after it. Areas further along will likely read weaker than they are until this is strengthened."
+  verdict_no_constraint: "No single area is limiting the others; every stage is carrying its load. What sits in front of you is a question of capacity."
   evidence: "Here is what that score rests on: {evidence_lines}."
-  blind_spot: "You rated {bs_name} highly, but the countable side tells a different story. Belief sits at {bs_belief}, the evidence at {bs_evidence}, a gap of {bs_gap} points."
-  cost: "Left alone, {primary_name} caps everything downstream. Spending on {downstream_list} first raises numbers once and changes nothing."
-  do_not_work_on: "Do not work on these yet, they are symptoms of the constraint above: {do_not_list}."
-  next_step: "Start with {primary_name}. {offer_hook}"
+  blind_spot: "You rated {bs_name} highly, and the countable side reads differently. Belief sits at {bs_belief}, the evidence at {bs_evidence}, a gap of {bs_gap} points. That distance is worth understanding before acting on either number alone."
+  cost: "Left unaddressed, {primary_name} caps what everything after it can reach. Investing in {downstream_list} first tends to lift a number for a season without changing what produced it."
+  do_not_work_on: "These are worth leaving for now. They read as symptoms of the constraint above rather than separate problems, and they will likely ease as it is strengthened: {do_not_list}."
+  next_step: "Start with {primary_name}. Strengthening it is what gives everything after it room to grow. {offer_hook}"
 inserts:
-  gating: "Before this can hold, address {gating_list}. These are the ground the fix stands on."
-  dispersion: "Your leaders do not agree on {disp_name}. Answers ranged across {disp_spread} points. That disagreement is itself the finding."
+  gating: "For this to hold, {gating_list} will need strengthening first. These are what the change has to stand on."
+  dispersion: "Your leaders see {disp_name} differently. Answers ranged across {disp_spread} points. That spread is worth investigating before prescribing anything, because it usually points to uneven experience rather than one shared reality."
   benchmark_note: "Benchmarks are XPG provisional priors, not an observed cohort yet."
   dependency_note: "Dependencies are XPG's working model of how these areas compound, not an observed causal finding."
 dossier:
   reading:
     stage:
-      severe:  "This is not underperforming, it is absent — there is no working version of this to improve yet."
-      broken:  "This is below the line where it holds — everything downstream of it is running on what little gets through."
-      watch:   "This works, but not reliably — it holds on a good week and slips on the rest."
-      holding: "This is strong. It is not what is limiting you."
+      severe:  "There is not yet a working version of this to strengthen. This is a build, not a repair."
+      broken:  "This sits below the level where it holds consistently. Areas further along are working with only what makes it through here."
+      watch:   "This works, though not yet consistently. It holds on a good week and slips on the rest."
+      holding: "This is a strength to protect. It is not what is limiting you."
     enabler:
-      severe:  "This is absent, and it is capping every area that leans on it — none of them can rise above it."
-      broken:  "This is below the line, and it puts a ceiling on every area it touches at once."
-      watch:   "This mostly holds, but it is thin enough to give way under any added load."
-      holding: "This is strong — it is not what is capping anything."
-  enabler_belief_only: "Measured on perception only — there's no countable evidence side to cross-check this against."
-  calibration_spread: "Rater style spans {spread} points across your leaders — that is removed before any score you see above."
+      severe:  "There is no working version of this yet, and every area leaning on it is capped at that level."
+      broken:  "This sits below the line, and it puts a ceiling on every area it touches at once."
+      watch:   "This mostly holds, though it is thin enough to give way under added load."
+      holding: "This is a strength to protect. It is not capping anything."
+  enabler_belief_only: "Measured on perception only, so there is no countable evidence side to cross-check this against."
+  calibration_spread: "Rater style spans {spread} points across your leaders. That is removed before any score you see above."
   generosity:
-    breadth: "Breadth: your givers are generous — there just aren’t enough of them yet. This routes upstream to connection."
+    breadth: "Breadth: the people who give are generous, there are just not yet enough of them. This routes upstream to connection."
     depth: "Depth: most of your people give, but few have been taught why. The opportunity is discipleship around generosity."
-    both: "Both breadth and depth are low: few givers, and little teaching behind the giving."
+    both: "Both breadth and depth sit low: few givers, and little teaching behind the giving. Generosity here is a discipleship opportunity before it is a budget one."
   # Residual-spread read for a single area (spec §7.2), relocated verbatim from
   # lib/report/view.ts's agreementFor. `split` keeps the {spread} token.
   agreement:
-    split: "Split — spread of {spread} points after removing rater style"
-    tight: "Tight — no significant spread once rater style is removed"
+    split: "Split: a spread of {spread} points after removing rater style."
+    tight: "Tight: no significant spread once rater style is removed."
 # Dependency-map read sentences (spec §6.1), one per EdgeRead. Relocated verbatim from
 # system.tsx / pdf/document.tsx; {fromName}/{toName} interpolated in lib/report/view.ts.
 dependency_reads:
-  load_bearing: "{fromName} is weak here too — this dependency is active and part of what's costing you."
-  clear: "{fromName} is strong — so {fromName} is not what's capping your {toName}."
-  at_risk: "{toName} is strong for now, but {fromName} is weak — it's running on borrowed time."
-  both_strong: "Both are strong — nothing to flag here."
+  load_bearing: "{fromName} is weak here too, so this dependency is active and part of what it is costing you."
+  clear: "{fromName} is strong, so it is not what is capping your {toName}."
+  at_risk: "{toName} is strong for now, but {fromName} is weak beneath it, so that strength is running on borrowed time."
+  both_strong: "Both are strong. Nothing to flag here."
 # One deterministic XPG read per archetype x tier, for S3's Executive Health Dashboard.
 # S3 is not an AI section and never will be — the dashboard is the numbers layer, and it must
 # not degrade to prose when the model is unavailable (spec §3). Tier ids are rules.yaml's
 # `tiers` keys; archetypes are lib/report/tier.ts's Archetype union.
 xpg_read:
   capacity:
-    healthy_ready: "Nothing in the chain is broken and the numbers are strong across the board. The question in front of you is not what to repair — it is what to build next."
-    healthy_stretched: "Nothing in the chain is broken, but the whole system is running near its limit. Adding load before adding capacity is how a healthy church becomes a strained one."
-    strained: "No single stage is broken, but nothing is comfortable either. This is a whole-system capacity conversation, not a repair one — spread thin is its own diagnosis."
-    at_risk: "No single stage has failed, yet every one of them is running low at once. Treat this as a capacity floor, not a list of separate problems."
+    healthy_ready: "Every area is carrying its load and the numbers are strong across the board. The most useful question now is not what to strengthen, it is what to build for the season ahead."
+    healthy_stretched: "Every area is carrying its load, but the whole system is running near its limit. Adding load before adding capacity is how a healthy church becomes a strained one."
+    strained: "No single area has given way, but nothing has much room either. Read this as a whole-system capacity picture rather than a list of separate problems."
+    at_risk: "No single area has given way, yet every one of them is running low at once. Treat this as a capacity floor to build up from, not a list of separate problems."
   constraint:
-    healthy_ready: "One stage is holding the rest back while everything around it is strong. Fixing it is the highest-leverage move available to you this year."
-    healthy_stretched: "One stage is broken inside an otherwise healthy system. Everything downstream of it is running on what little gets through — that is where the ceiling is."
-    strained: "One stage is broken and the system around it has no slack to absorb it. Fix the constraint before anything downstream of it gets attention or budget."
-    at_risk: "A broken stage sits inside a system that is already low everywhere. Work the constraint first — spreading effort evenly now would improve nothing measurably."
+    healthy_ready: "One area is capping what an otherwise strong system can reach. Strengthening it is the highest-leverage move available to you this year."
+    healthy_stretched: "One area is limiting an otherwise healthy system. That is where the ceiling sits, and lifting it lifts everything after it."
+    strained: "One area is limiting the rest, and the system around it has little slack to absorb that. Strengthen the constraint before anything after it gets attention or budget."
+    at_risk: "A limiting area sits inside a system that is already low across the board. Work the constraint first, because spreading effort evenly now would move very little."
   foundation:
-    healthy_ready: "No stage is broken, but an enabler is capping what the strong parts can reach. The ground has to hold before the building goes higher."
-    healthy_stretched: "Your stages hold; the enablers underneath them do not. Every area leaning on those enablers is capped at their level, whatever its own score says."
-    strained: "Nothing is broken outright, but the enablers underneath everything are the ceiling. Work the ground before the stages — they cannot rise above it."
-    at_risk: "The enablers holding up every other area are the binding limit. Any stage-level gain now is temporary until the ground beneath it changes."
+    healthy_ready: "No stage is falling short, but an enabler is capping what the strong areas can reach. Strengthen what holds the weight before adding height."
+    healthy_stretched: "Your stages are carrying their load; the enablers beneath them are not yet. Every area leaning on those enablers is capped at their level, whatever its own score says."
+    strained: "Nothing has given way outright, but the enablers underneath everything set the ceiling. Work those before the stages, because no stage rises above what supports it."
+    at_risk: "The enablers holding up every other area are the binding limit right now. Stage-level gains will be temporary until what supports them is strengthened."
 # The three s6 micro-template beats that had no data source until now (spec §4). The full beat
 # order is affirm -> pivot -> evidence -> not_statement -> reframe -> trajectory; affirm /
 # evidence / reframe already read from dossier.reading, blocks.blind_spot and inserts.dispersion.
@@ -73,23 +73,23 @@ beats:
   # eight (1 = highest score); {delta} is how many points it sits below the mean of the top three,
   # always a non-negative integer (the top three themselves emit no pivot beat).
   pivot:
-    severe: "It ranks {rank} of eight and sits {delta} points below your strongest three — this is not a gap to close, it is a floor to build."
+    severe: "It ranks {rank} of eight and sits {delta} points below your strongest three. This is not a gap to close, it is a floor to build."
     broken: "It ranks {rank} of eight, {delta} points below your strongest three, and that distance is the finding."
-    watch: "It ranks {rank} of eight, {delta} points behind your strongest three — close enough to look fine, far enough to matter."
-    holding: "It ranks {rank} of eight and trails your strongest three by {delta} points, which is a difference in degree, not in kind."
+    watch: "It ranks {rank} of eight, {delta} points behind your strongest three. Close enough to look fine, far enough to matter."
+    holding: "It ranks {rank} of eight and trails your strongest three by {delta} points, which is a difference in degree rather than in kind."
   # Keyed by the dominant theme among THIS area's lowest-scoring indicators. Says what the
   # weakness is not, so a leader does not reach for the wrong instrument.
   not_statement:
-    systems: "What is weak here is process, not conviction — nobody needs persuading, something needs writing down."
-    culture: "What is weak here is habit, not capability — the people can do this; it is not yet what they do."
-    theology: "What is weak here is understanding, not effort — people are working hard without a clear reason why."
-    relational: "What is weak here is connection, not competence — the work happens, it just does not happen between people."
+    systems: "What is thin here is process, not conviction. Nobody needs persuading; something needs writing down."
+    culture: "What is thin here is habit, not capability. Your people can do this; it is not yet what they do."
+    theology: "What is thin here is understanding, not effort. People are working hard without a clear reason why."
+    relational: "What is thin here is connection, not competence. The work happens, it just does not happen between people."
   # Keyed by the church's growth_trajectory profile value (settings-form.tsx GROWTH_OPTIONS).
   # An unset or unrecognised value drops the beat entirely.
   trajectory:
-    declining: "Against a declining trajectory, this is the area where decline shows up first."
-    plateaued: "Against a flat trajectory, this is one of the places the plateau is being held in place."
-    growing_steadily: "Against steady growth, this is the area that growth will find first."
+    declining: "Against a declining trajectory, this is where decline tends to show up first."
+    plateaued: "Against a flat trajectory, this is one of the places holding the plateau in place."
+    growing_steadily: "Against steady growth, this is the area growth will find first."
     growing_rapidly: "Against rapid growth, this is the area most likely to be overrun before it is ready."
 # S8's below-threshold line. Shown instead of verbatim reflections when too few people responded
 # for a quote to be unattributable — including on the public share page, which renders the

@@ -50,6 +50,7 @@ const cs = StyleSheet.create({
   coverKicker: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1, color: INK_SOFT, marginTop: 4 },
   coverDate: { fontSize: 10.5, color: INK_SOFT, marginTop: 2 },
   coverHero: { marginTop: 70 },
+  coverScoreLabel: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: 1, color: INK_SOFT, marginBottom: 4 },
   coverScore: { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 84 },
   coverCaption: { fontFamily: FONT_BODY, fontWeight: 700, fontSize: 10.5, marginTop: 10 },
   coverFoot: { position: 'absolute', left: 0, right: 0, bottom: 44, paddingVertical: 26, paddingHorizontal: 48 },
@@ -356,6 +357,7 @@ export function ReportDocument({
           {generatedAt.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
         </Text>
         <View style={cs.coverHero}>
+          <Text style={cs.coverScoreLabel}>{cover.scoreLabel.toUpperCase()}</Text>
           <Text style={[cs.coverScore, { color: BAND_TEXT[cover.band] }]}>{String(cover.score)}</Text>
           <CoverStrip cover={cover} />
           <Text style={cs.coverCaption}>{`${cover.caption.tierName} · ${cover.caption.score} of 100`}</Text>

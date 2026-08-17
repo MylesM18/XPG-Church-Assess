@@ -147,7 +147,7 @@ const DOC_ARGS = {
 };
 
 const S8_TITLE = 'What leaders are saying'; // methodology.report.sections.s8.title
-const S9_TITLE = 'Strategic diagnosis'; // methodology.report.sections.s9.title — s8's region boundary
+const S9_TITLE = 'Strategic direction'; // methodology.report.sections.s9.title — s8's region boundary
 
 /**
  * @react-pdf/renderer wraps long bullet text at the page width, inserting a newline mid-sentence
