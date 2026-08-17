@@ -52,17 +52,25 @@ export default function SignInPage() {
   }, [])
 
   // Forward the `?next=` the sign-in page was loaded with (e.g. the answer page
-  // or the accept-invitation page redirecting here when unauthenticated) through the magic
-  // link so /auth/callback lands the user back where they started. Falls back to
+  // or the accept-invitation page redirecting here when unauthenticated) through the
+  // sign-in round-trip so the user lands back where they started. Falls back to
   // /get-started for a bare sign-in visit. Open-redirect guarded in resolveNext.
-  const callbackUrl = () => {
-    const origin =
-      typeof window !== 'undefined' ? window.location.origin : ''
-    const next =
-      typeof window !== 'undefined'
-        ? resolveNext(window.location.search)
-        : '/get-started'
-    return `${origin}/auth/callback?next=${encodeURIComponent(next)}`
+  const currentOrigin = () => (typeof window !== 'undefined' ? window.location.origin : '')
+  const nextPath = () =>
+    typeof window !== 'undefined' ? resolveNext(window.location.search) : '/get-started'
+
+  // Google OAuth only. It is a PKCE code exchange, so it still round-trips through
+  // /auth/callback, which is unchanged.
+  const callbackUrl = () => `${currentOrigin()}/auth/callback?next=${encodeURIComponent(nextPath())}`
+
+  // Magic link. Supabase renders this value into the email template as `{{ .RedirectTo }}`, and
+  // the emailed link carries it to /auth/confirm as `next` — so it must be the REAL destination,
+  // not a callback hop. It arrives at the confirm route absolute; `resolveNextFromRedirectTo`
+  // reduces it back to a path there.
+  const magicLinkRedirectTo = () => {
+    const origin = currentOrigin()
+    const next = nextPath()
+    return `${origin}${next}`
   }
 
   async function sendMagicLink(e: React.FormEvent) {
@@ -70,7 +78,7 @@ export default function SignInPage() {
     setError(null)
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: callbackUrl() },
+      options: { emailRedirectTo: magicLinkRedirectTo() },
     })
     if (error) setError(error.message)
     else setSent(true)
