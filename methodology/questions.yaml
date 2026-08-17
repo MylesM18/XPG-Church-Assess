@@ -452,7 +452,7 @@ categories:
           hi: "Our systems would scale with us."
       - id: SYS6
         theme: systems
-        text: "Do your community efforts run on systems — owned partnerships, follow-up, a rhythm — or on bursts of enthusiasm?"
+        text: "Do your efforts in the community around you run on systems — owned partnerships, follow-up, a rhythm — or on bursts of enthusiasm?"
         signal: evidence
         since: "0.3.0"
         anchors:
