@@ -43,7 +43,8 @@ describe('Fixture: Healthy Church (NO_STRUCTURAL_CONSTRAINT)', () => {
     expect(text).not.toContain('{'); // every token interpolated
     expect(text.toLowerCase()).toContain('capacity'); // no-constraint verdict / capacity offer
     expect(text).toContain(d.offer.call_type);
-    for (const c of m.questions.categories) expect(text).toContain(c.name); // appendix
-    expect(text.toLowerCase()).toContain('prior'); // benchmarks are provisional priors
+    for (const c of m.questions.categories) expect(text).toContain(c.name); // category score list
+    // The 'prior' assertion went with benchmark_note, dropped from ReportBlocks on 2026-08-16.
+    expect(text.toLowerCase()).not.toContain('provisional priors');
   });
 });

@@ -93,7 +93,15 @@ export interface ReportDocumentProps {
    * the report was built from would fail open.
    */
   labels: readonly string[];
-  /** A report exists for this run but not for these inputs. Renders as an appendix caveat. */
+  /**
+   * A report exists for this run but not for these inputs. Renders as a cover-page caveat.
+   *
+   * It used to render at the foot of the appendix, which was the last thing in the document.
+   * With the appendix gone (2026-08-16) the caveat had no home, and appending it to s12 would
+   * have buried a provenance warning behind twelve sections and the booking CTA. The cover is
+   * also where the WEB surface puts its stale notice (app/app/[churchId]/diagnosis/page.tsx
+   * renders it above the cover), so the two surfaces now agree on placement as well as wording.
+   */
   stale: boolean;
   /** Cover model computed in resolve; the document never reads facts. */
   cover: CoverModel;
@@ -287,7 +295,7 @@ function SectionContent({
 }
 
 /**
- * Groups the 13 sections into content pages (spec §2.7): each group becomes one `<Page>` with a
+ * Groups the 12 sections into content pages (spec §2.7): each group becomes one `<Page>` with a
  * fixed runhead/footer and a verdict-tint opener per section inside it. s3 (verdict block + the
  * 8-area stat grid) gets its own page: pairing it with s4, as the plan literally specified, filled
  * page 3 with s3's content and left page 4 carrying only the s4 opener plus a line or two — an
@@ -304,7 +312,6 @@ export const PAGE_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
   ['s7', 's8'],
   ['s9', 's10'],
   ['s11', 's12'],
-  ['appendix'],
 ];
 
 type PageGroup = { key: string; sections: Array<{ section: AssembledSection; number: string; title: string }> };
@@ -334,7 +341,7 @@ function pageGroupsFor(sections: AssembledSection[]): PageGroup[] {
 }
 
 /**
- * The PDF mirror of app/app/[churchId]/diagnosis/report/sections.tsx. Same 13 sections, same
+ * The PDF mirror of app/app/[churchId]/diagnosis/report/sections.tsx. Same 12 sections, same
  * order, same one-title-source rule — different primitives, because @react-pdf/renderer cannot
  * render DOM components and never could.
  *
@@ -365,6 +372,7 @@ export function ReportDocument({
         <View style={[cs.coverFoot, { backgroundColor: BAND_FILL[cover.band] }]}>
           <Text style={[cs.coverHeadline, { color: textOnBand(cover.band) }]}>{cover.headline}</Text>
         </View>
+        {stale && <Text style={s.caveat}>{STALE_CAVEAT}</Text>}
         <Text style={cs.coverRunline}>XPG · CHURCH HEALTH ASSESSMENT</Text>
       </Page>
 
@@ -387,7 +395,6 @@ export function ReportDocument({
                 </View>
               ))}
               <SectionContent section={section} areaIndex={areaIndex} />
-              {stale && section.id === 'appendix' && <Text style={s.caveat}>{STALE_CAVEAT}</Text>}
             </View>
           ))}
 

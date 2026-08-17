@@ -31,7 +31,6 @@ const VISUALS: WebVisuals = {
   s8: { spread: null },
   s9: { chain: { stages: [] } },
   s10: { phaseRail: null },
-  s13: { confidence: { pct: 0, label: '0%', respondents: 0, areas: 0, thinnest: null } },
 }
 
 const fallbackSection = (id: string, title: string): AssembledSection => ({
@@ -419,21 +418,17 @@ describe('SectionVisualsAbove / SectionVisualsBelow', () => {
     expect(html).toContain(`</div><p class="${BODY_CLASS}">body of s9</p>`)
   })
 
-  it('renders the confidence meter for the appendix id only, exactly once', () => {
-    // Guards the id correction directly: the MODEL key is visuals.s13, but the runtime
-    // SectionId is 'appendix'. A `case 's13'` in SectionVisualsBelow renders 0 of these.
-    const appendix = renderToStaticMarkup(
-      createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [fallbackSection('appendix', 'Methodology')] }),
-    )
-    expect(countOf(appendix, CONFIDENCE_HEAD)).toBe(1)
-    const others = renderToStaticMarkup(
-      createElement(ReportSections, {
-        visuals: VISUALS,
-        band: BAND,
-        sections: ['s1', 's10', 's11', 's12'].map((id) => fallbackSection(id, `Title ${id}`)),
-      }),
-    )
-    expect(countOf(others, CONFIDENCE_HEAD)).toBe(0)
+  // Was "renders the confidence meter for the appendix id only, exactly once". The meter and
+  // the appendix were both removed on 2026-08-16, so the count inverts to 0 — including for
+  // the now-dead 'appendix' id itself, which the dispatcher must treat as any other unknown id
+  // (fall through to null) rather than resurrecting a meter for it.
+  it('renders the confidence meter for no id, including the removed appendix id', () => {
+    for (const id of ['appendix', 's1', 's4', 's7', 's8', 's10', 's11', 's12']) {
+      const html = renderToStaticMarkup(
+        createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [fallbackSection(id, `Title ${id}`)] }),
+      )
+      expect(countOf(html, CONFIDENCE_HEAD), id).toBe(0)
+    }
   })
 })
 

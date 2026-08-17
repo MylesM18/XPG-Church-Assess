@@ -1,4 +1,4 @@
-version: "0.2.0"
+version: "0.3.0"
 blocks:
   verdict: "The data points to {primary_name} as your primary growth constraint. It scored {primary_score} out of 100, under the level where this stage reliably carries what comes after it. Areas further along will likely read weaker than they are until this is strengthened."
   verdict_no_constraint: "No single area is limiting the others; every stage is carrying its load. What sits in front of you is a question of capacity."
@@ -10,8 +10,6 @@ blocks:
 inserts:
   gating: "For this to hold, {gating_list} will need strengthening first. These are what the change has to stand on."
   dispersion: "Your leaders see {disp_name} differently. Answers ranged across {disp_spread} points. That spread is worth investigating before prescribing anything, because it usually points to uneven experience rather than one shared reality."
-  benchmark_note: "Benchmarks are XPG provisional priors, not an observed cohort yet."
-  dependency_note: "Dependencies are XPG's working model of how these areas compound, not an observed causal finding."
 dossier:
   reading:
     stage:

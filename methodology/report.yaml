@@ -5,7 +5,7 @@
 #
 # This version feeds the report cache key (lib/report/report-hash.ts): bumping it regenerates
 # every report without staling any run.
-version: "0.2.0"
+version: "0.3.0"
 
 # The register. Kept word-for-word in sync with SYSTEM_PROMPT in lib/ai/prose.ts — the two
 # instruct the same model about the same copy, and letting them drift is how the AI path and the
@@ -155,15 +155,6 @@ sections:
         on.
     length_ceiling: 900
     required_mentions: [tier_name, overall_percent]
-
-  appendix:
-    title: "Methodology and caveats"
-    templates:
-      capacity: "How these numbers were produced, and what they do and do not claim."
-      constraint: "How these numbers were produced, and what they do and do not claim."
-      foundation: "How these numbers were produced, and what they do and do not claim."
-    length_ceiling: 1200
-    required_mentions: []
 
 # Gate family 3. Each list captures the OTHER archetypes' thesis FRAMINGS — multi-word phrases,
 # never single generic words and never stage names, which are shared vocabulary and would

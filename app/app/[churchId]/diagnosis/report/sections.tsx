@@ -11,7 +11,6 @@ import { WebChart } from './charts'
 import {
   WebCapacityBars,
   WebChainRail,
-  WebConfidence,
   WebConstraintCallout,
   WebDumbbells,
   WebPhaseRail,
@@ -36,7 +35,7 @@ const OPENER_TITLE_SIZE = { fontSize: 'clamp(1.5rem, 4vw, 2.125rem)' } as const
 // same opener was a visible warm/cool mismatch.
 
 /**
- * The uniform renderer: the { body, bullets } half of a SectionBody. Used for all 13
+ * The uniform renderer: the { body, bullets } half of a SectionBody. Used for all 12
  * sections on the public share page, and for every source:'fallback' section on the
  * diagnosis page. The title is rendered by ReportSections, never here — one title
  * source for both branches. Bullets are a real <ul> with disc markers (no bullet glyph in
@@ -274,7 +273,7 @@ function SectionContent({ section, areaIndex }: { section: AssembledSection; are
  * react-hooks/static-components error in this repo, not a style preference.
  */
 type AboveId = 's3' | 's4' | 's7' | 's9'
-type BelowId = 's4' | 's7' | 's8' | 'appendix'
+type BelowId = 's4' | 's7' | 's8'
 
 /**
  * `as const satisfies readonly AboveId[]` / `readonly BelowId[]` is load-bearing, not tidiness.
@@ -290,7 +289,7 @@ type BelowId = 's4' | 's7' | 's8' | 'appendix'
  * comment exists to prevent. Runtime behaviour is unchanged: same values, same order.
  */
 const ABOVE_IDS = ['s3', 's4', 's7', 's9'] as const satisfies readonly AboveId[]
-const BELOW_IDS = ['s4', 's7', 's8', 'appendix'] as const satisfies readonly BelowId[]
+const BELOW_IDS = ['s4', 's7', 's8'] as const satisfies readonly BelowId[]
 
 function chartOfKind(section: AssembledSection, kind: ChartModel['kind']) {
   return section.charts.find((chart) => chart.kind === kind) ?? null
@@ -353,11 +352,10 @@ function SectionVisualsAbove({
 }
 
 /**
- * The confidence meter's case is 'appendix', not 's13'. The MODEL's own key is
- * `visuals.s13` (spec §5.1's 13th-section numbering), but the runtime SectionId of the
- * last section is 'appendix' (methodology/schema.ts) — there is no 's13' section id, so
- * a `case 's13'` here would never match and the meter would silently vanish. The id and
- * the model key differ on purpose.
+ * The confidence meter used to hang off the appendix here. Both went on 2026-08-16
+ * (Natalie): the appendix section is gone, and CONFIDENCE / RESPONDENTS / AREAS ASSESSED /
+ * THINNEST COVERAGE went with it rather than moving to another section. WebConfidence and
+ * its ConfidenceModel were deleted outright, not left as unreferenced exports.
  */
 function SectionVisualsBelow({
   section,
@@ -379,8 +377,6 @@ function SectionVisualsBelow({
       return rankList ? <WebChart model={rankList} /> : null
     case 's8':
       return visuals.s8.spread ? <WebSpread model={visuals.s8.spread} /> : null
-    case 'appendix':
-      return <WebConfidence model={visuals.s13.confidence} />
     default: {
       const exhaustive: never = id
       return exhaustive

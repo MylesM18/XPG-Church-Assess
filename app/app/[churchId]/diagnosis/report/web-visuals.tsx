@@ -18,7 +18,6 @@ import { BAND_FILL, BAND_TEXT, THEME_FILL, textOnBand } from '@/lib/report/chart
 import type {
   CapacityBarsModel,
   ChainModel,
-  ConfidenceModel,
   ConstraintCalloutModel,
   DumbbellsModel,
   PhaseRailModel,
@@ -36,49 +35,6 @@ const CAPS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]';
  * colour from a band ground instead. */
 const CAPS_SOFT = `${CAPS} text-ink-soft`;
 const NUM = 'font-display font-semibold leading-none';
-
-/**
- * Data-quality meter for the appendix (spec §6). Deliberately NEUTRAL CHROME: track
- * `bg-line`, fill `bg-ink-soft`, number `text-ink`. No band token appears anywhere in
- * this component.
- *
- * Confidence measures how much data the report rests on, not how healthy the church
- * is. Pinning it to a band — whether fixed (which painted a 38%-confidence church in
- * the healthy palette) or banded off the verdict (which would imply data quality
- * tracks church health) — makes it read as a verdict. The neutral pair still carries
- * a strong contrast step, so the fill stays legible against its track.
- */
-export function WebConfidence({ model }: { model: ConfidenceModel }) {
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className={CAPS_SOFT}>Confidence</p>
-        <p className={`${NUM} text-[1.5rem] text-ink`}>{model.label}</p>
-      </div>
-      <div aria-hidden className="h-2 w-full overflow-hidden bg-line">
-        <div className="h-full bg-ink-soft" style={{ width: `${model.pct}%` }} />
-      </div>
-      <ul role="list" className="flex flex-col gap-1 border-t border-line pt-3">
-        <li className="flex items-baseline justify-between gap-3">
-          <span className={CAPS_SOFT}>Respondents</span>
-          <span className="font-body text-[0.8125rem] text-ink">{model.respondents}</span>
-        </li>
-        <li className="flex items-baseline justify-between gap-3">
-          <span className={CAPS_SOFT}>Areas assessed</span>
-          <span className="font-body text-[0.8125rem] text-ink">{model.areas}</span>
-        </li>
-        {model.thinnest ? (
-          <li className="flex items-baseline justify-between gap-3">
-            <span className={CAPS_SOFT}>Thinnest coverage</span>
-            <span className="font-body text-[0.8125rem] text-ink">
-              {model.thinnest.name} · {model.thinnest.count}
-            </span>
-          </li>
-        ) : null}
-      </ul>
-    </div>
-  );
-}
 
 /**
  * Capacity vs throughput on one shared 0-100 axis (spec §6.3) — the two bars are

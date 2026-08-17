@@ -46,8 +46,6 @@ function blocks(over: Partial<ReportBlocks> = {}): ReportBlocks {
   return {
     verdict: 'Guest Experience is the constraint. It scored 30 out of 100.',
     next_step: 'Start with the first weekend touchpoint.',
-    benchmark_note: 'Benchmarks are provisional priors.',
-    dependency_note: 'Dependencies are a working model.',
     ...over,
   };
 }
@@ -108,7 +106,6 @@ describe('buildReportView', () => {
     );
     expect(v.evidence).toBeUndefined();
     expect(v.verdict).toBeTruthy();
-    expect(v.appendix.categories.length).toBe(2);
     // M4 (whole-branch review, T13-a): constraintName must be null, not the id 'null' or an
     // empty string, when there is nothing to name.
     expect(v.cover.constraintName).toBeNull();
@@ -202,13 +199,13 @@ describe('buildReportView', () => {
     expect(v.cover.constraintName).not.toBe('guest');
   });
 
-  // Coverage lock for the session-19 view.ts threading: appendix.dependencyNote must mirror
-  // blocks.dependency_note verbatim. Goes red if the `dependencyNote: blocks.dependency_note`
-  // line is ever dropped from buildReportView (it would then be undefined, not the note string).
-  it('threads the dependency note onto the appendix', () => {
-    const b = blocks();
-    const v = buildReportView(diagnosis(), b, methodology, { audience: 'screen' });
-    expect(v.appendix.dependencyNote).toBe(b.dependency_note);
+  // Replaces the session-19 coverage lock on appendix.dependencyNote. The appendix slice was
+  // removed with the section itself (2026-08-16), so the guard inverts: the view must carry NO
+  // appendix key at all. `in` on the runtime object, not a type assertion — re-adding the slice
+  // in buildReportView would typecheck fine against a widened ReportView and only this fails.
+  it('carries no appendix slice', () => {
+    const v = buildReportView(diagnosis(), blocks(), methodology, { audience: 'screen' });
+    expect('appendix' in v).toBe(false);
   });
 });
 

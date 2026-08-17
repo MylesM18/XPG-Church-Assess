@@ -59,34 +59,6 @@ describe('webVisuals — s3 capacity bars', () => {
   });
 });
 
-describe('webVisuals — s13 confidence', () => {
-  const methodology = loadMethodology();
-
-  it('prints confidence as a whole percentage with the sample basis', () => {
-    const { confidence } = webVisuals(CAPACITY_FACTS, methodology).s13;
-    expect(confidence.pct).toBe(Math.round(CAPACITY_FACTS.confidence * 100));
-    expect(confidence.label).toBe(`${confidence.pct}%`);
-    expect(confidence.respondents).toBe(CAPACITY_FACTS.cover.respondent_count);
-    expect(confidence.areas).toBe(CAPACITY_FACTS.categories.length);
-  });
-
-  it('reports the thinnest coverage by area name and count', () => {
-    const { confidence } = webVisuals(CAPACITY_FACTS, methodology).s13;
-    const min = Math.min(...CAPACITY_FACTS.categories.map((c) => c.respondent_count));
-    expect(confidence.thinnest).not.toBeNull();
-    expect(confidence.thinnest!.count).toBe(min);
-    expect(CAPACITY_FACTS.categories.some(
-      (c) => c.name === confidence.thinnest!.name && c.respondent_count === min,
-    )).toBe(true);
-  });
-
-  it('has no thinnest row when there are no categories', () => {
-    const model = webVisuals(makeFacts({ categories: [] }), methodology).s13.confidence;
-    expect(model.thinnest).toBeNull();
-    expect(model.areas).toBe(0);
-  });
-});
-
 describe('webVisuals is pure', () => {
   const methodology = loadMethodology();
 

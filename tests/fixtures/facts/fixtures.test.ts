@@ -44,10 +44,10 @@ describe('facts fixtures', () => {
     }
   });
 
-  it('renders all 13 sections without throwing, on every fixture', () => {
+  it('renders all 12 sections without throwing, on every fixture', () => {
     for (const { name, facts } of ALL_FIXTURES) {
       const sections = fallbackSections({ facts, methodology, reflections: [] });
-      expect(Object.keys(sections), name).toHaveLength(13);
+      expect(Object.keys(sections), name).toHaveLength(12);
       for (const [id, body] of Object.entries(sections)) {
         expect(body.title.length, `${name}/${id}`).toBeGreaterThan(0);
         expect(body.body.length, `${name}/${id}`).toBeGreaterThan(0);

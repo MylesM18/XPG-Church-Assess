@@ -1,12 +1,17 @@
 import { z } from 'zod/v4';
 
 /**
- * Mirrors the shipped 10-field ReportBlocks contract (lib/ai/fallback.ts).
- * Required: verdict, next_step, benchmark_note, dependency_note. The 6 optional fields are
+ * Mirrors the shipped 8-field ReportBlocks contract (lib/ai/fallback.ts).
+ * Required: verdict, next_step. The 6 optional fields are
  * `.nullable()` (present-but-null) rather than `.optional()`: OpenAI strict
  * structured outputs require every property in `required`, so the model returns
  * null for an absent field. passesFactCheck (Task 2) treats null/undefined/''
  * identically, so the field-parity invariant holds regardless.
+ *
+ * benchmark_note and dependency_note were dropped with the appendix section
+ * (Natalie, 2026-08-16): they rendered only there, so keeping them would have made
+ * the model produce two fields no surface reads. This is the structured-output
+ * shape, so the removal changes what OpenAI is asked to return.
  */
 export const ReportBlocksSchema = z.object({
   verdict: z.string(),
@@ -17,8 +22,6 @@ export const ReportBlocksSchema = z.object({
   next_step: z.string(),
   gating: z.string().nullable(),
   dispersion: z.string().nullable(),
-  benchmark_note: z.string(),
-  dependency_note: z.string(),
 });
 
 export type ParsedBlocks = z.infer<typeof ReportBlocksSchema>;
@@ -168,8 +171,6 @@ function toReportBlocks(p: ParsedBlocks): ReportBlocks {
     next_step: p.next_step,
     gating: p.gating ?? undefined,
     dispersion: p.dispersion ?? undefined,
-    benchmark_note: p.benchmark_note,
-    dependency_note: p.dependency_note,
   };
 }
 

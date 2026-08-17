@@ -165,7 +165,7 @@ const foundationFacts: FactsPack = buildFacts({
   }),
 });
 
-const IDS = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11', 's12', 'appendix'] as const;
+const IDS = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11', 's12'] as const;
 
 // 3-tuple [label, archetypeKey, facts]: archetypeKey indexes banned_phrases/report templates
 // (only 'capacity'|'constraint'|'foundation' exist there), while label disambiguates the two
@@ -522,22 +522,23 @@ describe('S6 area beats', () => {
   });
 });
 
-describe('appendix', () => {
-  it('uses copy.inserts.benchmark_note/dependency_note (not copy.blocks)', () => {
-    const s = fallbackSection('appendix', { facts: capacityFacts, methodology, reflections: [] });
-    expect(s.bullets[0]).toBe(methodology.copy.inserts.benchmark_note);
-    expect(s.bullets[1]).toBe(methodology.copy.inserts.dependency_note);
-  });
+// Replaces the two appendixBullets tests. The appendix section was removed on 2026-08-16, so
+// what needs guarding is that its content did not quietly reappear on a neighbouring section:
+// the IDS key-set equality above already pins the twelve, but a stray `Confidence: 0.85.` or
+// small-sample bullet re-added to s12 would pass that and still put the removed panel back in
+// front of a reader. Asserted over ALL_FIXTURES, and over the sub-8-respondent fixture that
+// used to be the ONLY input producing the small-sample line — checking a 40-respondent church
+// would pass vacuously.
+describe('the removed appendix disclosures', () => {
+  const REMOVED = ['Confidence:', 'Small sample:', 'provisional priors', 'working model of how'];
 
-  it('adds the small-sample bullet only under 8 respondents', () => {
+  it('appear on no section, at any respondent count', () => {
     const small = { ...capacityFacts, cover: { ...capacityFacts.cover, respondent_count: 3 } };
-    const large = { ...capacityFacts, cover: { ...capacityFacts.cover, respondent_count: 40 } };
-    expect(
-      fallbackSection('appendix', { facts: small, methodology, reflections: [] }).bullets.some((b) => b.startsWith('Small sample:')),
-    ).toBe(true);
-    expect(
-      fallbackSection('appendix', { facts: large, methodology, reflections: [] }).bullets.some((b) => b.startsWith('Small sample:')),
-    ).toBe(false);
+    for (const facts of [capacityFacts, constraintFacts, foundationFacts, small]) {
+      const all = fallbackSections({ facts, methodology, reflections: [] });
+      const text = IDS.map((id) => `${all[id].body} ${all[id].bullets.join(' ')}`).join(' ');
+      for (const phrase of REMOVED) expect(text, phrase).not.toContain(phrase);
+    }
   });
 });
 

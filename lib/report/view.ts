@@ -77,7 +77,6 @@ export interface ReportView {
   gating?: string;
   dispersion?: { text: string; respondents: Array<{ label: string; mean: number }> };
   nextStep?: { callType: string; hook: string; text: string };
-  appendix: { categories: Array<DiagnosisCategory & { name: string }>; benchmarkNote: string; dependencyNote: string };
   cover: CoverView;
   areas: AreaDossierView[];
   system: SystemView;
@@ -439,10 +438,6 @@ export function buildReportView(
     ? d.evidence_trail.find((r) => r.claim === `primary_constraint:${primaryId}`)
     : undefined;
 
-  // Same resolution pattern chain-walk.ts uses, so the chain section and the
-  // appendix never disagree on how a category_id is displayed.
-  const names = new Map(methodology.questions.categories.map((c) => [c.id, c.name]));
-
   const voices =
     opts.audience !== 'shared' && opts.reflections
       ? buildOutreachVoices(methodology, opts.reflections)
@@ -477,11 +472,6 @@ export function buildReportView(
       opts.audience === 'shared'
         ? undefined
         : { callType: d.offer.call_type, hook: d.offer.hook, text: blocks.next_step },
-    appendix: {
-      categories: d.categories.map((c) => ({ ...c, name: names.get(c.category_id) ?? c.category_id })),
-      benchmarkNote: blocks.benchmark_note,
-      dependencyNote: blocks.dependency_note,
-    },
 
     cover: buildCover(d, methodology),
     areas: buildAreas(d, methodology, voices),

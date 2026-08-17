@@ -5,15 +5,15 @@ import type { CategoryFact, FactsPack } from './facts';
 import { buildOutreachVoices, dependencyReadLines, interp, readingBand } from './view';
 
 /**
- * The deterministic spine. Every one of the thirteen sections renders from the facts pack and
+ * The deterministic spine. Every one of the twelve sections renders from the facts pack and
  * report.yaml alone — no model, no network, no throw. This is what makes an AI section failure
  * a local, invisible degradation rather than a broken report, and it is the ONLY renderer the
  * share page will ever reach (P5).
  *
- * Absorbs the old 10 blocks per the parent spec line 74:
+ * Absorbs the old blocks per the parent spec line 74:
  *   verdict → S2/S4 · evidence → S4/S7 · cost + do_not_work_on → S9/S10 (Constraint)
  *   next_step → S11 · gating → S6/S9 (Foundation) · dispersion → S6 area beat
- *   blind_spot → S6 "watch for" beat · benchmark_note + dependency_note → appendix
+ *   blind_spot → S6 "watch for" beat
  */
 export interface FallbackSectionArgs {
   facts: FactsPack;
@@ -345,18 +345,6 @@ function s11Bullets(facts: FactsPack, methodology: Methodology): string[] {
   return [`${offer.call_type}: ${offer.hook}`];
 }
 
-function appendixBullets(facts: FactsPack, methodology: Methodology): string[] {
-  const bullets = [
-    methodology.copy.inserts.benchmark_note!,
-    methodology.copy.inserts.dependency_note!,
-    `Confidence: ${facts.confidence}.`,
-  ];
-  if (facts.cover.respondent_count < 8) {
-    bullets.push(`Small sample: ${facts.cover.respondent_count} respondents.`);
-  }
-  return bullets;
-}
-
 function bulletsFor(
   id: SectionId,
   facts: FactsPack,
@@ -397,8 +385,6 @@ function bulletsFor(
         `Band: ${facts.overall.tier.name}.`,
         `Objective: ${tokens.primary_name}.`,
       ];
-    case 'appendix':
-      return appendixBullets(facts, methodology);
   }
 }
 

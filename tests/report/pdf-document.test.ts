@@ -221,7 +221,7 @@ describe('ReportDocument', () => {
 
     const ids = Object.keys(methodology.report.sections) as Array<keyof typeof methodology.report.sections>;
     const titles = ids.map((id) => methodology.report.sections[id].title);
-    expect(titles.length).toBe(13);
+    expect(titles.length).toBe(12);
 
     const positions = titles.map((title) => text.indexOf(title));
     const missing = titles.filter((_, i) => positions[i] === -1);
@@ -282,24 +282,36 @@ describe('ReportDocument', () => {
     ).rejects.toThrow(/respondent/i);
   }, 30_000);
 
-  // Replaces "renders the dependency disclosure note in the appendix" + "renders Area/Role/Score/
-  // Percentile columns..." (that table is gone) + "renders with no AI prose (prime directive 1)"
-  // (trivially true by construction for assembleFallbackOnly — every section source is
-  // 'fallback' — so not worth asserting). The appendix's actual fallback content
-  // (appendixBullets in lib/report/fallback-sections.ts) still carries the benchmark/dependency
-  // disclosure notes, a confidence line, and — for this fixture's 3 distinct respondents — a
-  // small-sample caveat; this checks all four survive to the rendered PDF, region-isolated to the
-  // appendix heading onward.
-  it('renders the appendix disclosures: benchmark note, dependency note, confidence, small sample', async () => {
+  // Inverts the old "renders the appendix disclosures" test. The appendix section and its four
+  // disclosures were removed on 2026-08-16; this fixture has 3 distinct respondents, so it is
+  // the one that USED to emit the small-sample caveat — checking a large-sample fixture would
+  // pass vacuously. Literal strings, not `methodology.copy.inserts.*`: those keys are gone, so
+  // reading them would make the assertion compare against undefined and pass for free.
+  it('renders no appendix section and none of its disclosures', async () => {
     const buffer = await renderReportDocument({ sections: sectionsFor(), ...DOC_ARGS });
     const text = await extractText(buffer);
-    const start = text.indexOf(methodology.report.sections.appendix.title);
-    expect(start, 'expected the appendix heading in the PDF').toBeGreaterThan(-1);
-    const appendix = text.slice(start);
-    expect(appendix).toContain(methodology.copy.inserts.benchmark_note);
-    expect(appendix).toContain(methodology.copy.inserts.dependency_note);
-    expect(appendix).toContain('Confidence: 0.85.');
-    expect(appendix).toContain('Small sample: 3 respondents.');
+    expect(text).not.toContain('Methodology and caveats');
+    expect(text).not.toContain('Confidence: 0.85.');
+    expect(text).not.toContain('Small sample: 3 respondents.');
+    expect(text).not.toContain('provisional priors');
+    expect(text).not.toContain('working model of how');
+  }, 30_000);
+
+  // The stale caveat used to render ONLY at the foot of the appendix and would have been
+  // silently lost with it. It now renders on the cover. Both directions: absent when the report
+  // is current (DOC_ARGS sets stale:false), present when it is not — a one-directional check
+  // would pass against a caveat hardcoded to always render.
+  it('renders the stale caveat on the cover, and only when stale', async () => {
+    const current = await extractText(await renderReportDocument({ sections: sectionsFor(), ...DOC_ARGS }));
+    expect(current).not.toContain('A previously generated narrative report exists');
+
+    const stale = await extractText(
+      await renderReportDocument({ sections: sectionsFor(), ...DOC_ARGS, stale: true }),
+    );
+    const caveat = stale.indexOf('A previously generated narrative report exists');
+    expect(caveat, 'expected the stale caveat in the PDF').toBeGreaterThan(-1);
+    // On the COVER means before every section opener — s1's title is the first one.
+    expect(caveat).toBeLessThan(stale.indexOf(methodology.report.sections.s1.title));
   }, 30_000);
 
   it('renders one page per populated group plus the cover, with the new furniture', () => {

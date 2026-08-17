@@ -60,16 +60,6 @@ export type CapacityBarsModel = {
   gapLabel: string | null;
 };
 
-export type ConfidenceModel = {
-  pct: number;
-  label: string;
-  respondents: number;
-  areas: number;
-  /** Minimum categories[].respondent_count with its area name. Area names only —
-   * never respondent labels or ids (spec §10). */
-  thinnest: { name: string; count: number } | null;
-};
-
 export type ConstraintRow = { id: string; name: string; score: number; note: string | null };
 
 export type ConstraintCalloutModel = {
@@ -186,7 +176,6 @@ export type WebVisuals = {
   s8: { spread: SpreadModel | null };
   s9: { chain: ChainModel };
   s10: { phaseRail: PhaseRailModel | null };
-  s13: { confidence: ConfidenceModel };
 };
 
 function capacityBars(facts: FactsPack): CapacityBarsModel {
@@ -199,23 +188,6 @@ function capacityBars(facts: FactsPack): CapacityBarsModel {
     throughputPct: pct(throughput),
     gap,
     gapLabel: gap > 0 ? `${gap} POINTS LOST` : null,
-  };
-}
-
-function confidenceModel(facts: FactsPack): ConfidenceModel {
-  const percent = Math.round(facts.confidence * 100);
-  let thinnest: { name: string; count: number } | null = null;
-  for (const cat of facts.categories) {
-    if (!thinnest || cat.respondent_count < thinnest.count) {
-      thinnest = { name: cat.name, count: cat.respondent_count };
-    }
-  }
-  return {
-    pct: percent,
-    label: `${percent}%`,
-    respondents: facts.cover.respondent_count,
-    areas: facts.categories.length,
-    thinnest,
   };
 }
 
@@ -388,6 +360,5 @@ export function webVisuals(facts: FactsPack, methodology: Methodology): WebVisua
     s8: { spread: spreadModel(facts, methodology) },
     s9: { chain: chainModel(facts, methodology) },
     s10: { phaseRail: phaseRail(facts, methodology) },
-    s13: { confidence: confidenceModel(facts) },
   };
 }

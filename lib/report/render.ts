@@ -31,9 +31,5 @@ export function renderReportText(
     lines.push(`- ${names.get(c.category_id) ?? c.category_id} (${tag}): ${c.score}`);
   }
 
-  lines.push('');
-  lines.push(blocks.benchmark_note);
-  lines.push(blocks.dependency_note);
-
   return lines.join('\n');
 }

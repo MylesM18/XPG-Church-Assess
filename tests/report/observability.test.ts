@@ -5,28 +5,28 @@ import type { SectionId, SectionSource } from '@/lib/report/compose';
 afterEach(() => { vi.restoreAllMocks(); });
 
 function sources(over: Partial<Record<SectionId, SectionSource>>): Record<SectionId, SectionSource> {
-  const ids: SectionId[] = ['s1','s2','s3','s4','s5','s6','s7','s8','s9','s10','s11','s12','appendix'];
+  const ids: SectionId[] = ['s1','s2','s3','s4','s5','s6','s7','s8','s9','s10','s11','s12'];
   return Object.fromEntries(ids.map((id) => [id, over[id] ?? 'fallback'])) as Record<SectionId, SectionSource>;
 }
 
 describe('summariseSectionSources', () => {
   it('reports the ai count and names every fallback section', () => {
     const line = summariseSectionSources(sources({ s2: 'ai', s4: 'ai' }));
-    expect(line).toContain('ai 2/13');
+    expect(line).toContain('ai 2/12');
     expect(line).toContain('s6');
     expect(line).not.toContain('s2');
   });
 
   it('makes an all-fallback report unmistakable', () => {
     const line = summariseSectionSources(sources({}));
-    expect(line).toContain('ai 0/13');
+    expect(line).toContain('ai 0/12');
   });
 
   it('makes an all-ai report unmistakable and lists no fallbacks', () => {
     const all = sources({});
     for (const id of Object.keys(all) as SectionId[]) all[id] = 'ai';
     const line = summariseSectionSources(all);
-    expect(line).toContain('ai 13/13');
+    expect(line).toContain('ai 12/12');
     expect(line).toContain('fallback: none');
   });
 
