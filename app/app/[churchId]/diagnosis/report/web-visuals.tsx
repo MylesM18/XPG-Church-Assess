@@ -417,7 +417,7 @@ export function WebPhaseRail({ model, bullets }: { model: PhaseRailModel; bullet
             >
               <div className="flex items-baseline gap-3">
                 <span className={`${NUM} text-[1.75rem]`}>{block.numeral}</span>
-                <span className={CAPS}>{block.dayLabel}</span>
+                <span className={CAPS}>{block.unit}</span>
               </div>
               <p className="font-body text-[0.9375rem] leading-[1.6]">{block.text}</p>
             </div>

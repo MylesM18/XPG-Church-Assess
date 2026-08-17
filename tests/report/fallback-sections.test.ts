@@ -314,21 +314,73 @@ describe('S10 roadmap', () => {
   });
 });
 
-describe('S11 mirrors S10 (ruling 11-REVISED — supersedes the withdrawn per-bullet ruling 11)', () => {
-  it('has one bullet per distinct roadmap phase', () => {
-    const s10 = fallbackSection('s10', { facts: constraintFacts, methodology, reflections: [] });
-    const s11 = fallbackSection('s11', { facts: constraintFacts, methodology, reflections: [] });
-    // Under per-phase mirroring this still holds for the constraint archetype: it has exactly
-    // one roadmap entry per phase already, so 3 === 3.
-    expect(s11.bullets).toHaveLength(s10.bullets.filter((b) => /^(30|60|90) days — /.test(b)).length);
+describe('S9 dependency reads (2026-08-16 review)', () => {
+  // The dependency map has 13 structural edges and emitted one read sentence per edge. Three of
+  // the four reads interpolate {fromName}/{toName} and so come out distinct, but `both_strong`
+  // names nothing — a healthy church got "Both are strong. Nothing to flag here." 13 times
+  // running. dependencyReadLines (lib/report/view.ts) collapses identical sentences to one.
+  //
+  // Asserted over ALL_FIXTURES, not the skeleton fixtures above: those carry 0 or 1 dependency
+  // edge, so they cannot express the duplicate at all and would pass this vacuously.
+  const bulletsFor = (facts: FactsPack) =>
+    fallbackSection('s9', { facts, methodology, reflections: [] }).bullets;
+
+  it('emits no duplicate bullet, for any fixture', () => {
+    for (const { name, facts } of ALL_FIXTURES) {
+      const bullets = bulletsFor(facts);
+      expect(new Set(bullets).size, `${name}: ${JSON.stringify(bullets)}`).toBe(bullets.length);
+    }
   });
 
-  it('collapses a 2-gated-enabler foundation to exactly 3 S11 bullets, NOT 6 (the withdrawn ruling 11 produced 6 byte-identical duplicates here)', () => {
-    const s10 = fallbackSection('s10', { facts: foundationFacts, methodology, reflections: [] });
-    const s11 = fallbackSection('s11', { facts: foundationFacts, methodology, reflections: [] });
-    const s10PhaseBullets = s10.bullets.filter((b) => /^(30|60|90) days — /.test(b));
-    expect(s10PhaseBullets).toHaveLength(3 * foundationFacts.gating.length); // S10: ruling 8 unchanged
-    expect(s11.bullets).toHaveLength(3); // S11: mirrors the 3 PHASES, not S10's 6 entries
+  it('states the nameless both_strong sentence exactly once where every edge produces it', () => {
+    const bothStrong = methodology.copy.dependency_reads.both_strong;
+    // Non-vacuity, asserted not assumed: a healthy church's RAW per-edge list really does repeat
+    // this sentence many times over, so the count assertion below tests a collapse that happened.
+    const raw = CAPACITY_FACTS.dependencies.filter((d) => d.read_sentence === bothStrong);
+    expect(raw.length, 'CAPACITY_FACTS no longer repeats both_strong').toBeGreaterThan(1);
+    expect(bulletsFor(CAPACITY_FACTS).filter((b) => b === bothStrong)).toHaveLength(1);
+  });
+
+  it('keeps every DISTINCT read sentence — dedup must not drop a real finding', () => {
+    for (const { name, facts } of ALL_FIXTURES) {
+      const bullets = bulletsFor(facts);
+      const distinct = new Set(facts.dependencies.map((d) => d.read_sentence));
+      for (const sentence of distinct) expect(bullets, `${name}: ${sentence}`).toContain(sentence);
+    }
+  });
+
+  it('still carries the gating notes alongside the reads', () => {
+    for (const { name, facts } of ALL_FIXTURES) {
+      const bullets = bulletsFor(facts);
+      for (const g of facts.gating) expect(bullets, name).toContain(`${g.name}: ${g.note}`);
+    }
+  });
+});
+
+describe('S11 states the offer once (2026-08-16 review — supersedes ruling 11-REVISED)', () => {
+  // Ruling 11-REVISED mirrored S10's three PHASES, pairing each with the SAME archetype-level
+  // offer, so every report printed one byte-identical `call_type: hook` per phase. Natalie saw
+  // it three times over on a rendered capacity report; it is now stated once. S10 is unchanged.
+  it('is exactly one bullet for every archetype, however many roadmap phases S10 emits', () => {
+    for (const facts of [capacityFacts, constraintFacts, foundationFacts, genConstraintFacts, govConstraintFacts]) {
+      const s10 = fallbackSection('s10', { facts, methodology, reflections: [] });
+      const s11 = fallbackSection('s11', { facts, methodology, reflections: [] });
+      // Non-vacuity: S10 really does still carry multiple phase bullets to have been mirrored.
+      expect(s10.bullets.filter((b) => /^(30|60|90) days — /.test(b)).length).toBeGreaterThan(1);
+      expect(s11.bullets, JSON.stringify(s11.bullets)).toHaveLength(1);
+    }
+  });
+
+  it('carries no day-label prefix and no em-dash separator', () => {
+    // The em-dash came from the RENDERER's `${call_type} — ${hook}`, not from offers.yaml, so
+    // tests/methodology/copy-register.test.ts (parsed YAML only) could never have caught it.
+    for (const facts of [capacityFacts, constraintFacts, foundationFacts]) {
+      const [bullet] = fallbackSection('s11', { facts, methodology, reflections: [] }).bullets;
+      expect(bullet).toBeDefined();
+      expect(bullet).not.toMatch(/^(30|60|90) days/);
+      expect(bullet).not.toContain('\u2014');
+      expect(bullet).toContain(': ');
+    }
   });
 
   it('every S11 bullet is distinct, for every archetype including multi-enabler foundation (the covering assertion the withdrawn ruling 11 defect slipped past)', () => {
@@ -340,7 +392,7 @@ describe('S11 mirrors S10 (ruling 11-REVISED — supersedes the withdrawn per-bu
 
   it('never throws and never drops the bullet when generosity_mode is null (ruling 6, S11 side)', () => {
     const s11 = fallbackSection('s11', { facts: capacityFacts, methodology, reflections: [] });
-    expect(s11.bullets).toHaveLength(3);
+    expect(s11.bullets).toHaveLength(1);
   });
 
   it('routes to offers.generosity, not offers.no_constraint, when the primary is gen (Natalie ruling 4)', () => {

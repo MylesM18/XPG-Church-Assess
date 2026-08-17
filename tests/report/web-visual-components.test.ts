@@ -328,8 +328,8 @@ describe('WebPhaseRail', () => {
   // were when the reduced-opacity colour was itself a hex.
   const model: PhaseRailModel = {
     blocks: [
-      { numeral: '30', dayLabel: '30 Days', text: 'Fix the volunteer pipeline.', opacity: 1 },
-      { numeral: '60', dayLabel: '60 Days', text: 'Launch a new small group track.', opacity: 0.6 },
+      { numeral: '30', unit: 'Days', dayLabel: '30 Days', text: 'Fix the volunteer pipeline.', opacity: 1 },
+      { numeral: '60', unit: 'Days', dayLabel: '60 Days', text: 'Launch a new small group track.', opacity: 0.6 },
     ],
     band: 'broken',
     supersedes: [
@@ -445,9 +445,15 @@ describe('WebPhaseRail — foundation archetype, nine roadmap entries', () => {
   const chunks = html.split('<li').slice(1)
 
   const OPACITY = /opacity:([\d.]+)"/
-  // The day-label caption is the block's only element carrying the CAPS class; the numeral
-  // beside it carries NUM, and the body text carries the body class. All three are distinct.
-  const DAY_LABEL = /tracking-\[0\.1em\]">([^<]+)</
+  // The caption is the block's only element carrying the CAPS class; the numeral beside it
+  // carries NUM, and the body text carries the body class. All three are distinct.
+  //
+  // The NUMERAL — not the caption — is what discriminates a 30-day block from a 90-day one.
+  // The caption used to repeat the numeral ('30 DAYS' beside a big '30') and now reads just
+  // 'DAYS' on every block (Natalie, 2026-08-16), so keying these assertions on the caption
+  // would collapse all nine blocks into one bucket and pass vacuously.
+  const NUMERAL = /text-\[1\.75rem\]">([^<]+)</
+  const CAPTION = /tracking-\[0\.1em\]">([^<]+)</
   // The reduced-opacity text colour: the web @theme's ink token, read inline because it sits in
   // a ternary beside the computed textOnBand(band). Anchored as the WHOLE style attribute, not a
   // bare `color:…` needle — `color:` is a suffix of `background-color:`, so the loose form is
@@ -469,22 +475,34 @@ describe('WebPhaseRail — foundation archetype, nine roadmap entries', () => {
     expect(chunks.length).toBe(9)
   })
 
-  it('gives every 30-day block one opacity, every 60-day block the next, every 90-day block the third', () => {
-    const byDayLabel = new Map<string, string[]>()
+  it('captions every block with the bare unit, never repeating the numeral beside it', () => {
+    // The defect this replaces: caption '30 DAYS' printed next to a 1.75rem '30'. Asserted
+    // over all nine blocks so a fix applied to only the first phase would fail here.
     for (const chunk of chunks) {
-      const dayLabel = DAY_LABEL.exec(chunk)?.[1]
+      expect(CAPTION.exec(chunk)?.[1]).toBe('days')
+    }
+    // ...and the numeral is still what carries the phase, so nothing was lost in the trim.
+    expect(chunks.map((c) => NUMERAL.exec(c)?.[1])).toEqual(
+      ['30', '30', '30', '60', '60', '60', '90', '90', '90'],
+    )
+  })
+
+  it('gives every 30-day block one opacity, every 60-day block the next, every 90-day block the third', () => {
+    const byNumeral = new Map<string, string[]>()
+    for (const chunk of chunks) {
+      const numeral = NUMERAL.exec(chunk)?.[1]
       const opacity = OPACITY.exec(chunk)?.[1]
-      // Both are read out of the SAME chunk, so each opacity is bound to the day label
+      // Both are read out of the SAME chunk, so each opacity is bound to the numeral
       // printed beside it — a cross-block mixup cannot survive this pairing.
-      expect(dayLabel).toBeDefined()
+      expect(numeral).toBeDefined()
       expect(opacity).toBeDefined()
-      byDayLabel.set(dayLabel!, [...(byDayLabel.get(dayLabel!) ?? []), opacity!])
+      byNumeral.set(numeral!, [...(byNumeral.get(numeral!) ?? []), opacity!])
     }
 
-    expect([...byDayLabel.keys()].sort()).toEqual(['30 days', '60 days', '90 days'])
-    expect(byDayLabel.get('30 days')).toEqual(['1', '1', '1'])
-    expect(byDayLabel.get('60 days')).toEqual(['0.6', '0.6', '0.6'])
-    expect(byDayLabel.get('90 days')).toEqual(['0.3', '0.3', '0.3'])
+    expect([...byNumeral.keys()].sort()).toEqual(['30', '60', '90'])
+    expect(byNumeral.get('30')).toEqual(['1', '1', '1'])
+    expect(byNumeral.get('60')).toEqual(['0.6', '0.6', '0.6'])
+    expect(byNumeral.get('90')).toEqual(['0.3', '0.3', '0.3'])
   })
 
   it('flips text to the theme ink on every reduced-opacity block, so ONLY the three 30-day blocks wear textOnBand', () => {
@@ -500,8 +518,8 @@ describe('WebPhaseRail — foundation archetype, nine roadmap entries', () => {
 
     const onBandAttr = `style="color:${onBand}"`
     for (const chunk of chunks) {
-      const dayLabel = DAY_LABEL.exec(chunk)![1]
-      if (dayLabel === '30 days') {
+      const numeral = NUMERAL.exec(chunk)![1]
+      if (numeral === '30') {
         expect(chunk).toContain(onBandAttr)
         expect(chunk).not.toContain(INK_ATTR)
       } else {
@@ -511,7 +529,7 @@ describe('WebPhaseRail — foundation archetype, nine roadmap entries', () => {
     }
   })
 
-  it('renders nine separate list items, each carrying its OWN day label bound to its OWN text', () => {
+  it('renders nine separate list items, each carrying its OWN numeral bound to its OWN text', () => {
     // Stand-in for key uniqueness. React puts no keys in static markup, and React 19's
     // server renderer emits no duplicate-key warning either (verified empirically — the
     // reconciler's duplicate-key check is client-side), so the observable property is that
@@ -519,7 +537,7 @@ describe('WebPhaseRail — foundation archetype, nine roadmap entries', () => {
     // about the key EXPRESSION on its own; the source assertion below covers that.
     expect(chunks.length).toBe(model!.blocks.length)
     model!.blocks.forEach((block, i) => {
-      expect(chunks[i]).toContain(`>${escapeHtml(block.dayLabel)}<`)
+      expect(chunks[i]).toContain(`>${escapeHtml(block.numeral)}<`)
       expect(chunks[i]).toContain(`>${escapeHtml(block.text)}<`)
     })
     // The nine texts are nine distinct action_library strings, so the per-chunk pairing

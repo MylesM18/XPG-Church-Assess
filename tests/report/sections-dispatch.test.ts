@@ -324,9 +324,9 @@ describe('SectionVisualsAbove / SectionVisualsBelow', () => {
   it('swaps the s10 bullets for the phase rail, keeping the body and any bullet it does not supersede', () => {
     const phaseRail: PhaseRailModel = {
       blocks: [
-        { numeral: '30', dayLabel: '30 days', text: 'RAIL BLOCK THIRTY', opacity: 1 },
-        { numeral: '60', dayLabel: '60 days', text: 'RAIL BLOCK SIXTY', opacity: 0.6 },
-        { numeral: '90', dayLabel: '90 days', text: 'RAIL BLOCK NINETY', opacity: 0.3 },
+        { numeral: '30', unit: 'days', dayLabel: '30 days', text: 'RAIL BLOCK THIRTY', opacity: 1 },
+        { numeral: '60', unit: 'days', dayLabel: '60 days', text: 'RAIL BLOCK SIXTY', opacity: 0.6 },
+        { numeral: '90', unit: 'days', dayLabel: '90 days', text: 'RAIL BLOCK NINETY', opacity: 0.3 },
       ],
       band: 'holding',
       supersedes: ['SUPERSEDED BULLET'],

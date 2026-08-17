@@ -150,7 +150,18 @@ export type ChainModel = { stages: ChainStage[] };
  * strength, every 60-day block is 0.6 and every 90-day block is 0.3, however many there are. */
 const PHASE_OPACITY: Record<Phase, number> = { align: 1, build: 0.6, scale: 0.3 };
 
-export type PhaseRailBlock = { numeral: string; dayLabel: string; text: string; opacity: number };
+/** `numeral` and `unit` are the two halves of `dayLabel` ('30 days' → '30' + 'days'), split here
+ *  so the rail can draw the numeral large and caption it `DAYS` rather than `30 DAYS` — the
+ *  numeral already says which phase it is, and the old caption repeated it beside itself
+ *  (Natalie, 2026-08-16, on a rendered report). `dayLabel` stays whole because `supersedes`
+ *  below must match s10Bullets byte for byte. */
+export type PhaseRailBlock = {
+  numeral: string;
+  unit: string;
+  dayLabel: string;
+  text: string;
+  opacity: number;
+};
 
 export type PhaseRailModel = {
   blocks: PhaseRailBlock[];
@@ -351,12 +362,16 @@ function phaseRail(facts: FactsPack, methodology: Methodology): PhaseRailModel |
   if (entries.length === 0) return null;
 
   return {
-    blocks: entries.map((entry) => ({
-      numeral: entry.dayLabel.split(' ')[0] ?? entry.dayLabel,
-      dayLabel: entry.dayLabel,
-      text: entry.text,
-      opacity: PHASE_OPACITY[entry.phase],
-    })),
+    blocks: entries.map((entry) => {
+      const [numeral, ...unit] = entry.dayLabel.split(' ');
+      return {
+        numeral: numeral ?? entry.dayLabel,
+        unit: unit.join(' '),
+        dayLabel: entry.dayLabel,
+        text: entry.text,
+        opacity: PHASE_OPACITY[entry.phase],
+      };
+    }),
     band: verdictBandFor(facts.overall.tier.id),
     supersedes: entries.map((entry) => `${entry.dayLabel} — ${entry.text}`),
   };

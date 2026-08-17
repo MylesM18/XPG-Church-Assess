@@ -94,6 +94,27 @@ export function interp(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => (k in vars ? vars[k]! : `{${k}}`));
 }
 
+/**
+ * Collapses identical dependency-read sentences to a single occurrence, first-occurrence
+ * order preserved.
+ *
+ * The dependency map has 13 structural edges (lib/engine/dependencies.ts) and emits one read
+ * sentence per edge. Three of the four reads name their two areas, so they are naturally
+ * distinct — but `both_strong` interpolates no names at all, so a healthy church got
+ * "Both are strong. Nothing to flag here." thirteen or fourteen times in a row. Say it once
+ * (Natalie, 2026-08-16, on a rendered report).
+ *
+ * Dropped outright rather than kept-with-a-count: the sentence is a null finding, and
+ * "Nothing to flag here. (x14)" makes a non-finding look like a tallied one.
+ *
+ * This is the seam both surfaces read through — the deduped lines become s9's bullets in
+ * fallback-sections.ts, which the web page and the PDF each render from the same composed
+ * section — so neither surface can drift back to the repeated form.
+ */
+export function dependencyReadLines(sentences: readonly string[]): string[] {
+  return [...new Set(sentences)];
+}
+
 const ENABLER_BELIEF_ONLY_IDS = new Set(['gov', 'comm', 'sys']);
 
 type ReadingBand = 'severe' | 'broken' | 'watch' | 'holding';
