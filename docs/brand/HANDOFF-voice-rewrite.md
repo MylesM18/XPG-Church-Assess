@@ -85,6 +85,74 @@ pages of images and will consume an entire context window. The distillation has 
    behind auth and agents do not run auth round-trips on this repo.
 3. **Nothing is merged.** Natalie merges; the agent does not.
 
+## Requested next — four changes, not yet started
+
+Natalie reviewed a rendered report on 2026-08-16 and asked for these. **None are implemented.** Do
+them on `feat/report-band-tier-vocabulary` before opening the PR, or as a follow-up PR if that one
+has already gone up.
+
+### 1. s9 — collapse repeated dependency reads
+
+The dependency map emits one read sentence per edge, and a healthy church gets
+`"Both are strong. Nothing to flag here."` **14 times in a row**. Say it once.
+
+Source: `methodology/copy.yaml` `dependency_reads.both_strong`, interpolated at
+`lib/report/view.ts:353` and `lib/report/facts.ts:234`.
+
+The fix is de-duplication at render, not a copy change — identical consecutive read sentences should
+collapse to a single bullet. Decide deliberately whether to (a) drop duplicate sentences entirely,
+or (b) keep one and summarise the count. Both surfaces (`system.tsx`, `pdf/document.tsx`) read from
+the same `view.ts` seam, so fix it there and both inherit it.
+
+### 2. s10 — drop the redundant "30 DAYS / 60 DAYS / 90 DAYS" caption
+
+Each roadmap phase renders a large `30` / `60` / `90` numeral **and** a small-caps `30 DAYS` label
+beside it. The numeral already says it. Keep the numeral, change the caption to just `DAYS`.
+
+Not yet located — it is a roadmap phase component under
+`app/app/[churchId]/diagnosis/report/` (likely `web-visuals.tsx` or `sections.tsx`) with a PDF
+counterpart in `lib/report/pdf/`. Change both or they drift.
+
+### 3. s11 — stop repeating the identical offer three times
+
+"Where XPG can partner" prints the same `call_type — hook` for 30/60/90 whenever all three phases
+map to the same offer, which is every capacity-archetype report:
+
+> 30 days: Capacity & Next-Ceiling Session — Nothing here is limiting you yet…
+> 60 days: Capacity & Next-Ceiling Session — Nothing here is limiting you yet…
+> 90 days: Capacity & Next-Ceiling Session — Nothing here is limiting you yet…
+
+When the phases resolve to one offer, render it once rather than three times. Note the em-dash in
+the rendered output above comes from the **renderer's** `—` separator, not from `offers.yaml` —
+that hook was already rewritten. Fix the separator too while in there; the guard test does not see
+renderer-side punctuation.
+
+### 4. Remove the appendix ("Methodology and caveats", section 13) from web AND PDF
+
+Natalie: remove it entirely. This is the largest of the four — it is a whole section, so it reaches
+further than a copy edit:
+
+- `methodology/schema.ts:244` — `appendix: ReportSectionSchema` is a **required** key. Removing the
+  section means changing the schema, which every methodology yaml must then satisfy.
+- `methodology/report.yaml:159` — the `appendix` section block.
+- `lib/report/view.ts:80,459` — the `appendix` slice of the view model.
+- `lib/report/fallback-sections.ts:347,399` — `appendixBullets` and its dispatch case.
+- `lib/report/pdf/document.tsx:307,390` — its own page group, plus the `stale` caveat that renders
+  **only** in the appendix. Decide where the stale caveat goes instead, or it is silently lost.
+- `app/.../report/sections.tsx:277,293,382` — `BelowId`/`BELOW_IDS` and the confidence-meter case.
+- Section count drops 13 → 12. The `13 / 13` counter and several tests assert on 13.
+
+**Two consequences to confirm with Natalie before implementing**, because neither is obviously
+intended by "remove the caveats section":
+
+1. **The confidence meter and data-quality panel live inside it** — `CONFIDENCE 85%`, `RESPONDENTS`,
+   `AREAS ASSESSED`, `THINNEST COVERAGE` all disappear with the section. If she wants those kept,
+   they need a new home before the section is cut.
+2. **`benchmark_note` and `dependency_note` are required fields** in `ReportBlocks` and are pinned by
+   `passesFactCheck` in `lib/ai/prose.ts`. The appendix is their only render site. Removing it
+   orphans two fields the AI still generates and the fact-check still requires — either drop them
+   from the contract too, or accept generating text nothing displays.
+
 ## Standing guardrails
 
 Never run `npm run test:db` or `supabase db push|reset`. Never merge or force-push. Never push to
@@ -109,7 +177,17 @@ their reasons, and the traps. Then docs/brand/xpg-voice.md if you need the voice
 read the source PDF (~/Desktop/XPG Church Health Assessment Guide (1).pdf); it is 38 pages of
 images and will eat your whole context window.
 
+⚠️ PR #67 IS ALREADY MERGED (merge commit 5bd33d6) and it merged ONLY 49a9a9c. The band/tier
+work and this handoff were pushed to that branch AFTER the merge and are orphaned. They have been
+cherry-picked onto a fresh branch feat/report-band-tier-vocabulary off origin/master, verified
+green (1458 tests, tsc, lint), but NOT pushed and NO PR opened yet — Natalie's call.
+
 TASKS, in order:
+0. Implement the four changes in "Requested next" in the handoff doc (s9 duplicate dependency
+   reads, s10 redundant DAYS caption, s11 tripled offer, removing the appendix). Ask Natalie the
+   two confirmation questions flagged under item 4 BEFORE cutting the appendix — the confidence
+   meter lives inside it, and benchmark_note/dependency_note lose their only render site.
+   Then push feat/report-band-tier-vocabulary and open the PR.
 1. Check Greptile on the CURRENT head (725060d, not 49a9a9c):
    gh api repos/MylesM18/XPG-Church-Assess/commits/725060d/check-runs
    gh api repos/MylesM18/XPG-Church-Assess/pulls/67/comments
