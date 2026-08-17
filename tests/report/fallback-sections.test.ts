@@ -225,13 +225,13 @@ describe('S1 respondent phrase', () => {
   it('pluralises to "N respondents" and drops the timestamp', () => {
     const facts = { ...capacityFacts, cover: { ...capacityFacts.cover, respondent_count: 4 } };
     const s1 = fallbackSection('s1', { facts, methodology, reflections: [] });
-    expect(s1.body).toBe(`${facts.cover.church_name} — 4 respondents.`);
+    expect(s1.body).toBe(`${facts.cover.church_name}. 4 respondents.`);
   });
 
   it('singularises to "1 respondent" when the count is exactly one', () => {
     const facts = { ...capacityFacts, cover: { ...capacityFacts.cover, respondent_count: 1 } };
     const s1 = fallbackSection('s1', { facts, methodology, reflections: [] });
-    expect(s1.body).toBe(`${facts.cover.church_name} — 1 respondent.`);
+    expect(s1.body).toBe(`${facts.cover.church_name}. 1 respondent.`);
   });
 });
 

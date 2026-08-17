@@ -5,21 +5,31 @@
 #
 # This version feeds the report cache key (lib/report/report-hash.ts): bumping it regenerates
 # every report without staling any run.
-version: "0.1.0"
+version: "0.2.0"
 
+# The register. Kept word-for-word in sync with SYSTEM_PROMPT in lib/ai/prose.ts — the two
+# instruct the same model about the same copy, and letting them drift is how the AI path and the
+# deterministic path start sounding like different consultants. Distilled from
+# docs/brand/xpg-voice.md (§5 posture, §22 attributes, §23 challenge without condemnation,
+# §24 vocabulary, §44 hard rules).
 style_spine: >-
-  Write for a lead pastor reading a consultant's report. Plain words, warm but precise. No
-  em-dashes. No churchy clichés. Sentence case. Active voice. Name things the way a church
-  leader would. Never invent a number, a category, or a finding. If a fact is absent from the
-  facts you were given, do not supply it. Return only the JSON.
+  Write as an experienced ministry leader sitting beside a lead pastor, not as a consultant
+  grading the church from outside. Plain words, warm but precise. Sentence case. Active voice.
+  No em-dashes. No churchy clichés. Name strengths before gaps. State what the data shows
+  plainly and hedge what it means: "appears", "suggests", "may" and "likely" attach to the
+  interpretation, never to the numbers. Frame gaps as growth constraints, capacity gaps and next
+  steps, never as failure, brokenness or blame. Connect what you find to discipleship,
+  stewardship and Kingdom impact without collapsing into either "pray more" or "better systems".
+  Never invent a number, a category, or a finding. If a fact is absent from the facts you were
+  given, do not supply it. Return only the JSON.
 
 sections:
   s1:
     title: "Church Health Assessment"
     templates:
-      capacity: "{church_name} — {respondent_phrase}."
-      constraint: "{church_name} — {respondent_phrase}."
-      foundation: "{church_name} — {respondent_phrase}."
+      capacity: "{church_name}. {respondent_phrase}."
+      constraint: "{church_name}. {respondent_phrase}."
+      foundation: "{church_name}. {respondent_phrase}."
     length_ceiling: 200
     required_mentions: []
 
@@ -28,52 +38,52 @@ sections:
     templates:
       capacity: >-
         Overall health sits at {overall_percent} out of 100, which places {church_name} in the
-        {tier_name} band. Nothing in the chain is broken. The question in front of you is
-        capacity, not repair.
+        {tier_name} band. Every stage is carrying its load, so the strategic question is what to
+        build next rather than what to repair.
       constraint: >-
         Overall health sits at {overall_percent} out of 100, which places {church_name} in the
-        {tier_name} band. One stage is holding the rest back: {primary_name}. Everything
-        downstream will read weak until that is addressed.
+        {tier_name} band. The data points to {primary_name} as the area limiting the rest.
+        Strengthening it is what gives the others room to show their true health.
       foundation: >-
         Overall health sits at {overall_percent} out of 100, which places {church_name} in the
-        {tier_name} band. No stage is broken, but the ground underneath is not ready to carry
-        what is built on it.
+        {tier_name} band. The stages are each doing their part, but the enablers underneath them
+        are not yet ready to carry what is being built on them.
     length_ceiling: 1400
     required_mentions: [tier_name]
 
   s3:
     title: "Health dashboard"
     templates:
-      capacity: "Eight areas, strongest first. Overall {overall_percent} out of 100 — {tier_name}."
-      constraint: "Eight areas, strongest first. Overall {overall_percent} out of 100 — {tier_name}."
-      foundation: "Eight areas, strongest first. Overall {overall_percent} out of 100 — {tier_name}."
+      capacity: "The eight areas, strongest first. Overall {overall_percent} out of 100, {tier_name}."
+      constraint: "The eight areas, strongest first. Overall {overall_percent} out of 100, {tier_name}."
+      foundation: "The eight areas, strongest first. Overall {overall_percent} out of 100, {tier_name}."
     length_ceiling: 300
     required_mentions: [tier_name, overall_percent]
 
   s4:
-    title: "What the assessment revealed"
+    title: "What the data suggests"
     templates:
-      capacity: "Capacity. Every stage is working; what you have is a growth question."
-      constraint: "{primary_name}. It scored {primary_score} out of 100, below the point where a stage is working."
-      foundation: "Foundation. The stages hold, but the enablers underneath them do not yet."
+      capacity: "Capacity. Every stage is working, so what sits in front of you is a growth question."
+      constraint: "{primary_name}, at {primary_score} out of 100. This is the area the data points to first."
+      foundation: "Foundation. The stages are holding; the enablers underneath them are not yet."
     length_ceiling: 1200
     required_mentions: []
 
   s5:
-    title: "Organizational strengths"
+    title: "Strengths to protect"
     templates:
-      capacity: "Three areas are carrying real weight. Name them before you change anything."
-      constraint: "Three areas are carrying real weight. They are what you build the repair on."
-      foundation: "Three areas are carrying real weight. They are not the problem."
+      capacity: "Three areas are carrying real weight. Name them and protect them before you change anything."
+      constraint: "Protect these first. Three areas are strong, and they are what the rest of the work gets built on."
+      foundation: "Three areas are strong. Whatever is limiting you, it is not these, and they are worth protecting deliberately."
     length_ceiling: 2200
     required_mentions: []
 
   s6:
-    title: "Areas requiring investment"
+    title: "Areas to strengthen"
     templates:
-      capacity: "Each area below is working but has room. Affirm, then pivot to what is missing."
-      constraint: "Each area below sits downstream of {primary_name} or alongside it. Read them in that light."
-      foundation: "Each area below rests on ground that is not ready. Read them in that light."
+      capacity: "Each area below is working and has room to grow. Affirm what holds, then name what is missing."
+      constraint: "Each area below sits after {primary_name} on the path or alongside it. Read them with that in mind."
+      foundation: "Each area below is leaning on an enabler that is not yet ready. Their scores should be read against that."
     length_ceiling: 6000
     required_mentions: []
 
@@ -96,26 +106,26 @@ sections:
     required_mentions: []
 
   s9:
-    title: "Strategic diagnosis"
+    title: "Strategic direction"
     templates:
       capacity: >-
         Nothing is capping you. The working model below shows which areas compound into which,
         so growth investment lands where it multiplies.
       constraint: >-
-        {primary_name} is the constraint. The working model below shows what it caps, and why
-        spending downstream of it raises numbers once and changes nothing.
+        {primary_name} is where the data points. The working model below shows what it caps, and
+        why investment further along the path rarely holds.
       foundation: >-
-        The enablers below gate the stages above them. Until they hold, work on the stages will
-        not stick.
+        The enablers below set the ceiling for the stages above them. Until they are
+        strengthened, gains at the stage level tend not to stick.
     length_ceiling: 2000
     required_mentions: [primary_name]
 
   s10:
     title: "30/60/90 roadmap"
     templates:
-      capacity: "Ninety days, three phases: align, build, scale."
-      constraint: "Ninety days, three phases: align, build, scale. Everything points at {primary_name}."
-      foundation: "Ninety days, three phases: align, build, scale. The enablers go first."
+      capacity: "Ninety days, in three phases: align, build, scale."
+      constraint: "Ninety days in three phases. Align, build, scale, with every phase pointed at {primary_name}."
+      foundation: "Ninety days in three phases. Align, build and scale, with the enablers going first."
     length_ceiling: 2400
     required_mentions: []
 
@@ -132,14 +142,16 @@ sections:
     title: "Final executive assessment"
     templates:
       capacity: >-
-        {church_name} is at {overall_percent} out of 100, in the {tier_name} band, with no broken
-        stage. The objective for the next ninety days is capacity, not repair.
+        {church_name} finishes at {overall_percent} out of 100, {tier_name}, with every area
+        carrying its load. The objective for the next ninety days is building the capacity to
+        steward what is coming.
       constraint: >-
-        {church_name} is at {overall_percent} out of 100, in the {tier_name} band. The objective
-        for the next ninety days is {primary_name}.
+        {church_name} finishes at {overall_percent} out of 100, {tier_name}. The objective for
+        the next ninety days is {primary_name}, so the church can faithfully steward where it is
+        being taken next.
       foundation: >-
-        {church_name} is at {overall_percent} out of 100, in the {tier_name} band. The objective
-        for the next ninety days is the ground underneath.
+        {church_name} finishes at {overall_percent} out of 100, {tier_name}. The objective for
+        the next ninety days is strengthening the enablers everything else rests on.
     length_ceiling: 900
     required_mentions: [tier_name, overall_percent]
 
@@ -157,20 +169,20 @@ sections:
 # false-positive on every report. Matched case-insensitively as substrings.
 banned_phrases:
   capacity:
-    - "your primary constraint"
-    - "is the constraint"
-    - "capping everything downstream"
-    - "before this can hold"
+    - "primary growth constraint"
+    - "the area limiting the rest"
+    - "not yet ready to carry"
+    - "set the ceiling for the stages"
   constraint:
-    - "healthy and ready to grow"
-    - "nothing in your chain is broken"
-    - "this is a capacity conversation"
-    - "every stage is strong"
+    - "every stage is carrying its load"
+    - "a question of capacity"
+    - "what to build next rather than what to repair"
+    - "nothing is capping you"
   foundation:
-    - "healthy and ready to grow"
-    - "your primary constraint"
-    - "is the constraint"
-    - "this is a capacity conversation"
+    - "primary growth constraint"
+    - "the area limiting the rest"
+    - "every stage is carrying its load"
+    - "a question of capacity"
 
 # S10/S11 are fully deterministic in v1 (P4). Selection is keyed by archetype, primary
 # constraint, gated enablers and bottom items; the text is used verbatim.
