@@ -77,8 +77,8 @@ describe('/auth/confirm/verify — destination', () => {
     expect(CODE).toContain('${forwardedHost}${next}')
   })
 
-  it('redirects on every branch — three successes plus the failure', () => {
-    expect(REDIRECTS.length).toBe(4)
+  it('redirects on every branch — three successes, the failure, and the provenance rejection', () => {
+    expect(REDIRECTS.length).toBe(5)
   })
 
   it('sends 303 on every redirect so the browser stops POSTing', () => {
@@ -92,5 +92,41 @@ describe('/auth/confirm/verify — destination', () => {
 
   it('routes any failure to the existing sign-in error channel', () => {
     expect(CODE).toContain('/sign-in?error=auth')
+  })
+})
+
+// Login CSRF. verifyOtp deliberately drops PKCE's browser binding — that is precisely what buys
+// the cross-device sign-in this flow exists for — so nothing intrinsic stops an attacker
+// auto-submitting their OWN token_hash from their OWN page and silently signing the visitor into
+// the attacker's account, where the visitor's assessment answers then land.
+//
+// A cross-site urlencoded form POST is a CORS-simple request, so it is never preflighted away, and
+// SameSite governs whether cookies are SENT, not whether a response may SET them. The old
+// /auth/callback route was immune for free: PKCE needs the code_verifier cookie in the browser that
+// requested the link. Next.js's automatic Origin/Host check covers Server Actions only, not Route
+// Handlers, so this route has to state the check itself.
+describe('/auth/confirm/verify — request provenance', () => {
+  it('inspects the Origin header', () => {
+    expect(CODE).toMatch(/headers\.get\(\s*'origin'\s*\)/)
+  })
+
+  it('compares Origin by host against the hosts it already trusts for the redirect', () => {
+    expect(CODE, 'a substring/startsWith compare matches evil-360churchhealthassessment.com').toMatch(
+      /new URL\(\s*originHeader\s*\)\.host/,
+    )
+    expect(CODE).toMatch(/\.has\(\s*originHost\s*\)/)
+  })
+
+  it('gates on provenance BEFORE spending the token', () => {
+    const gate = CODE.search(/if\s*\(\s*!isSameOrigin\(request\)\s*\)/)
+    const spend = CODE.search(/verifyOtp\s*\(/)
+    expect(gate, 'the POST must reject a cross-origin caller').toBeGreaterThan(-1)
+    expect(spend, 'a check after verifyOtp has already established the session').toBeGreaterThan(
+      gate,
+    )
+  })
+
+  it('treats an unparseable Origin as hostile rather than falling through', () => {
+    expect(CODE).toMatch(/catch\s*\{\s*return false/)
   })
 })
