@@ -118,17 +118,34 @@ describe('renderBrandedEmail', () => {
     expect(html).not.toContain('<a ')
   })
 
-  it('renders the paste-in-browser fallback link line when requested', () => {
+  it('renders the fallback as a short hyperlink, never as a visible URL', () => {
+    const url = 'https://app.test/accept/abc'
+    const { html, text } = renderBrandedEmail({
+      previewText: 'p',
+      heading: 'H',
+      paragraphs: ['x'],
+      cta: { label: 'Accept', url },
+      fallbackLink: { lead: 'Button not working?', linkText: 'Use this link instead' },
+    })
+    expect(html).toContain('Button not working?')
+    expect(html).toContain(`<a href="${url}" style="color:#565962;text-decoration:underline;">Use this link instead</a>`)
+    // The whole point: the url exists twice as an href (button + fallback) and zero times as text.
+    expect(html.split(url).length - 1).toBe(2)
+    expect(html.split(`href="${url}"`).length - 1).toBe(2)
+    // Plaintext still carries the raw url once, via the CTA line — the copy/paste escape hatch.
+    expect(text.split(url).length - 1).toBe(1)
+    expect(text).toContain(`Accept: ${url}`)
+  })
+
+  it('drops the fallback line when there is no CTA to borrow a url from', () => {
     const { html } = renderBrandedEmail({
       previewText: 'p',
       heading: 'H',
       paragraphs: ['x'],
-      cta: { label: 'Accept', url: 'https://app.test/accept/abc' },
-      fallbackLinkLabel: 'Or paste this link into your browser:',
+      fallbackLink: { lead: 'Button not working?', linkText: 'Use this link instead' },
     })
-    expect(html).toContain('Or paste this link into your browser:')
-    // The raw link is present as text for copy/paste as well as in the button href.
-    expect(html.split('https://app.test/accept/abc').length - 1).toBeGreaterThanOrEqual(2)
+    expect(html).not.toContain('Button not working?')
+    expect(html).not.toContain('<a ')
   })
 
   it('uses only approved brand hex colors — no reserved berry, no yellow', () => {
@@ -137,7 +154,7 @@ describe('renderBrandedEmail', () => {
       heading: 'H',
       paragraphs: ['x'],
       cta: { label: 'Go', url: 'https://app.test/x' },
-      fallbackLinkLabel: 'Or paste:',
+      fallbackLink: { lead: 'Button not working?', linkText: 'Use this link instead' },
     })
     const hexes = hexesIn(html)
     expect(hexes.length).toBeGreaterThan(0)

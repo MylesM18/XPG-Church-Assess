@@ -36,7 +36,7 @@ export async function sendMemberInvitationEmail(
       'The 360 Church Health Assessment is a short, guided reflection on your church’s health. Your perspective helps paint the full picture.',
     ],
     cta: { label: 'Accept your invitation', url: link },
-    fallbackLinkLabel: 'Or paste this link into your browser:',
+    fallbackLink: { lead: 'Button not working?', linkText: 'Use this link instead' },
   })
   try {
     const resend = new Resend(key)
