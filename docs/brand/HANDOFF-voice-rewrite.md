@@ -85,6 +85,36 @@ pages of images and will consume an entire context window. The distillation has 
    behind auth and agents do not run auth round-trips on this repo.
 3. **Nothing is merged.** Natalie merges; the agent does not.
 
+## 2026-08-16 session 2 — three of the four are DONE
+
+Branch `feat/report-band-tier-vocabulary` is now **pushed** (`origin/feat/report-band-tier-vocabulary`).
+**No PR is open** — deliberately held until change 4 lands, so the PR body can describe all four.
+
+| commit | scope |
+|---|---|
+| `7c4443d` | cherry-picked band/tier vocabulary (the orphaned tail of #67) |
+| `cba2b7f` `5f1472e` `fd2c4b5` | this handoff doc |
+| `2b4c409` | **changes 1, 2 and 3 below** |
+
+Verified green at `2b4c409`: **1463 tests · `npx tsc --noEmit` clean · `npm run lint` clean.**
+
+- **s9 — DONE.** `dependencyReadLines()` in `lib/report/view.ts` collapses identical read
+  sentences; `s9Bullets` reads through it. Option (a), drop duplicates outright — a null finding
+  with a count reads as a tallied one. Tests in `tests/report/fallback-sections.test.ts` under
+  `S9 dependency reads`, asserted over `ALL_FIXTURES` (the local skeleton fixtures in that file
+  carry 0 or 1 edge and would pass vacuously; `CAPACITY_FACTS` has all 13 edges `both_strong`).
+- **s10 — DONE.** `PhaseRailBlock` gained `unit`; the rail captions the unit alone.
+  ⚠️ **There is no PDF counterpart** — searched and confirmed. The phase rail is web-only
+  (`lib/report/web-visuals.ts` + `app/.../report/web-visuals.tsx`); the PDF renders s10's fallback
+  bullets as prose (`30 days — <text>`) and never drew a numeral to repeat. Nothing to change there.
+  `dayLabel` was kept whole because `PhaseRailModel.supersedes` must match `s10Bullets` byte for byte.
+- **s11 — DONE.** One bullet, `${call_type}: ${hook}`, no day-label prefix, no em-dash. `offerFor()`
+  resolves per ARCHETYPE and never per phase, so there was never a second offer — the dedup is
+  structural, not a filter. This supersedes ruling 11-REVISED, which is why the describe block was
+  renamed rather than edited in place.
+- **Change 4 (appendix removal) — NOT STARTED.** Spec unchanged below; see the extra findings
+  appended to it.
+
 ## Requested next — four changes, not yet started
 
 Natalie reviewed a rendered report on 2026-08-16 and asked for these. **None are implemented.** Do
@@ -162,6 +192,29 @@ further than a copy edit:
      (which is itself being deleted).
    - Tests: `tests/ai/prose-factcheck.test.ts` asserts the 10-field contract and will need to
      become 8. Grep for both field names across `tests/` before assuming that is the only one.
+
+### Change 4 — extra call sites found in session 2 (the list above is incomplete)
+
+Verified by grep on `2b4c409`. Add these to the spec above:
+
+- `lib/report/render.ts:27,35,36` — a plain-text renderer that prints `Appendix - all category
+  scores (0-100):` and then `blocks.benchmark_note` / `blocks.dependency_note`. Not mentioned above
+  at all. It will not typecheck once the two fields leave `ReportBlocks`.
+- `lib/methodology/schema.ts` — the `SectionId` union is what drives `13`. Grep `'appendix'` there.
+- `methodology/copy.yaml:13,14` — `inserts.benchmark_note` / `inserts.dependency_note`.
+- Tests that name the two fields or assert 13 sections, all confirmed present:
+  `tests/methodology/offers-copy.test.ts:33,39,42,43` (asserts `Object.keys(copy.inserts).sort()`
+  equals a 4-key list — becomes 2) · `tests/ai/prose-generate.test.ts:36,37` ·
+  `tests/ai/prose-schema.test.ts:6,7,11,12` · `tests/ai/prose-cache-scope.test.ts:70` ·
+  `tests/report/view.test.ts:49,50,111,205,208,211` · `tests/report/fallback-sections.test.ts:168,473-487`
+  · `tests/report/pdf-document.test.ts:285-302` · `tests/report/sections-dispatch.test.ts:224,422-428`
+  · `tests/report/web-sections.test.ts:101-112,346,358-363` · `tests/report/compose.test.ts:280,422`
+  · `tests/methodology/report-yaml.test.ts:8` · `tests/report/observability.test.ts:8`.
+- `tests/report/web-sections.test.ts:101` asserts the booking CTA renders "immediately after s12 and
+  **before the appendix**". With no appendix, that test needs a new terminal anchor or it is
+  asserting against a section that no longer exists.
+- `lib/report/cta.ts:5`'s comment says the CTA is "placed after the dynamic NextStep and before the
+  Appendix (Layer 4)" — stale once the appendix goes.
 
 ## Standing guardrails
 
