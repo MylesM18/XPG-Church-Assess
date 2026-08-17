@@ -112,14 +112,45 @@ Verified green at `2b4c409`: **1463 tests · `npx tsc --noEmit` clean · `npm ru
   resolves per ARCHETYPE and never per phase, so there was never a second offer — the dedup is
   structural, not a filter. This supersedes ruling 11-REVISED, which is why the describe block was
   renamed rather than edited in place.
-- **Change 4 (appendix removal) — NOT STARTED.** Spec unchanged below; see the extra findings
-  appended to it.
+- **Change 4 (appendix removal) — DONE in `f79c620`.** See the session-3 section below.
 
-## Requested next — four changes, not yet started
+## 2026-08-16 session 3 — change 4 is DONE, all four have landed
 
-Natalie reviewed a rendered report on 2026-08-16 and asked for these. **None are implemented.** Do
-them on `feat/report-band-tier-vocabulary` before opening the PR, or as a follow-up PR if that one
-has already gone up.
+Commit `f79c620` on `feat/report-band-tier-vocabulary`. **Verified green: 1459 tests ·
+`npx tsc --noEmit` clean · `npm run lint` clean.** The count fell 1463 → 1459 because six tests
+covering deleted behaviour were replaced by two: the ConfidenceModel trio, the two `copy.inserts`
+note assertions and the two `appendixBullets` tests are gone; a schema key-set lock and a
+no-appendix-slice lock are new.
+
+The section is gone from both surfaces and the report is **twelve sections**, not thirteen. The
+ordered spec below was followed as written, plus the extra call sites; every item in both lists
+is closed. What is worth carrying forward:
+
+- **The `stale` caveat moved to the PDF cover page.** It rendered only at the foot of the
+  appendix. s12 was the alternative and was rejected — it would put a provenance warning behind
+  twelve sections and the booking CTA. The cover also matches the WEB surface, which already
+  renders its stale notice above the cover (`app/app/[churchId]/diagnosis/page.tsx:242`).
+- **Both methodology versions went 0.2.0 → 0.3.0.** `report.yaml`'s feeds the report cache key
+  and a whole section left the file. ⚠️ This compounds the already-open regeneration item below,
+  it does not add a second one — same regeneration event, one more reason it must happen.
+- **`ReportBlocksSchema` is now 8 fields.** This is the OpenAI structured-output shape. It is
+  pinned by sorted key-set EQUALITY in `tests/ai/prose-schema.test.ts`, not a presence check, so
+  re-adding a field fails rather than passing silently.
+- **`tsc` caught nothing vitest missed this round, but the boundary held**: after the contract
+  edits every remaining error was in `tests/`, which is what confirmed the source layer was
+  complete. Running `tsc` between steps is what made that legible.
+- **Deleted, not orphaned**: `WebConfidence`, `ConfidenceModel`, `confidenceModel()`, the
+  `visuals.s13` key, `appendixBullets`, the `appendix` slice of `ReportView`, and the `names` map
+  in `buildReportView` that existed only to feed it.
+- `lib/report/render.ts` keeps its `Appendix - all category scores (0-100):` heading. That is a
+  plain-text category score dump reached only by two tests, not the removed section; only the two
+  note lines came out of it.
+
+## Requested next — four changes, ALL NOW DONE (kept for the reasoning)
+
+Natalie reviewed a rendered report on 2026-08-16 and asked for these. **All four are implemented**
+on `feat/report-band-tier-vocabulary` (1–3 in `2b4c409`, 4 in `f79c620`). The specs are kept below
+because they carry the reasoning and the call-site maps, not because work remains.
 
 ### 1. s9 — collapse repeated dependency reads
 
