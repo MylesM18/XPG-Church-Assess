@@ -142,16 +142,26 @@ further than a copy edit:
 - `app/.../report/sections.tsx:277,293,382` — `BelowId`/`BELOW_IDS` and the confidence-meter case.
 - Section count drops 13 → 12. The `13 / 13` counter and several tests assert on 13.
 
-**Two consequences to confirm with Natalie before implementing**, because neither is obviously
-intended by "remove the caveats section":
+**Both consequences were put to Natalie on 2026-08-16 and ANSWERED. Do not re-ask.**
 
-1. **The confidence meter and data-quality panel live inside it** — `CONFIDENCE 85%`, `RESPONDENTS`,
-   `AREAS ASSESSED`, `THINNEST COVERAGE` all disappear with the section. If she wants those kept,
-   they need a new home before the section is cut.
-2. **`benchmark_note` and `dependency_note` are required fields** in `ReportBlocks` and are pinned by
-   `passesFactCheck` in `lib/ai/prose.ts`. The appendix is their only render site. Removing it
-   orphans two fields the AI still generates and the fact-check still requires — either drop them
-   from the contract too, or accept generating text nothing displays.
+1. **Confidence meter and data-quality panel: REMOVE them too.** `CONFIDENCE 85%`, `RESPONDENTS`,
+   `AREAS ASSESSED`, `THINNEST COVERAGE` all go with the section. They do not move anywhere.
+   Touches `app/.../report/sections.tsx:356-382` (the `'appendix'` confidence-meter case) and the
+   data-quality meter in `app/.../report/web-visuals.tsx:41`, plus its PDF counterpart. Delete the
+   components if nothing else references them — do not leave dead exports.
+2. **`benchmark_note` and `dependency_note`: DROP them from the contract.** Not orphaned, removed.
+   This is a contract change, so do it in this order and re-run `tsc` between steps:
+   - `lib/ai/prose.ts` — remove both from `ReportBlocksSchema`. They are **required** keys today,
+     so this changes the OpenAI structured-output shape.
+   - `lib/ai/fallback.ts` — remove them from `ReportBlocks` and stop emitting them in
+     `fallbackProse`. Check the no-constraint early-return path (~line 37) as well as the main path.
+   - `passesFactCheck` — field parity is computed from the populated-field sets, so it follows
+     automatically, but re-read it to confirm nothing names the two fields explicitly.
+   - `methodology/copy.yaml` — delete `inserts.benchmark_note` and `inserts.dependency_note`.
+   - `lib/report/view.ts:80,459` — drop `benchmarkNote` / `dependencyNote` from the appendix slice
+     (which is itself being deleted).
+   - Tests: `tests/ai/prose-factcheck.test.ts` asserts the 10-field contract and will need to
+     become 8. Grep for both field names across `tests/` before assuming that is the only one.
 
 ## Standing guardrails
 
@@ -184,9 +194,11 @@ green (1458 tests, tsc, lint), but NOT pushed and NO PR opened yet — Natalie's
 
 TASKS, in order:
 0. Implement the four changes in "Requested next" in the handoff doc (s9 duplicate dependency
-   reads, s10 redundant DAYS caption, s11 tripled offer, removing the appendix). Ask Natalie the
-   two confirmation questions flagged under item 4 BEFORE cutting the appendix — the confidence
-   meter lives inside it, and benchmark_note/dependency_note lose their only render site.
+   reads, s10 redundant DAYS caption, s11 tripled offer, removing the appendix). Item 4's two
+   open questions are ALREADY ANSWERED in the doc — remove the confidence meter too, and drop
+   benchmark_note/dependency_note from the contract. Do not re-ask; just follow the ordered steps.
+   Dropping those two fields changes the ReportBlocks contract and the OpenAI structured-output
+   shape, so run npx tsc --noEmit between steps, not just at the end.
    Then push feat/report-band-tier-vocabulary and open the PR.
 1. Check Greptile on the CURRENT head (725060d, not 49a9a9c):
    gh api repos/MylesM18/XPG-Church-Assess/commits/725060d/check-runs
