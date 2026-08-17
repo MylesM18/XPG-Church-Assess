@@ -10,8 +10,6 @@ export interface ReportBlocks {
   next_step: string;
   gating?: string;
   dispersion?: string;
-  benchmark_note: string;
-  dependency_note: string;
 }
 
 function interp(template: string, vars: Record<string, string>): string {
@@ -29,15 +27,11 @@ export function fallbackProse(d: Diagnosis, methodology: Methodology): ReportBlo
   const { blocks, inserts } = methodology.copy;
   const names = new Map(methodology.questions.categories.map(c => [c.id, c.name]));
   const nameOf = (id: string) => names.get(id) ?? id;
-  const benchmark_note = inserts.benchmark_note!;
-  const dependency_note = inserts.dependency_note!;
 
   if (!d.primary_constraint) {
     return {
       verdict: blocks.verdict_no_constraint!,
       next_step: interp(blocks.next_step!, { primary_name: 'your next ceiling', offer_hook: d.offer.hook }),
-      benchmark_note,
-      dependency_note,
     };
   }
 
@@ -85,5 +79,5 @@ export function fallbackProse(d: Diagnosis, methodology: Methodology): ReportBlo
 
   const next_step = interp(blocks.next_step!, { primary_name: primaryName, offer_hook: d.offer.hook });
 
-  return { verdict, evidence, blind_spot, cost, do_not_work_on, next_step, gating, dispersion, benchmark_note, dependency_note };
+  return { verdict, evidence, blind_spot, cost, do_not_work_on, next_step, gating, dispersion };
 }

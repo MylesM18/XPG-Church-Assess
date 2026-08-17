@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { load as parseYaml, dump as dumpYaml } from 'js-yaml';
 import { loadMethodology } from '@/lib/methodology/load';
 
-const SECTION_IDS = ['s1','s2','s3','s4','s5','s6','s7','s8','s9','s10','s11','s12','appendix'] as const;
+const SECTION_IDS = ['s1','s2','s3','s4','s5','s6','s7','s8','s9','s10','s11','s12'] as const;
 const ARCHETYPES = ['capacity','constraint','foundation'] as const;
 
 const REAL_DIR = join(process.cwd(), 'methodology');
@@ -33,7 +33,7 @@ describe('report.yaml', () => {
     expect(m.report.version).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it('names all thirteen sections', () => {
+  it('names all twelve sections', () => {
     expect(Object.keys(m.report.sections).sort()).toEqual([...SECTION_IDS].sort());
   });
 

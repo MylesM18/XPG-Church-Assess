@@ -277,7 +277,7 @@ describe('composeReport', () => {
   it('marks the deterministic sections fallback always', async () => {
     mockAllSectionsGood();
     const r = await composeReport({ facts: constraintFacts, methodology, labels: [] });
-    for (const id of ['s1', 's3', 's8', 's10', 's11', 'appendix'] as const) {
+    for (const id of ['s1', 's3', 's8', 's10', 's11'] as const) {
       expect(r.section_sources[id], id).toBe('fallback');
     }
   });
@@ -367,7 +367,7 @@ describe('assembleReport', () => {
   it('returns a complete report from a partial persisted row', () => {
     const persisted = { inputs_hash: live, sections: { s2: goodS2 } };
     const out = assembleReport({ facts: constraintFacts, methodology, reflections: [], persisted, liveInputsHash: live });
-    expect(out).toHaveLength(13);
+    expect(out).toHaveLength(12);
     for (const s of out) expect(s.fallback.body.trim().length, s.id).toBeGreaterThan(0);
     expect(out.filter((s) => s.source === 'ai')).toHaveLength(1);
   });
@@ -419,7 +419,7 @@ describe('chart models on AssembledSection', () => {
   });
 
   it('gives every other section no charts', () => {
-    for (const id of ['s1', 's2', 's4', 's5', 's6', 's8', 's9', 's10', 's11', 's12', 'appendix'] as const) {
+    for (const id of ['s1', 's2', 's4', 's5', 's6', 's8', 's9', 's10', 's11', 's12'] as const) {
       expect(chartsForSection(id, CAPACITY_FACTS, methodology), id).toEqual([]);
     }
   });

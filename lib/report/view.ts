@@ -77,7 +77,6 @@ export interface ReportView {
   gating?: string;
   dispersion?: { text: string; respondents: Array<{ label: string; mean: number }> };
   nextStep?: { callType: string; hook: string; text: string };
-  appendix: { categories: Array<DiagnosisCategory & { name: string }>; benchmarkNote: string; dependencyNote: string };
   cover: CoverView;
   areas: AreaDossierView[];
   system: SystemView;
@@ -92,6 +91,27 @@ export interface ReportView {
  */
 export function interp(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => (k in vars ? vars[k]! : `{${k}}`));
+}
+
+/**
+ * Collapses identical dependency-read sentences to a single occurrence, first-occurrence
+ * order preserved.
+ *
+ * The dependency map has 13 structural edges (lib/engine/dependencies.ts) and emits one read
+ * sentence per edge. Three of the four reads name their two areas, so they are naturally
+ * distinct — but `both_strong` interpolates no names at all, so a healthy church got
+ * "Both are strong. Nothing to flag here." thirteen or fourteen times in a row. Say it once
+ * (Natalie, 2026-08-16, on a rendered report).
+ *
+ * Dropped outright rather than kept-with-a-count: the sentence is a null finding, and
+ * "Nothing to flag here. (x14)" makes a non-finding look like a tallied one.
+ *
+ * This is the seam both surfaces read through — the deduped lines become s9's bullets in
+ * fallback-sections.ts, which the web page and the PDF each render from the same composed
+ * section — so neither surface can drift back to the repeated form.
+ */
+export function dependencyReadLines(sentences: readonly string[]): string[] {
+  return [...new Set(sentences)];
 }
 
 const ENABLER_BELIEF_ONLY_IDS = new Set(['gov', 'comm', 'sys']);
@@ -125,10 +145,15 @@ export function readingBand(
  *  state-aware reading band the dossier prose uses (spec §7 Layer 1/3), so the cover
  *  table and each dossier can never disagree. Replaces the former score-only scoreBand()
  *  that cover.tsx and pdf/document.tsx each duplicated (finding #5, Natalie: align). */
+/** Kept in step with charts.ts's BAND_NAME: the two label the SAME band for the same area, one
+ *  in the dossier/cover table and one on the chart, so a divergence reads as a contradiction.
+ *  `holding` is the one deliberate exception — 'Strong' here vs 'Strength' on the chart label —
+ *  because the adjective was Natalie's explicit call in the visual-overhaul round (finding #5)
+ *  and it reads better in a table cell than the noun does. Synonyms, not a contradiction. */
 const READING_BAND_LABEL: Record<ReadingBand, string> = {
-  severe: 'Severe',
-  broken: 'Broken',
-  watch: 'Watch',
+  severe: 'Priority',
+  broken: 'Constraint',
+  watch: 'Maturing',
   holding: 'Strong',
 };
 
@@ -413,10 +438,6 @@ export function buildReportView(
     ? d.evidence_trail.find((r) => r.claim === `primary_constraint:${primaryId}`)
     : undefined;
 
-  // Same resolution pattern chain-walk.ts uses, so the chain section and the
-  // appendix never disagree on how a category_id is displayed.
-  const names = new Map(methodology.questions.categories.map((c) => [c.id, c.name]));
-
   const voices =
     opts.audience !== 'shared' && opts.reflections
       ? buildOutreachVoices(methodology, opts.reflections)
@@ -451,11 +472,6 @@ export function buildReportView(
       opts.audience === 'shared'
         ? undefined
         : { callType: d.offer.call_type, hook: d.offer.hook, text: blocks.next_step },
-    appendix: {
-      categories: d.categories.map((c) => ({ ...c, name: names.get(c.category_id) ?? c.category_id })),
-      benchmarkNote: blocks.benchmark_note,
-      dependencyNote: blocks.dependency_note,
-    },
 
     cover: buildCover(d, methodology),
     areas: buildAreas(d, methodology, voices),

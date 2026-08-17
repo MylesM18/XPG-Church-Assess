@@ -51,7 +51,7 @@ describe('ReportSections openers (web mirror of the PDF openers)', () => {
     const matches = [...html.matchAll(re)]
     expect(matches.map((m) => m[1])).toEqual(sections.map((_, i) => String(i + 1).padStart(2, '0')))
     expect(matches.every((m) => m[2] === String(sections.length))).toBe(true)
-    expect(matches.length).toBe(13)
+    expect(matches.length).toBe(12)
   })
 
   it('renders <h1> for index 0 only and <h2> for the rest, both with the fluid opener size', () => {
@@ -98,18 +98,25 @@ describe('ReportSections openers (web mirror of the PDF openers)', () => {
     }
   })
 
-  it('renders the booking CTA exactly once, immediately after s12 and before the appendix', () => {
+  // The old terminal anchor was the appendix heading ("after s12 and before the appendix").
+  // The appendix was removed on 2026-08-16, so the CTA is now the LAST thing in the report and
+  // the anchor becomes exactly that: after s12, and after every other section title too. The
+  // second half is what keeps this honest — "after s12" alone would still pass if the CTA were
+  // rendered once at the very top of a re-ordered document.
+  it('renders the booking CTA exactly once, after s12 and last in the report', () => {
     const html = render(sections, 'holding')
     // Anchor on the CTA's own sub-head element, not the bare phrase (fallback prose could echo it).
     const ctaHead = `<p class="${SUBHEAD}">${escapeHtml(bookingCta.heading)}</p>`
     expect((html.match(new RegExp(escapeRe(ctaHead), 'g')) ?? []).length).toBe(1)
     const s12Title = escapeHtml(sections.find((s) => s.id === 's12')!.fallback.title)
-    const appendixTitle = escapeHtml(sections.find((s) => s.id === 'appendix')!.fallback.title)
     const cta = html.indexOf(ctaHead)
     expect(html.indexOf(`>${s12Title}</h2>`)).toBeGreaterThan(-1)
-    expect(html.indexOf(`>${appendixTitle}</h2>`)).toBeGreaterThan(-1)
     expect(cta).toBeGreaterThan(html.indexOf(`>${s12Title}</h2>`))
-    expect(cta).toBeLessThan(html.indexOf(`>${appendixTitle}</h2>`))
+    // Terminal anchor: past the LAST section heading in the document, whichever that is.
+    // Independent of which ids render an <h2> (s1's title is the report's own <h1>), and it
+    // still fails if a section is ever appended after the CTA.
+    expect(html.lastIndexOf('</h2>')).toBeGreaterThan(-1)
+    expect(cta).toBeGreaterThan(html.lastIndexOf('</h2>'))
     expect(html).toContain(`href="${bookingCta.url}"`)
     expect(html).toContain('target="_blank"')
     expect(html).toContain('rel="noopener noreferrer"')
@@ -342,9 +349,9 @@ describe('WebVerdictBlock (rebuilt in HTML) + the WebStatGrid percentile line', 
  * unscoped check would pass even with the dispatcher deleted.
  */
 describe('per-section visual placement (Task 16 dispatchers)', () => {
-  // WebConfidence's own eyebrow element. Deliberately NOT the bare word 'Confidence' — the
-  // appendix's fallback bullets literally include 'Confidence: 0.85.', which would make a
-  // substring check pass with the meter entirely absent.
+  // WebConfidence's former eyebrow element. The component was deleted with the appendix on
+  // 2026-08-16; this string is kept as the shape a re-added meter would render, so the guard
+  // below goes red rather than silently passing on a component that no longer exists.
   const CONFIDENCE_HEAD = `<p class="${CAPS_SOFT}">Confidence</p>`
   // WebCapacityBars' first bar label.
   const CAPACITY_LABEL = `<span class="${CAPS_SOFT}">Capacity</span>`
@@ -355,22 +362,16 @@ describe('per-section visual placement (Task 16 dispatchers)', () => {
   const bodyOf = (id: string) =>
     `<p class="${BODY}">${escapeHtml(sections.find((s) => s.id === id)!.fallback.body)}</p>`
 
-  it('renders the confidence meter EXACTLY ONCE, on the appendix section, below its prose', () => {
-    // Two regressions in one count. 2 => Task 10's temporary
-    // `{section.id === 'appendix' ? <WebConfidence .../> : null}` line survived alongside the
-    // dispatcher (double render). 0 => SectionVisualsBelow was pasted with the brief's
-    // `case 's13'`, which no runtime SectionId ever equals (SectionId is s1..s12 | 'appendix'),
-    // so BELOW_IDS.includes('appendix') is false and the meter silently vanishes.
-    expect(countOf(render(sections, 'holding'), CONFIDENCE_HEAD)).toBe(1)
-
-    // ...and it is the appendix that carries it, not some other section.
-    expect(countOf(render(only('appendix'), 'holding'), CONFIDENCE_HEAD)).toBe(1)
-    expect(countOf(render(sections.filter((s) => s.id !== 'appendix'), 'holding'), CONFIDENCE_HEAD)).toBe(0)
-
-    // BELOW means below: the meter follows the appendix's own body paragraph.
-    const html = render(only('appendix'), 'holding')
-    expect(html.indexOf(bodyOf('appendix'))).toBeGreaterThan(-1)
-    expect(html.indexOf(CONFIDENCE_HEAD)).toBeGreaterThan(html.indexOf(bodyOf('appendix')))
+  // Inverts the old "renders the confidence meter EXACTLY ONCE" test. Natalie removed the meter
+  // (CONFIDENCE / RESPONDENTS / AREAS ASSESSED / THINNEST COVERAGE) along with the appendix on
+  // 2026-08-16, so the count goes 1 => 0. Checked per-section, not just on the whole document:
+  // a whole-document count of 0 would also pass if the dispatcher were re-wired to a section
+  // that happens to render nothing in this fixture.
+  it('renders the confidence meter nowhere — it was removed with the appendix', () => {
+    expect(countOf(render(sections, 'holding'), CONFIDENCE_HEAD)).toBe(0)
+    for (const s of sections) {
+      expect(countOf(render(only(s.id), 'holding'), CONFIDENCE_HEAD), s.id).toBe(0)
+    }
   })
 
   it("moves s7's rank list BELOW the section prose, with the theme split above it", () => {

@@ -67,7 +67,7 @@ describe('generateDiagnosis AI prose cache-check', () => {
   beforeEach(() => {
     vi.stubEnv('PROSE_MODE', 'ai');
     mockGenerateProse.mockReset();
-    mockGenerateProse.mockResolvedValue({ verdict: 'v', next_step: 'n', benchmark_note: 'b', dependency_note: 'd' });
+    mockGenerateProse.mockResolvedValue({ verdict: 'v', next_step: 'n' });
     saveProseCalls.length = 0;
 
     const from = fakeDb({

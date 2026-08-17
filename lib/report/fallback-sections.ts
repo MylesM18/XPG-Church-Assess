@@ -2,18 +2,18 @@ import { MIN_SUPPORT } from '../ai/theme-gates';
 import type { CategoryState } from '../engine/types';
 import type { Methodology, Offer, SectionId, Theme } from '../methodology/schema';
 import type { CategoryFact, FactsPack } from './facts';
-import { buildOutreachVoices, interp, readingBand } from './view';
+import { buildOutreachVoices, dependencyReadLines, interp, readingBand } from './view';
 
 /**
- * The deterministic spine. Every one of the thirteen sections renders from the facts pack and
+ * The deterministic spine. Every one of the twelve sections renders from the facts pack and
  * report.yaml alone — no model, no network, no throw. This is what makes an AI section failure
  * a local, invisible degradation rather than a broken report, and it is the ONLY renderer the
  * share page will ever reach (P5).
  *
- * Absorbs the old 10 blocks per the parent spec line 74:
+ * Absorbs the old blocks per the parent spec line 74:
  *   verdict → S2/S4 · evidence → S4/S7 · cost + do_not_work_on → S9/S10 (Constraint)
  *   next_step → S11 · gating → S6/S9 (Foundation) · dispersion → S6 area beat
- *   blind_spot → S6 "watch for" beat · benchmark_note + dependency_note → appendix
+ *   blind_spot → S6 "watch for" beat
  */
 export interface FallbackSectionArgs {
   facts: FactsPack;
@@ -211,9 +211,12 @@ function s8Bullets(
   return lines.length > 0 ? lines : [methodology.copy.s8_below_threshold];
 }
 
+/** Read sentences go through dependencyReadLines (lib/report/view.ts), which collapses the
+ *  identical ones — 13 edges, but a healthy church's `both_strong` sentence names no areas and
+ *  so repeated verbatim once per edge. Gating notes are name-prefixed and never collide. */
 function s9Bullets(facts: FactsPack): string[] {
   return [
-    ...facts.dependencies.map((d) => d.read_sentence),
+    ...dependencyReadLines(facts.dependencies.map((d) => d.read_sentence)),
     ...facts.gating.map((g) => `${g.name}: ${g.note}`),
   ];
 }
@@ -321,39 +324,25 @@ function offerFor(facts: FactsPack, methodology: Methodology): Offer {
 }
 
 /**
- * RULING 11-REVISED (binding, supersedes the withdrawn per-bullet ruling 11 — see
- * task-5-report.md's fix-round-1 addendum for the full reasoning): the brief's S11 row reads
- * "One bullet per S10 phase, mirroring it 1:1" — its primary clause is PER PHASE, and there are
- * always exactly three phases (align/build/scale → 30/60/90 days). "Mirrors 1:1" means 1:1 with
- * S10's distinct PHASES, never with S10's raw entry count (which varies with gated-enabler
- * count under Natalie's ruling 8 — S10 itself is unchanged).
+ * ONE bullet: the single archetype-level offer, stated once (Natalie, 2026-08-16, on a rendered
+ * report). This supersedes ruling 11-REVISED's "one bullet per distinct S10 dayLabel", which
+ * paired every phase with the SAME offer text and so printed the identical
+ * `call_type — hook` under 30 days, 60 days and 90 days — three times on every capacity report,
+ * and on every other archetype too.
  *
- * So: one bullet per DISTINCT dayLabel present in roadmapEntries (deduplicated, phase order
- * preserved via Set's insertion-order semantics), each paired with the single archetype-level
- * offer from offerFor() above. Concretely: constraint and capacity already produce exactly one
- * roadmap entry per phase, so S11 has 3 bullets, all distinct (different day label, same offer
- * text is fine — the day label makes each bullet unique). Foundation collapses N gated
- * enablers' worth of same-phase entries down to that phase's single distinct day label, so a
- * 2-gated-enabler foundation still yields 3 S11 bullets, not 6 — never a byte-identical
- * duplicate pair, which is exactly the defect the withdrawn ruling 11 produced.
+ * The dedup is structural, not a filter: offerFor() resolves per ARCHETYPE, not per phase, so
+ * the three phases always resolve to one offer and there is never a second one to print. If a
+ * future offer model ever resolves per phase, restore the per-phase loop and dedupe on the
+ * offer text rather than on the day label.
+ *
+ * The separator is a colon. It used to be an em-dash, which is banned by `style_spine` and
+ * `SYSTEM_PROMPT` — `tests/methodology/copy-register.test.ts` enforces that ban across the
+ * parsed YAML only, so a renderer-side `—` slipped past it and put the mark back into rendered
+ * copy that offers.yaml had already been cleaned of.
  */
 function s11Bullets(facts: FactsPack, methodology: Methodology): string[] {
   const offer = offerFor(facts, methodology);
-  const offerText = `${offer.call_type} — ${offer.hook}`;
-  const dayLabels = [...new Set(roadmapEntries(facts, methodology).map((e) => e.dayLabel))];
-  return dayLabels.map((dayLabel) => `${dayLabel}: ${offerText}`);
-}
-
-function appendixBullets(facts: FactsPack, methodology: Methodology): string[] {
-  const bullets = [
-    methodology.copy.inserts.benchmark_note!,
-    methodology.copy.inserts.dependency_note!,
-    `Confidence: ${facts.confidence}.`,
-  ];
-  if (facts.cover.respondent_count < 8) {
-    bullets.push(`Small sample: ${facts.cover.respondent_count} respondents.`);
-  }
-  return bullets;
+  return [`${offer.call_type}: ${offer.hook}`];
 }
 
 function bulletsFor(
@@ -396,8 +385,6 @@ function bulletsFor(
         `Band: ${facts.overall.tier.name}.`,
         `Objective: ${tokens.primary_name}.`,
       ];
-    case 'appendix':
-      return appendixBullets(facts, methodology);
   }
 }
 

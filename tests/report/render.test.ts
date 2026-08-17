@@ -22,9 +22,11 @@ describe('renderReportText', () => {
     expect(text).toContain('Guest Experience');
     expect(text).toContain(d.offer.call_type);
   });
-  it('has an appendix line for every category and states the priors basis', () => {
+  it('has a score line for every category and no longer states a priors basis', () => {
     for (const c of m.questions.categories) expect(text).toContain(c.name);
-    expect(text.toLowerCase()).toContain('prior');
+    // benchmark_note / dependency_note left ReportBlocks with the appendix on 2026-08-16.
+    expect(text.toLowerCase()).not.toContain('provisional priors');
+    expect(text.toLowerCase()).not.toContain('working model of how');
   });
   it('leaves no un-interpolated tokens', () => {
     expect(text).not.toContain('{');

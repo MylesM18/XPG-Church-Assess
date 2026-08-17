@@ -60,16 +60,6 @@ export type CapacityBarsModel = {
   gapLabel: string | null;
 };
 
-export type ConfidenceModel = {
-  pct: number;
-  label: string;
-  respondents: number;
-  areas: number;
-  /** Minimum categories[].respondent_count with its area name. Area names only —
-   * never respondent labels or ids (spec §10). */
-  thinnest: { name: string; count: number } | null;
-};
-
 export type ConstraintRow = { id: string; name: string; score: number; note: string | null };
 
 export type ConstraintCalloutModel = {
@@ -150,7 +140,18 @@ export type ChainModel = { stages: ChainStage[] };
  * strength, every 60-day block is 0.6 and every 90-day block is 0.3, however many there are. */
 const PHASE_OPACITY: Record<Phase, number> = { align: 1, build: 0.6, scale: 0.3 };
 
-export type PhaseRailBlock = { numeral: string; dayLabel: string; text: string; opacity: number };
+/** `numeral` and `unit` are the two halves of `dayLabel` ('30 days' → '30' + 'days'), split here
+ *  so the rail can draw the numeral large and caption it `DAYS` rather than `30 DAYS` — the
+ *  numeral already says which phase it is, and the old caption repeated it beside itself
+ *  (Natalie, 2026-08-16, on a rendered report). `dayLabel` stays whole because `supersedes`
+ *  below must match s10Bullets byte for byte. */
+export type PhaseRailBlock = {
+  numeral: string;
+  unit: string;
+  dayLabel: string;
+  text: string;
+  opacity: number;
+};
 
 export type PhaseRailModel = {
   blocks: PhaseRailBlock[];
@@ -175,7 +176,6 @@ export type WebVisuals = {
   s8: { spread: SpreadModel | null };
   s9: { chain: ChainModel };
   s10: { phaseRail: PhaseRailModel | null };
-  s13: { confidence: ConfidenceModel };
 };
 
 function capacityBars(facts: FactsPack): CapacityBarsModel {
@@ -188,23 +188,6 @@ function capacityBars(facts: FactsPack): CapacityBarsModel {
     throughputPct: pct(throughput),
     gap,
     gapLabel: gap > 0 ? `${gap} POINTS LOST` : null,
-  };
-}
-
-function confidenceModel(facts: FactsPack): ConfidenceModel {
-  const percent = Math.round(facts.confidence * 100);
-  let thinnest: { name: string; count: number } | null = null;
-  for (const cat of facts.categories) {
-    if (!thinnest || cat.respondent_count < thinnest.count) {
-      thinnest = { name: cat.name, count: cat.respondent_count };
-    }
-  }
-  return {
-    pct: percent,
-    label: `${percent}%`,
-    respondents: facts.cover.respondent_count,
-    areas: facts.categories.length,
-    thinnest,
   };
 }
 
@@ -351,12 +334,16 @@ function phaseRail(facts: FactsPack, methodology: Methodology): PhaseRailModel |
   if (entries.length === 0) return null;
 
   return {
-    blocks: entries.map((entry) => ({
-      numeral: entry.dayLabel.split(' ')[0] ?? entry.dayLabel,
-      dayLabel: entry.dayLabel,
-      text: entry.text,
-      opacity: PHASE_OPACITY[entry.phase],
-    })),
+    blocks: entries.map((entry) => {
+      const [numeral, ...unit] = entry.dayLabel.split(' ');
+      return {
+        numeral: numeral ?? entry.dayLabel,
+        unit: unit.join(' '),
+        dayLabel: entry.dayLabel,
+        text: entry.text,
+        opacity: PHASE_OPACITY[entry.phase],
+      };
+    }),
     band: verdictBandFor(facts.overall.tier.id),
     supersedes: entries.map((entry) => `${entry.dayLabel} — ${entry.text}`),
   };
@@ -373,6 +360,5 @@ export function webVisuals(facts: FactsPack, methodology: Methodology): WebVisua
     s8: { spread: spreadModel(facts, methodology) },
     s9: { chain: chainModel(facts, methodology) },
     s10: { phaseRail: phaseRail(facts, methodology) },
-    s13: { confidence: confidenceModel(facts) },
   };
 }

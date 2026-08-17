@@ -13,8 +13,8 @@ describe('rules.yaml tiers block (spec P1/P7)', () => {
     expect(r.tiers).toEqual({
       healthy_ready: { min: 85, name: 'Healthy & Ready' },
       healthy_stretched: { min: 70, name: 'Healthy but Stretched' },
-      strained: { min: 55, name: 'Strained' },
-      at_risk: { min: 0, name: 'At Risk' },
+      strained: { min: 55, name: 'Growth Constrained' },
+      at_risk: { min: 0, name: 'Strategic Priority' },
     });
   });
   it('a missing band fails at load (named keys, never z.record)', () => {

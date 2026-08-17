@@ -234,14 +234,17 @@ export const ReportSectionSchema = z.object({
   required_mentions: z.array(RequiredMentionSchema),
 });
 
-// All thirteen named. fallback-sections.ts iterates the full skeleton, so a missing id is a
+// All twelve named. fallback-sections.ts iterates the full skeleton, so a missing id is a
 // hole in a rendered report; naming them makes it a load-time failure instead.
+//
+// The thirteenth, `appendix` ("Methodology and caveats"), was removed on 2026-08-16 at
+// Natalie's request. It is this object that drives SectionId, so nothing downstream can
+// still name it — that is why the removal starts here.
 const ReportSectionsSchema = z.object({
   s1: ReportSectionSchema, s2: ReportSectionSchema, s3: ReportSectionSchema,
   s4: ReportSectionSchema, s5: ReportSectionSchema, s6: ReportSectionSchema,
   s7: ReportSectionSchema, s8: ReportSectionSchema, s9: ReportSectionSchema,
   s10: ReportSectionSchema, s11: ReportSectionSchema, s12: ReportSectionSchema,
-  appendix: ReportSectionSchema,
 });
 
 const ActionSetSchema = z.object({

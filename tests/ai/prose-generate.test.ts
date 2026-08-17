@@ -33,8 +33,7 @@ function asParsed(b: ReportBlocks): Record<string, string | null> {
   return {
     verdict: b.verdict, evidence: b.evidence ?? null, blind_spot: b.blind_spot ?? null,
     cost: b.cost ?? null, do_not_work_on: b.do_not_work_on ?? null, next_step: b.next_step,
-    gating: b.gating ?? null, dispersion: b.dispersion ?? null, benchmark_note: b.benchmark_note,
-    dependency_note: b.dependency_note,
+    gating: b.gating ?? null, dispersion: b.dispersion ?? null,
   };
 }
 

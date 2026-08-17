@@ -20,7 +20,7 @@ describe('seam tokens (visual overhaul)', () => {
   });
 
   it('BAND_NAME spells out every band', () => {
-    expect(BAND_NAME).toEqual({ severe: 'Severe', broken: 'Broken', watch: 'Watch', holding: 'Holding' });
+    expect(BAND_NAME).toEqual({ severe: 'Priority', broken: 'Constraint', watch: 'Maturing', holding: 'Strength' });
   });
 
   it('verdictBandFor maps the four tier ids and fails dark on unknown', () => {
@@ -152,9 +152,9 @@ describe('verdictBlockModel', () => {
       expect(model.hero.band).toBe(verdictBandFor(facts.overall.tier.id));
       expect(model.stats.map((s) => s.label)).toEqual([
         'Areas assessed',
-        'Areas holding',
+        'Strengths',
         'Questions at 20 or less',
-        'Areas severe',
+        'Priority areas',
       ]);
     }
   });
