@@ -25,8 +25,13 @@ export interface BrandedEmailArgs {
   paragraphs: string[]
   /** Optional ink bulletproof button. */
   cta?: EmailCta
-  /** Optional "paste this link into your browser:" line (invite only). */
-  fallbackLinkLabel?: string
+  /**
+   * Optional small fallback line under the CTA, rendered as `${lead} <a href=cta.url>${linkText}</a>`.
+   * The URL is never printed as visible text: a signed auth URL runs ~250 characters, swamps the card,
+   * and reads as unsafe. Copy/paste survives via the plaintext mirror and right-click → copy address.
+   * Ignored without a `cta` — it borrows that button's url.
+   */
+  fallbackLink?: { lead: string; linkText: string }
   /** Defaults to "— The XP Gathering team". */
   signoff?: string
 }
@@ -67,7 +72,7 @@ function escapeHtml(value: string): string {
  * mirror. All interpolation is HTML-escaped in the html branch.
  */
 export function renderBrandedEmail(args: BrandedEmailArgs): { html: string; text: string } {
-  const { previewText, heading, paragraphs, cta, fallbackLinkLabel } = args
+  const { previewText, heading, paragraphs, cta, fallbackLink } = args
   const signoff = args.signoff ?? DEFAULT_SIGNOFF
 
   const paragraphsHtml = paragraphs
@@ -87,13 +92,17 @@ export function renderBrandedEmail(args: BrandedEmailArgs): { html: string; text
       )}</a></td></tr></table>`
     : ''
 
+  // Anchor color + underline are declared inline: without them iOS Mail and Outlook repaint the link
+  // their own blue/purple, which is the one off-palette color no test can catch at build time.
   const fallbackHtml =
-    fallbackLinkLabel && cta
+    fallbackLink && cta
       ? `<p style="margin:16px 0 0;font-family:${SANS};font-size:13px;line-height:1.5;color:${INK_SOFT};">${escapeHtml(
-          fallbackLinkLabel,
-        )}<br><span style="word-break:break-all;color:${INK_SOFT};">${escapeHtml(
+          fallbackLink.lead,
+        )} <a href="${escapeHtml(
           cta.url,
-        )}</span></p>`
+        )}" style="color:${INK_SOFT};text-decoration:underline;">${escapeHtml(
+          fallbackLink.linkText,
+        )}</a></p>`
       : ''
 
   const html = `<!DOCTYPE html>
@@ -143,9 +152,11 @@ ${fallbackHtml}
 </body>
 </html>`
 
+  // The plaintext mirror is where the raw URL belongs — it cannot hyperlink, and it is the copy/paste
+  // path for anyone the button fails. The CTA line already carries the url, so the fallback would only
+  // repeat it; the lead alone would point at nothing. Emit neither.
   const textParts = ['XP Gathering', 'CHURCH HEALTH', '', heading, '', ...paragraphs]
   if (cta) textParts.push('', `${cta.label}: ${cta.url}`)
-  if (fallbackLinkLabel && cta) textParts.push('', fallbackLinkLabel, cta.url)
   textParts.push('', signoff, '© XP Gathering')
   const text = textParts.join('\n')
 

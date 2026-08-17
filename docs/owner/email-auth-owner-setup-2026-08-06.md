@@ -88,8 +88,10 @@ Two template files live beside this doc, same visual design, different copy for 
 2. **Subject:** `Your sign-in link for the 360 Church Health Assessment`
 3. **Message body (HTML):** replace the entire contents with the template in
    **`docs/owner/magic-link-template.html`** (also inlined below). It is the *same* branded shell as
-   the app's other emails, with the button and paste-link pointing at Supabase's own
-   `{{ .ConfirmationURL }}` token (the CTA reads **"Sign in to your assessment"**). **Keep the
+   the app's other emails, with the button and the small "Button not working?" fallback both pointing
+   at Supabase's own `{{ .ConfirmationURL }}` token (the CTA reads **"Sign in to your assessment"**).
+   Neither prints the URL as visible text — it is the href only, so the ~250-character signed link
+   never lands in the reader's face. **Keep the
    `{{ .ConfirmationURL }}` token exactly as-is** — Supabase substitutes the real one-time link when
    it sends.
 4. **Save**.
@@ -123,7 +125,7 @@ Two template files live beside this doc, same visual design, different copy for 
 <h1 style="margin:0 0 16px;font-family:Georgia, 'Times New Roman', Times, serif;font-size:24px;font-weight:500;line-height:1.3;color:#1A1C22;">Your sign-in link</h1>
 <p style="margin:0 0 16px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:16px;line-height:1.6;color:#1A1C22;">Click the button below to securely sign in to the 360 Church Health Assessment.</p><p style="margin:0 0 16px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:16px;line-height:1.6;color:#1A1C22;">This link signs you in without a password. It can be used once and expires shortly — if it no longer works, just request a new link from the sign-in page.</p>
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 4px;"><tr><td align="center" bgcolor="#1A1C22" style="border-radius:8px;"><a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:13px 26px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:15px;font-weight:600;line-height:1;color:#FBF9F5;text-decoration:none;border-radius:8px;">Sign in to your assessment</a></td></tr></table>
-<p style="margin:16px 0 0;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:13px;line-height:1.5;color:#565962;">Or paste this link into your browser:<br><span style="word-break:break-all;color:#565962;">{{ .ConfirmationURL }}</span></p>
+<p style="margin:16px 0 0;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:13px;line-height:1.5;color:#565962;">Button not working? <a href="{{ .ConfirmationURL }}" style="color:#565962;text-decoration:underline;">Use this link instead</a></p>
 </td>
 </tr>
 <tr>
