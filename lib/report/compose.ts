@@ -48,9 +48,10 @@ export async function composeReport(args: {
   const attempt = async (id: AiSectionId): Promise<boolean> => {
     const parsed = await composeSection(id, facts, methodology); // never throws → null on failure
     if (parsed === null) return false;
-    const reason = gateSection(id, parsed, ctx);
-    if (reason !== null) {
-      console.warn(`[report] section ${id}: ${reason}`);
+    const failure = gateSection(id, parsed, ctx);
+    if (failure !== null) {
+      // detail is omitted when empty so a reasonless family does not log a bare "()".
+      console.warn(`[report] section ${id}: ${failure.family}${failure.detail ? ` (${failure.detail})` : ''}`);
       return false;
     }
     sections[id] = parsed;

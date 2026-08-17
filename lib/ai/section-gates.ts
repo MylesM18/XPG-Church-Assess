@@ -3,6 +3,30 @@ import type { Methodology, RequiredMention } from '../methodology/schema';
 import { SECTION_REGISTRY, type AiSectionId } from './sections';
 
 /**
+ * The eight gate families. A NAMED UNION, not a widened string: adding a family here is a
+ * compile error in correctiveInstruction's exhaustive switch, so a new family cannot silently
+ * default to "re-roll blind".
+ */
+export type GateFamily =
+  | 'field parity' | 'category coverage' | 'numeric containment'
+  | 'required mention' | 'banned phrase' | 'anonymity'
+  | 'pattern claim' | 'length ceiling';
+
+/**
+ * `detail` is a SECURITY BOUNDARY, not a log format (spec §4.1). The rule at sections.ts:144-147
+ * holds: reasons only — never the payload, the parsed output, section text, or the facts pack.
+ * In particular `anonymity` carries the label's INDEX and never the label: a respondent label is
+ * PII, and logging it would defeat the gate it belongs to.
+ */
+export interface GateFailure { family: GateFamily; detail: string }
+
+const fail = (family: GateFamily, detail = ''): GateFailure => ({ family, detail });
+
+/** An unknown category id is MODEL OUTPUT, unlike every other detail we emit. Cap it so a model
+ *  that returns a sentence in that field cannot turn a reason line into a payload leak. */
+const MAX_ECHOED_ID = 24;
+
+/**
  * The six gate families (parent spec line 73). All must pass, or that section falls back.
  *
  * Pure — no I/O, no SDK, no network; the gate runs on already-fetched model output.
@@ -47,13 +71,13 @@ const SCALE_DENOMINATOR = 100;
  *  opts a section into gate 1b, so adding one is deliberate. */
 const COVERAGE_FIELD: Partial<Record<AiSectionId, 'strengths' | 'areas'>> = { s5: 'strengths', s6: 'areas' };
 
-export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext): string | null {
+export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext): GateFailure | null {
   // 1. Field parity — the schema is the expectation. A shape miss and a blank required field
   // are the same failure: the section did not come back whole.
   const check = SECTION_REGISTRY[id].schema.safeParse(parsed);
-  if (!check.success) return 'field parity';
+  if (!check.success) return fail('field parity');
   const strings = allStrings(check.data);
-  if (strings.some((s) => s.trim().length === 0)) return 'field parity';
+  if (strings.some((s) => s.trim().length === 0)) return fail('field parity');
 
   // 1b. Category coverage — s5/s6 only. Their payload is an array keyed to this section's own
   // category slice, and no other gate constrains it: gate 1's blank check is `.some()` over a
@@ -70,13 +94,18 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
   const coverageField = COVERAGE_FIELD[id];
   if (coverageField) {
     const entries = (check.data as Record<string, { category_id: string }[]>)[coverageField] ?? [];
-    if (entries.length === 0) return 'category coverage';
+    if (entries.length === 0) return fail('category coverage', 'empty');
     const known = new Set(
       (SECTION_REGISTRY[id].slice(ctx.facts) as { categories: CategoryFact[] }).categories.map((c) => c.id),
     );
     const seen = new Set<string>();
     for (const entry of entries) {
-      if (!known.has(entry.category_id) || seen.has(entry.category_id)) return 'category coverage';
+      // Split from the original combined `||` so the detail can distinguish the two. Behaviour is
+      // identical; this order preserves today's precedence — unknown wins over duplicate.
+      if (!known.has(entry.category_id)) {
+        return fail('category coverage', `unknown: ${entry.category_id.slice(0, MAX_ECHOED_ID)}`);
+      }
+      if (seen.has(entry.category_id)) return fail('category coverage', `duplicate: ${entry.category_id}`);
       seen.add(entry.category_id);
     }
     // Completeness. The loop above constrains only the ids that ARE present, so a proper subset
@@ -85,7 +114,10 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
     // "Three areas are carrying real weight" against a slice of exactly three, so a 2-of-3
     // response renders two strengths under a heading claiming three. s6's read "Each area below".
     // Uniqueness above makes size equality sufficient: `seen` cannot exceed `known`.
-    if (seen.size !== known.size) return 'category coverage';
+    if (seen.size !== known.size) {
+      const missing = [...known].filter((k) => !seen.has(k));
+      return fail('category coverage', `missing: ${missing.join(', ')}`);
+    }
   }
 
   const text = strings.join(' ');
@@ -95,7 +127,7 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
   // densely covers 0-100 with every score and percentile, so a global allowed set would let a
   // number migrate from one section's subject to another's. Same rationale as prose.ts:70-78.
   const allowed = new Set([SCALE_DENOMINATOR, ...extractNumbers(JSON.stringify(SECTION_REGISTRY[id].slice(ctx.facts)))]);
-  for (const n of extractNumbers(text)) if (!allowed.has(n)) return 'numeric containment';
+  for (const n of extractNumbers(text)) if (!allowed.has(n)) return fail('numeric containment', String(n));
 
   // 3. Required and banned mentions.
   const required = ctx.methodology.report.sections[id].required_mentions;
@@ -108,13 +140,13 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
     const needle = resolved[key];
     // Keyed by RequiredMention, so the compiler requires a resolver entry per enum member. An
     // absent primary constraint resolves to '', and includes('') is true — vacuously satisfied.
-    if (!lower.includes(needle.toLowerCase())) return 'required mention';
+    if (!lower.includes(needle.toLowerCase())) return fail('required mention', key);
   }
   if (ctx.facts.archetype === 'constraint' && ctx.facts.primary_constraint && (id === 's2' || id === 's4')) {
-    if (!lower.includes(ctx.facts.primary_constraint.name.toLowerCase())) return 'required mention';
+    if (!lower.includes(ctx.facts.primary_constraint.name.toLowerCase())) return fail('required mention', 'primary_name');
   }
   for (const phrase of ctx.methodology.report.banned_phrases[ctx.facts.archetype]) {
-    if (lower.includes(phrase.toLowerCase())) return 'banned phrase';
+    if (lower.includes(phrase.toLowerCase())) return fail('banned phrase', phrase);
   }
   // P1 register calibration: below the 70 tier boundary, a report must not reach for the
   // consolation register — banned_phrases.constraint's list ("healthy and ready to grow",
@@ -129,14 +161,14 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
   // which must not claim "every stage is strong" just because it scored under 70.
   if (ctx.facts.archetype !== 'capacity' && ctx.facts.overall.capacity < 70) {
     for (const phrase of ctx.methodology.report.banned_phrases.constraint) {
-      if (lower.includes(phrase.toLowerCase())) return 'banned phrase';
+      if (lower.includes(phrase.toLowerCase())) return fail('banned phrase', phrase);
     }
   }
 
   // 4. Anonymity — no respondent label anywhere in the section. Fail closed: the alternative is
   // a named individual on a rendered report.
-  for (const label of ctx.labels) {
-    if (label && lower.includes(label.toLowerCase())) return 'anonymity';
+  for (const [i, label] of ctx.labels.entries()) {
+    if (label && lower.includes(label.toLowerCase())) return fail('anonymity', `label ${i}`);
   }
 
   // 5. S7 pattern-claim consistency — a "none of these are X" claim is permitted only when the
@@ -148,14 +180,15 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
       if (c.includes('none')) {
         for (const [theme, words] of Object.entries(THEME_WORDS)) {
           if (!words.some((w) => c.includes(w))) continue;
-          if ((ctx.facts.pattern_counts[theme as keyof FactsPack['pattern_counts']] ?? 0) > 0) return 'pattern claim';
+          if ((ctx.facts.pattern_counts[theme as keyof FactsPack['pattern_counts']] ?? 0) > 0) return fail('pattern claim');
         }
       }
     }
   }
 
   // 6. Length ceiling — total rendered characters for this section.
-  if (text.length > ctx.methodology.report.sections[id].length_ceiling) return 'length ceiling';
+  const ceiling = ctx.methodology.report.sections[id].length_ceiling;
+  if (text.length > ceiling) return fail('length ceiling', `${text.length}/${ceiling}`);
 
   return null;
 }
