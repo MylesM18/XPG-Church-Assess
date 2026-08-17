@@ -20,7 +20,7 @@ describe('offers.yaml', () => {
   });
   it('keeps the foundation hook verbatim', () => {
     expect(offers.foundation.hook).toBe(
-      "Nothing in your pipeline is broken — but something underneath it is holding you back. Let's fix the foundation before you build on it.",
+      "Your ministry stages are doing their part, but something underneath them is holding you back. Let's strengthen the foundation before you build higher on it.",
     );
   });
 });

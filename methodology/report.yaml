@@ -142,16 +142,17 @@ sections:
     title: "Final executive assessment"
     templates:
       capacity: >-
-        {church_name} finishes at {overall_percent} out of 100, {tier_name}, with every area
-        carrying its load. The objective for the next ninety days is building the capacity to
-        steward what is coming.
+        {church_name} finishes at {overall_percent} out of 100, in the {tier_name} band, with
+        every area carrying its load. The objective for the next ninety days is building the
+        capacity to steward what is coming.
       constraint: >-
-        {church_name} finishes at {overall_percent} out of 100, {tier_name}. The objective for
-        the next ninety days is {primary_name}, so the church can faithfully steward where it is
-        being taken next.
+        {church_name} finishes at {overall_percent} out of 100, in the {tier_name} band. The
+        objective for the next ninety days is {primary_name}, so the church can faithfully
+        steward where it is being taken next.
       foundation: >-
-        {church_name} finishes at {overall_percent} out of 100, {tier_name}. The objective for
-        the next ninety days is strengthening the enablers everything else rests on.
+        {church_name} finishes at {overall_percent} out of 100, in the {tier_name} band. The
+        objective for the next ninety days is strengthening the enablers everything else rests
+        on.
     length_ceiling: 900
     required_mentions: [tier_name, overall_percent]
 

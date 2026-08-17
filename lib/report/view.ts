@@ -125,10 +125,15 @@ export function readingBand(
  *  state-aware reading band the dossier prose uses (spec §7 Layer 1/3), so the cover
  *  table and each dossier can never disagree. Replaces the former score-only scoreBand()
  *  that cover.tsx and pdf/document.tsx each duplicated (finding #5, Natalie: align). */
+/** Kept in step with charts.ts's BAND_NAME: the two label the SAME band for the same area, one
+ *  in the dossier/cover table and one on the chart, so a divergence reads as a contradiction.
+ *  `holding` is the one deliberate exception — 'Strong' here vs 'Strength' on the chart label —
+ *  because the adjective was Natalie's explicit call in the visual-overhaul round (finding #5)
+ *  and it reads better in a table cell than the noun does. Synonyms, not a contradiction. */
 const READING_BAND_LABEL: Record<ReadingBand, string> = {
-  severe: 'Severe',
-  broken: 'Broken',
-  watch: 'Watch',
+  severe: 'Priority',
+  broken: 'Constraint',
+  watch: 'Maturing',
   holding: 'Strong',
 };
 

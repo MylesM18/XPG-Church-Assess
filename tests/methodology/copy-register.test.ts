@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { loadMethodology } from '@/lib/methodology/load';
+import { bookingCta } from '@/lib/report/cta';
+import { BAND_NAME } from '@/lib/report/charts';
 
 /**
  * House-style guard for the copy layer (docs/brand/xpg-voice.md, decision D1).
@@ -29,8 +31,32 @@ describe('copy layer register', () => {
     const offenders = [
       ...stringLeaves(m.copy, 'copy'),
       ...stringLeaves(m.report, 'report'),
+      // offers.yaml renders into s11 and the booking CTA, so a leader reads it too. Its
+      // `foundation` hook carried an em-dash that the first two sources alone never caught.
+      ...stringLeaves(m.offers, 'offers'),
+      ...stringLeaves(m.rules.tiers, 'rules.tiers'),
     ].filter(([, s]) => /[—–]/.test(s));
     expect(offenders.map(([path]) => path)).toEqual([]);
+  });
+
+  // The booking CTA is a TS constant, not methodology YAML, so the loader-driven check above
+  // cannot see it — and it is rendered on all three report surfaces (screen, PDF, share link).
+  it('keeps the booking CTA free of em-dashes too', () => {
+    expect(/[—–]/.test(bookingCta.body)).toBe(false);
+    expect(/[—–]/.test(bookingCta.heading)).toBe(false);
+  });
+
+  // The band names are the most-read strings in the report: every area chart is labelled
+  // `${category} · ${BAND_NAME[band]}` and the PDF cover strip prints all four. Verdict words
+  // there ("Broken", "Severe") read as a judgement on the people in that ministry, which Guide
+  // §7 forbids. Pinned by value so reverting to the old vocabulary is a deliberate act.
+  it('names the reading bands as work to do, not as verdicts', () => {
+    expect(BAND_NAME).toEqual({
+      severe: 'Priority',
+      broken: 'Constraint',
+      watch: 'Maturing',
+      holding: 'Strength',
+    });
   });
 
   it('keeps style_spine and the copy layer on the same punctuation rule', async () => {

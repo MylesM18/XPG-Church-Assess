@@ -8,9 +8,9 @@ export const bookingCta = {
   url: 'https://api.leadconnectorhq.com/widget/bookings/xpgatheringdiscovery',
   heading: 'Take the next step',
   body:
-    'You’ve seen where your church is strong and where the real constraint is. The fastest ' +
-    'way to turn this into a plan is a conversation. Book a free call with the XP Gathering ' +
-    'team — we’ll walk through your results together and map the next few moves for your ' +
-    'church. No cost, no pressure.',
+    'You’ve seen where your church is strong and where the next constraint on growth sits. ' +
+    'The fastest way to turn this into a plan is a conversation. Book a free call with the XP ' +
+    'Gathering team and we’ll walk through your results together, then map the next few moves ' +
+    'for your church. No cost, no pressure.',
   buttonLabel: 'Book your free call →',
 } as const

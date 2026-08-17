@@ -10,10 +10,10 @@ describe('tierFor (spec P1: half-open lower bounds over fractional capacity)', (
     [85, 'healthy_ready', 'Healthy & Ready'],
     [84.6, 'healthy_stretched', 'Healthy but Stretched'],
     [70, 'healthy_stretched', 'Healthy but Stretched'],
-    [69.9, 'strained', 'Strained'],
-    [55, 'strained', 'Strained'],
-    [54.9, 'at_risk', 'At Risk'],
-    [0, 'at_risk', 'At Risk'],
+    [69.9, 'strained', 'Growth Constrained'],
+    [55, 'strained', 'Growth Constrained'],
+    [54.9, 'at_risk', 'Strategic Priority'],
+    [0, 'at_risk', 'Strategic Priority'],
   ] as const)('capacity %s → %s', (capacity, id, name) => {
     expect(tierFor(capacity, rules)).toEqual({ id, name });
   });

@@ -135,7 +135,7 @@ describe('buildFacts — cover + overall', () => {
       capacity: 63.9,
       throughput: 52.4,
       gap: 11.5,
-      tier: { id: 'strained', name: 'Strained' },
+      tier: { id: 'strained', name: 'Growth Constrained' },
     });
   });
   it('archetype comes from the engine verdict', () => {

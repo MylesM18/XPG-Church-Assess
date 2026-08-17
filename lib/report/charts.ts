@@ -60,11 +60,17 @@ export const BAND_TEXT: Record<BandKey, string> = {
 };
 
 /** Band color never travels alone (spec §3.1) — the spelled-out names. */
-export const BAND_NAME: Record<BandKey, 'Severe' | 'Broken' | 'Watch' | 'Holding'> = {
-  severe: 'Severe',
-  broken: 'Broken',
-  watch: 'Watch',
-  holding: 'Holding',
+/** The reader-facing name of each reading band, mapped onto the Guide's §18 score bands
+ *  (docs/brand/xpg-voice.md). The KEYS are the engine's states and never change; only these
+ *  display strings do. They are the most-read strings in the whole report — every area chart is
+ *  labelled `${category} · ${BAND_NAME[band]}` and the PDF cover strip prints all four — so they
+ *  carry the voice more than any prose block does. "Broken"/"Severe" printed next to a pastor's
+ *  own ministry area is a verdict on the people in it; "Constraint"/"Priority" names work to do. */
+export const BAND_NAME: Record<BandKey, 'Priority' | 'Constraint' | 'Maturing' | 'Strength'> = {
+  severe: 'Priority',
+  broken: 'Constraint',
+  watch: 'Maturing',
+  holding: 'Strength',
 };
 
 const VERDICT_BAND: Record<string, BandKey> = {
@@ -253,9 +259,9 @@ export function verdictBlockModel(facts: FactsPack, methodology: Methodology): V
   );
   const entries: Array<[string, number]> = [
     ['Areas assessed', facts.categories.length],
-    ['Areas holding', bands.filter((b) => b === 'holding').length],
+    ['Strengths', bands.filter((b) => b === 'holding').length],
     ['Questions at 20 or less', facts.bottom_items.filter((b) => b.mean <= 20).length],
-    ['Areas severe', bands.filter((b) => b === 'severe').length],
+    ['Priority areas', bands.filter((b) => b === 'severe').length],
   ];
   const cellW = CHART_W / 2;
   const stats = entries.map(([label, value], i): VerdictStat => ({
@@ -285,7 +291,9 @@ export function verdictBlockModel(facts: FactsPack, methodology: Methodology): V
 
 export type CoverStripSeg = {
   band: BandKey;
-  name: 'Severe' | 'Broken' | 'Watch' | 'Holding';
+  /** Derived from BAND_NAME rather than restating its union: this segment IS a band label, and
+   *  a second hand-written copy of the four strings drifts the moment they are renamed. */
+  name: (typeof BAND_NAME)[BandKey];
   x: number;
   w: number;
 };

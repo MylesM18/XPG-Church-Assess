@@ -10,6 +10,6 @@ generosity:
   # Claude-drafted
   both:    { type: "generosity_depth", call_type: "Generosity Culture & Discipleship Review", hook: "Most of your people give. Few have been taught why." }
 # Claude-drafted (no source offer for the no-constraint path):
-no_constraint: { type: "capacity", call_type: "Capacity & Next-Ceiling Session", hook: "Nothing here is broken. Let's talk about the ceiling you'll hit next, not the one you're hitting now." }
+no_constraint: { type: "capacity", call_type: "Capacity & Next-Ceiling Session", hook: "Nothing here is limiting you yet. Let's talk about the ceiling you will meet next, not the one you are meeting now." }
 # Claude-drafted (no source offer for the foundation path):
-foundation: { type: "foundation", call_type: "Foundation & Operating Systems Session", hook: "Nothing in your pipeline is broken — but something underneath it is holding you back. Let's fix the foundation before you build on it." }
+foundation: { type: "foundation", call_type: "Foundation & Operating Systems Session", hook: "Your ministry stages are doing their part, but something underneath them is holding you back. Let's strengthen the foundation before you build higher on it." }
