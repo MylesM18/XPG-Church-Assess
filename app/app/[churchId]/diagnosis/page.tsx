@@ -26,6 +26,11 @@ import { regenerateReport } from '../actions'
 
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'
 
+/** Report generation runs inside a Server Action on this segment: 7 concurrent model calls,
+ *  worst case two rounds. Nothing exported maxDuration before, so this ran at the platform
+ *  default — well under the real worst case. */
+export const maxDuration = 300
+
 // Raw shape of one get_completed_run_responses row (supabase.rpc returns it untyped).
 // respondent_user_id is null for a submission the RPC never resolved to a member id; the map
 // below falls back to the label in that case, exactly as generateDiagnosis (actions.ts) does.

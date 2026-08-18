@@ -185,7 +185,11 @@ export async function composeSection(
         ],
         text: { format: zodTextFormat(entry.schema, `report_${id}`) },
       },
-      { timeout: 30000, maxRetries: 0 },
+      // Sized against the slowest COMPLIANT call measured after §4.1-§4.4 (see
+      // docs/superpowers/plans/2026-08-17-2a-measurements.md), not against the old failure mix.
+      // Worst case is 2 rounds x (timeout x (1 + maxRetries)); it must fit inside the route
+      // segment's maxDuration with margin.
+      { timeout: 45_000, maxRetries: 1 },
     );
 
     if (response.status === 'incomplete') {

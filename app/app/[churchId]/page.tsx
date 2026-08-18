@@ -25,6 +25,11 @@ import { partialNudges } from '@/lib/coverage/partial-nudge'
 import { MemberCoverageMatrix } from './member-coverage-matrix'
 import { AnonymityNote } from '@/components/anonymity-note'
 
+/** Report generation runs inside a Server Action on this segment: 7 concurrent model calls,
+ *  worst case two rounds. Nothing exported maxDuration before, so this ran at the platform
+ *  default — well under the real worst case. */
+export const maxDuration = 300
+
 function gatesLabel(gates: 'all' | string[] | undefined): string {
   if (gates === 'all') return 'all stages'
   if (Array.isArray(gates)) return gates.join(', ')

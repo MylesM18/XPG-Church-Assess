@@ -262,4 +262,15 @@ describe('composeSection', () => {
     expect(system).toContain('200 words');  // s2's ceiling is 1400
     expect(system).not.toContain('128 words');
   });
+
+  // The request OPTIONS, not the request body — `mockParse.mock.calls[0]![1]` is the same house
+  // idiom as the `[0]` assertions above, one argument over. Both numbers were sized against
+  // measured per-call latency in docs/superpowers/plans/2026-08-17-2a-measurements.md
+  // ("### The three numbers, derived"); this pins them so a later edit cannot quietly shrink the
+  // budget back under the slowest well-formed call.
+  it('asks the SDK for the measured per-attempt timeout and retry budget (spec §4.5)', async () => {
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    await composeSection('s6', capacityFacts, methodology);
+    expect(mockParse.mock.calls[0]![1]).toEqual({ timeout: 45_000, maxRetries: 1 });
+  });
 });

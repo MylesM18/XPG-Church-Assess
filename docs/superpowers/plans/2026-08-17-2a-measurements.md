@@ -388,3 +388,30 @@ still take ~20 s on the day it starts passing. Size against the slowest **well-f
   800 s), so no plan-tier risk. Margin over the 181 s worst case: **119 s (39%)**.
 
 No `length_ceiling` moves, so `methodology/report.yaml` stays at `0.3.0`.
+
+### Task 5 Steps 4-6 — applied and verified (2026-08-17)
+
+`lib/ai/sections.ts:188` now carries `{ timeout: 45_000, maxRetries: 1 }`, and
+`export const maxDuration = 300` sits on both segments confirmed in Step 2. The plan's Step 6
+`git add` lists only `app/app/[churchId]/page.tsx`, but its own Steps 2 and 4 require **both**
+segments — both are staged; the omission is a plan-internal slip, not a spec conflict. The
+literal snippet's trailing semicolon was dropped: both `app/` files are semicolon-free, while
+`lib/ai/sections.ts` is not.
+
+The timeout/retry pair is pinned by a new test in `tests/ai/sections.test.ts` asserting on
+`mockParse.mock.calls[0]![1]` — the request **options**, the same house idiom as the existing
+`[0]` body assertions, one argument over. Watched RED first: it reported
+`expected { timeout: 30000, maxRetries: +0 } to deeply equal { timeout: 45000, maxRetries: 1 }`.
+
+`maxDuration` has no unit-testable behaviour, so `npm run build` is its validator — and it gives
+**positive** confirmation, not merely a clean exit. `.next/server/functions-config-manifest.json`
+after the build:
+
+```json
+{ "/api/cron/reminders": {}, "/api/report/[runId]/pdf": {},
+  "/app/[churchId]": { "maxDuration": 300 },
+  "/app/[churchId]/diagnosis": { "maxDuration": 300 } }
+```
+
+Exactly the two intended segments; `/r/[shareToken]` correctly absent. Gates: `tsc --noEmit`
+clean, **1547 tests / 208 files pass**, build compiled in 4.6 s with no warning.
