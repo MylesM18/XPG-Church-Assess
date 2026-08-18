@@ -588,3 +588,60 @@ describe('gate failure detail (spec §4.1)', () => {
     expect(gateSection('s6', goodS6, ctx)).toBeNull();
   });
 });
+
+// Task 4a — the roadmap horizons s12 is required to state.
+//
+// ctx.facts (constraintFacts) cannot carry these tests: its s12 slice (head + categories)
+// already contains 30 (conn's score) and 60 (overall.throughput), so two of the three horizons
+// would be vacuously allowed. This pack keeps 30, 60 and 90 out of the slice entirely, and each
+// horizon gets its OWN test because gate 2 returns on the FIRST offender — one combined string
+// would prove only whichever number appears first.
+const s12Facts: FactsPack = buildFacts({
+  ...baseArgs,
+  diagnosis: makeDiagnosis({
+    capacity: 71,
+    throughput: 62,
+    gap: 9,
+    categories: CAT_IDS.map((id, i) => makeCategory(id, [72, 68, 66, 61, 58, 71, 55, 64][i]!)),
+  }),
+});
+const s12Ctx = { facts: s12Facts, methodology, labels: ['Priscilla Vandermeer'] };
+
+/** A well-formed s12 whose only digits are the capacity and the scale denominator. */
+function s12With(primary_objective: string) {
+  return {
+    assessment: `The church finishes at ${s12Facts.overall.capacity} out of 100, in the ${s12Facts.overall.tier.name} band.`,
+    overall_percent: s12Facts.overall.capacity,
+    tier_name: s12Facts.overall.tier.name,
+    primary_objective,
+  };
+}
+
+describe('gate 2 — s12 roadmap horizons (spec §4.4)', () => {
+  it('permits the 30-day horizon in s12', () => {
+    expect(gateSection('s12', s12With('Name a single owner within the first 30 days.'), s12Ctx)).toBeNull();
+  });
+
+  it('permits the 60-day horizon in s12', () => {
+    expect(gateSection('s12', s12With('By 60 days that rhythm should be running weekly.'), s12Ctx)).toBeNull();
+  });
+
+  it('permits the 90-day horizon in s12', () => {
+    // s12's own template says "the next ninety days"; this is that word written in digits.
+    expect(gateSection('s12', s12With('Review what held at 90 days and reset from there.'), s12Ctx)).toBeNull();
+  });
+
+  it('still rejects a number in s12 that is neither in the slice nor a horizon', () => {
+    expect(gateSection('s12', s12With('Name a single owner within the first 45 days.'), s12Ctx))
+      .toMatchObject({ family: 'numeric containment', detail: '45' });
+  });
+
+  it('does not extend the horizons to other sections', () => {
+    // 30 and 90 are both absent from s2's slice (its number set is dumped at the gate 2
+    // describe above), so this stays a real rejection: the allowance is scoped to s12.
+    const withThirty = { ...goodS2, summary: `${goodS2.summary} Thirty is written 30 here.` };
+    expect(gateSection('s2', withThirty, ctx)).toMatchObject({ family: 'numeric containment', detail: '30' });
+    const withNinety = { ...goodS2, summary: `${goodS2.summary} Ninety is written 90 here.` };
+    expect(gateSection('s2', withNinety, ctx)).toMatchObject({ family: 'numeric containment', detail: '90' });
+  });
+});

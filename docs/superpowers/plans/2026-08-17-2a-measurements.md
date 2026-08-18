@@ -245,3 +245,45 @@ and s12 has never yet reached its 900-character length gate — so 4a alone will
 **Vercel plan tier: Pro.** Fluid compute caps `maxDuration` at 800 s (default 300 s). The
 measured `composeReport` total was 43.5–56.5 s *before* Tasks 2–4, so the ceiling is not the
 binding constraint — re-measure after Task 4 and size from that, not from this number.
+
+## Task 4a — justification re-derived from source, then implemented
+
+The plan's rationale was checked against source and **two of its claims are false**:
+
+1. *"report.yaml's s12 template asks for exactly those horizons"* — **false.** s12
+   (`methodology/report.yaml:141-157`) is titled *"Final executive assessment"* and all three
+   templates say **"the next ninety days"** in words. No digits appear in them.
+2. *"s12 IS a 30/60/90 roadmap"* — **false.** The roadmap is **s10**
+   (`report.yaml:124-128`, title `"30/60/90 roadmap"`, templates *"Ninety days, in three phases:
+   align, build, scale"*), a deterministic section that is not in `AI_SECTION_IDS`.
+
+An alternative hypothesis for the observed `60`/`80` pair — that they are tier-band boundaries —
+was also checked and is **dead**: `methodology/rules.yaml:63-67` puts the bands at 85 / 70 / 55 / 0.
+
+**The justification that does hold.** s12's templates require an objective for *"the next ninety
+days"*, and that ninety-day window is the one s10 publishes as its own title. So `90` is s12's
+template word written in digits, and `30`/`60` are that published window's phase boundaries.
+`FactsPack` carries no literal 30/60/90 — any appearance is a coincidence of one church's scores.
+That is the same class as `SCALE_DENOMINATOR`: the report's own structural vocabulary, absent from
+the facts pack, falsely rejected by a containment gate scoped to the facts.
+
+**Scope of what was measured.** Only `60` was observed (all three runs). `30` and `90` are admitted
+because the three are one published set; admitting one boundary and rejecting the others would be
+arbitrary. Recorded as prospective, not measured.
+
+**4a does not make s12 pass on its own** — restated here because the commit is easy to
+over-read: `80` fired in three of six s12 rejections and is *not* structural, gate 2 returns on the
+first offender only, and s12 has still never been measured against its 900-char length ceiling.
+Task 2's budget sentence and Task 3's corrective retry are the other half; Task 6 measures whether
+the combination lands.
+
+**Implemented** in `lib/ai/section-gates.ts` as `STRUCTURAL_NUMBERS`, scoped per-section
+(`{ s12: [30, 60, 90] }`) and unioned into gate 2's `allowed` set. No gate weakened for any other
+section; no `length_ceiling` touched, so `methodology/report.yaml` stays at `0.3.0`.
+
+**Tests** (`tests/ai/section-gates.test.ts`, +5, suite 1541 → 1546). `ctx.facts` could not carry
+them: `constraintFacts`'s s12 slice already holds 30 (conn's score) and 60 (`overall.throughput`),
+so two of three horizons would have been vacuously allowed. A dedicated `s12Facts` pack keeps all
+three out of the slice, and each horizon gets its own test because gate 2 returns on the first
+offender. RED was watched: all three failed before the change; the `45` control passed throughout,
+which proves the shared scaffold contributed no other offending number.

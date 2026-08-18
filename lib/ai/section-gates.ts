@@ -66,6 +66,27 @@ const THEME_WORDS: Record<string, string[]> = {
  *  every on-template composition of those sections is falsely rejected in production. */
 const SCALE_DENOMINATOR = 100;
 
+/** The report's own roadmap horizons, in digits. Same class as SCALE_DENOMINATOR above: the
+ *  report's structural vocabulary, which FactsPack carries no literal of.
+ *
+ *  Derived from source, not from the section title: s12's three templates (report.yaml:141-157)
+ *  all require an objective for "the next ninety days", and the ninety-day window they close is
+ *  the one s10 publishes as its title — "30/60/90 roadmap", "Ninety days, in three phases"
+ *  (report.yaml:124-128). So 90 is s12's own template word written in digits, and 30/60 are that
+ *  window's published phase boundaries. A model naming them is describing the report's own
+ *  structure, not asserting an unsupported fact about the church.
+ *
+ *  Measured: `numeric containment (60)` rejected s12 in all three baseline runs. 30 and 90 were
+ *  not observed; they are here because the three are one published set and admitting one
+ *  boundary while rejecting the others would be arbitrary. This does NOT make s12 pass on its
+ *  own — `80` fired just as often and is not structural, and gate 2 returns on the first
+ *  offender only.
+ *
+ *  Scoped per-section for the same reason gate 2 itself is scoped: a global allowance would let
+ *  a horizon migrate into a section that is not summarising the roadmap window. A correctness
+ *  fix, not a relaxation. */
+const STRUCTURAL_NUMBERS: Partial<Record<AiSectionId, readonly number[]>> = { s12: [30, 60, 90] };
+
 /** The two sections whose payload is an array keyed to a category, and the field carrying it.
  *  Partial because the other five have no category-keyed array at all — an entry here is what
  *  opts a section into gate 1b, so adding one is deliberate. */
@@ -126,7 +147,11 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
   // 2. Scoped numeric containment — against THIS section's slice, not the whole pack. The pack
   // densely covers 0-100 with every score and percentile, so a global allowed set would let a
   // number migrate from one section's subject to another's. Same rationale as prose.ts:70-78.
-  const allowed = new Set([SCALE_DENOMINATOR, ...extractNumbers(JSON.stringify(SECTION_REGISTRY[id].slice(ctx.facts)))]);
+  const allowed = new Set([
+    SCALE_DENOMINATOR,
+    ...(STRUCTURAL_NUMBERS[id] ?? []),
+    ...extractNumbers(JSON.stringify(SECTION_REGISTRY[id].slice(ctx.facts))),
+  ]);
   for (const n of extractNumbers(text)) if (!allowed.has(n)) return fail('numeric containment', String(n));
 
   // 3. Required and banned mentions.
