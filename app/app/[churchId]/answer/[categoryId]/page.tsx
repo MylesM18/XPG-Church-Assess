@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { requireChurchMembership } from '@/lib/auth/require-church-membership'
 import { currentRun, canAcceptAnswers } from '@/lib/runs/current-run'
+import { closedReadOnlyCopy } from '@/lib/runs/close-reopen'
 import { sectionNav } from '@/lib/review/section-nav'
 import { loadMethodology } from '@/lib/methodology/load'
 import { effectiveMethodologyForRun } from '@/lib/methodology/effective'
@@ -56,10 +57,10 @@ export default async function AnswerPage({
     if (row.reflection) initialReflections[row.item_id] = row.reflection
   }
 
-  // Review-only once the run is complete. v1 is single-run and completion is terminal, so a
-  // completed run cannot receive answers (docs/adr/0001-review-only-completion-defer-multi-run.md).
-  // Gate the editable form on the named write policy — rendering SelfForm on a completed run is
-  // exactly what produced the "no active run" write throw on the old "Take Again" path.
+  // Review-only once an admin has CLOSED the run (close_run, ADR 0003 — reversible via reopen_run;
+  // amends ADR 0001's terminal completion). Gate the editable form on the named write policy —
+  // rendering SelfForm on a closed run is exactly what produced the "no active run" write throw on
+  // the old "Take Again" path.
   const writable = canAcceptAnswers(run)
   // Categories themselves are invariant across editions (effectiveMethodologyForRun only ever drops
   // items, never categories), so prev/next section navigation is correct off the raw methodology.
@@ -97,7 +98,9 @@ export default async function AnswerPage({
               {category.name}
             </h1>
             <p className="font-body text-sm text-ink-soft">
-              This assessment is complete, so your answers are read-only.
+              {run?.closed_at
+                ? closedReadOnlyCopy(run.closed_at)
+                : 'This assessment is complete, so your answers are read-only.'}
             </p>
           </div>
           <ol className="flex flex-col gap-4">
