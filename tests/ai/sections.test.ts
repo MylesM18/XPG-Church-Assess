@@ -237,4 +237,29 @@ describe('composeSection', () => {
     mockParse.mockResolvedValue({ status: 'completed', output_parsed: { summary: 's', what_this_is_not: 'n', context_bullets: [] } });
     expect(await composeSection('s2', capacityFacts, methodology)).toEqual({ summary: 's', what_this_is_not: 'n', context_bullets: [] });
   });
+
+  // The budget.test.ts unit tests prove the arithmetic; these two prove the WIRING — that the
+  // sentence reaches the model, and that it is derived per section rather than once globally.
+  // The plan's sketch used a `constraintFacts` fixture that does not exist in this file (see
+  // line 24: only the capacity archetype was built here). budgetSentence reads
+  // `copy.length_ceiling`, never the archetype, so capacityFacts proves the same thing.
+  it('sends the length budget in the system prompt (spec §4.2)', async () => {
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    await composeSection('s12', capacityFacts, methodology);
+    const call = mockParse.mock.calls[0]![0];
+    const system = call.input.filter((m: { role: string }) => m.role === 'system')
+      .map((m: { content: string }) => m.content).join('\n');
+    expect(system).toContain('128 words');                    // s12's ceiling is 900
+    expect(system).toContain(methodology.report.style_spine); // the spine is still there
+  });
+
+  it('derives the budget per section, not once globally', async () => {
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    await composeSection('s2', capacityFacts, methodology);
+    const call = mockParse.mock.calls[0]![0];
+    const system = call.input.filter((m: { role: string }) => m.role === 'system')
+      .map((m: { content: string }) => m.content).join('\n');
+    expect(system).toContain('200 words');  // s2's ceiling is 1400
+    expect(system).not.toContain('128 words');
+  });
 });

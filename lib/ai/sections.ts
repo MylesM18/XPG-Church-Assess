@@ -137,6 +137,23 @@ function warnIfKeyAbsent(): void {
 }
 
 /**
+ * The model's stated budget, in WORDS, derived from the character ceiling the gate enforces
+ * (spec §4.2). Models count words far better than characters. Dividing by 7 rather than ~6
+ * builds in roughly 15% headroom, so a section that obeys the stated budget lands comfortably
+ * under `length_ceiling` instead of at it.
+ *
+ * This is code, not copy: report.yaml carries what Natalie edits, and a budget that must stay
+ * consistent with a compiler-checked ceiling is not copy.
+ */
+export function wordBudget(lengthCeiling: number): number {
+  return Math.floor(lengthCeiling / 7);
+}
+
+export function budgetSentence(lengthCeiling: number): string {
+  return `Keep your entire response under ${wordBudget(lengthCeiling)} words in total, counting every field.`;
+}
+
+/**
  * One section call. NEVER throws — incomplete, unparseable and request failure all resolve to
  * null, and the caller renders that section's deterministic fallback.
  *
@@ -160,7 +177,7 @@ export async function composeSection(
         max_output_tokens: entry.maxOutputTokens,
         reasoning: { effort: 'low' },
         input: [
-          { role: 'system', content: `${methodology.report.style_spine}\n\n${copy.templates[facts.archetype]}` },
+          { role: 'system', content: `${methodology.report.style_spine}\n\n${copy.templates[facts.archetype]}\n\n${budgetSentence(copy.length_ceiling)}` },
           { role: 'user', content: `Facts for "${copy.title}" — use no number or name absent from this:\n${JSON.stringify(entry.slice(facts), null, 2)}` },
         ],
         text: { format: zodTextFormat(entry.schema, `report_${id}`) },
