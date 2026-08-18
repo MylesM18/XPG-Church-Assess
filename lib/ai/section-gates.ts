@@ -66,26 +66,27 @@ const THEME_WORDS: Record<string, string[]> = {
  *  every on-template composition of those sections is falsely rejected in production. */
 const SCALE_DENOMINATOR = 100;
 
-/** The report's own roadmap horizons, in digits. Same class as SCALE_DENOMINATOR above: the
+/** The report's own roadmap horizon, in digits. Same class as SCALE_DENOMINATOR above: the
  *  report's structural vocabulary, which FactsPack carries no literal of.
  *
- *  Derived from source, not from the section title: s12's three templates (report.yaml:141-157)
- *  all require an objective for "the next ninety days", and the ninety-day window they close is
- *  the one s10 publishes as its title — "30/60/90 roadmap", "Ninety days, in three phases"
- *  (report.yaml:124-128). So 90 is s12's own template word written in digits, and 30/60 are that
- *  window's published phase boundaries. A model naming them is describing the report's own
- *  structure, not asserting an unsupported fact about the church.
+ *  Derived from the section's own templates: s12's three (report.yaml:141-157) all require an
+ *  objective for "the next ninety days". So 90 is s12's own template word written in digits — a
+ *  model naming it is describing what this section is required to say, not asserting an
+ *  unsupported fact about the church. Nothing else earns that standing here: 30 and 60 never
+ *  appear in an s12 template, so admitting them would widen the gate past the section's own
+ *  text. (s10's deterministic roadmap still labels its phases 30/60/90 — fallback-sections.ts:50
+ *  — but s10 is not an AI section and gate 2 never sees it.)
  *
- *  Measured: `numeric containment (60)` rejected s12 in all three baseline runs. 30 and 90 were
- *  not observed; they are here because the three are one published set and admitting one
- *  boundary while rejecting the others would be arbitrary. This does NOT make s12 pass on its
- *  own — `80` fired just as often and is not structural, and gate 2 returns on the first
- *  offender only.
+ *  Measured, and accepted: `numeric containment (60)` rejected s12 in all three baseline runs.
+ *  Holding the set to [90] keeps that failure live — s12 will fail gate 2 on 60 again and spend
+ *  its one corrective retry. That is the deliberate cost of not widening the gate. Admitting 60
+ *  would not have carried s12 on its own anyway: `80` fired just as often and is not structural,
+ *  and gate 2 returns on the first offender only.
  *
  *  Scoped per-section for the same reason gate 2 itself is scoped: a global allowance would let
- *  a horizon migrate into a section that is not summarising the roadmap window. A correctness
+ *  the horizon migrate into a section that is not summarising the roadmap window. A correctness
  *  fix, not a relaxation. */
-const STRUCTURAL_NUMBERS: Partial<Record<AiSectionId, readonly number[]>> = { s12: [30, 60, 90] };
+const STRUCTURAL_NUMBERS: Partial<Record<AiSectionId, readonly number[]>> = { s12: [90] };
 
 /** The two sections whose payload is an array keyed to a category, and the field carrying it.
  *  Partial because the other five have no category-keyed array at all — an entry here is what

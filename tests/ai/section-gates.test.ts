@@ -618,12 +618,14 @@ function s12With(primary_objective: string) {
 }
 
 describe('gate 2 — s12 roadmap horizons (spec §4.4)', () => {
-  it('permits the 30-day horizon in s12', () => {
-    expect(gateSection('s12', s12With('Name a single owner within the first 30 days.'), s12Ctx)).toBeNull();
+  it('rejects the 30-day horizon in s12', () => {
+    expect(gateSection('s12', s12With('Name a single owner within the first 30 days.'), s12Ctx))
+      .toMatchObject({ family: 'numeric containment', detail: '30' });
   });
 
-  it('permits the 60-day horizon in s12', () => {
-    expect(gateSection('s12', s12With('By 60 days that rhythm should be running weekly.'), s12Ctx)).toBeNull();
+  it('rejects the 60-day horizon in s12', () => {
+    expect(gateSection('s12', s12With('By 60 days that rhythm should be running weekly.'), s12Ctx))
+      .toMatchObject({ family: 'numeric containment', detail: '60' });
   });
 
   it('permits the 90-day horizon in s12', () => {
