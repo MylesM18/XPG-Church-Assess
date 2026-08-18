@@ -25,6 +25,16 @@ import { partialNudges } from '@/lib/coverage/partial-nudge'
 import { MemberCoverageMatrix } from './member-coverage-matrix'
 import { AnonymityNote } from '@/components/anonymity-note'
 
+/** Report generation runs inside a Server Action on this segment: 7 concurrent model calls,
+ *  worst case two rounds. Measured worst case is 181 s (docs/superpowers/plans/
+ *  2026-08-17-2a-measurements.md); on Vercel Pro the fluid default is already 300 s, so this
+ *  export is numerically identical to what was in force — it changes nothing today. It is here
+ *  to PIN that value: the ceiling survives a plan or platform-default change, and is positively
+ *  verifiable in .next/server/functions-config-manifest.json. It matters because exceeding it
+ *  kills the Server Action OUTSIDE the try/catch in actions.ts, so save_report never runs and
+ *  nothing at all is persisted — strictly worse than a 100%-fallback report. */
+export const maxDuration = 300
+
 function gatesLabel(gates: 'all' | string[] | undefined): string {
   if (gates === 'all') return 'all stages'
   if (Array.isArray(gates)) return gates.join(', ')

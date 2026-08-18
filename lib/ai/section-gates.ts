@@ -1,6 +1,30 @@
 import type { CategoryFact, FactsPack } from '../report/facts';
 import type { Methodology, RequiredMention } from '../methodology/schema';
-import { SECTION_REGISTRY, type AiSectionId } from './sections';
+import { SECTION_REGISTRY, wordBudget, type AiSectionId } from './sections';
+
+/**
+ * The eight gate families. A NAMED UNION, not a widened string: adding a family here is a
+ * compile error in correctiveInstruction's exhaustive switch, so a new family cannot silently
+ * default to "re-roll blind".
+ */
+export type GateFamily =
+  | 'field parity' | 'category coverage' | 'numeric containment'
+  | 'required mention' | 'banned phrase' | 'anonymity'
+  | 'pattern claim' | 'length ceiling';
+
+/**
+ * `detail` is a SECURITY BOUNDARY, not a log format (spec §4.1). The rule at sections.ts:144-147
+ * holds: reasons only — never the payload, the parsed output, section text, or the facts pack.
+ * In particular `anonymity` carries the label's INDEX and never the label: a respondent label is
+ * PII, and logging it would defeat the gate it belongs to.
+ */
+export interface GateFailure { family: GateFamily; detail: string }
+
+const fail = (family: GateFamily, detail = ''): GateFailure => ({ family, detail });
+
+/** An unknown category id is MODEL OUTPUT, unlike every other detail we emit. Cap it so a model
+ *  that returns a sentence in that field cannot turn a reason line into a payload leak. */
+const MAX_ECHOED_ID = 24;
 
 /**
  * The six gate families (parent spec line 73). All must pass, or that section falls back.
@@ -42,18 +66,72 @@ const THEME_WORDS: Record<string, string[]> = {
  *  every on-template composition of those sections is falsely rejected in production. */
 const SCALE_DENOMINATOR = 100;
 
+/** The report's own roadmap horizon, in digits. Same class as SCALE_DENOMINATOR above: the
+ *  report's structural vocabulary, which FactsPack carries no literal of.
+ *
+ *  Derived from the section's own templates: s12's three (report.yaml:141-157) all require an
+ *  objective for "the next ninety days". So 90 is s12's own template word written in digits — a
+ *  model naming it is describing what this section is required to say, not asserting an
+ *  unsupported fact about the church. Nothing else earns that standing here: 30 and 60 never
+ *  appear in an s12 template, so admitting them would widen the gate past the section's own
+ *  text. (s10's deterministic roadmap still labels its phases 30/60/90 — fallback-sections.ts:50
+ *  — but s10 is not an AI section and gate 2 never sees it.)
+ *
+ *  Measured, and accepted: `numeric containment (60)` rejected s12 in all three baseline runs.
+ *  Holding the set to [90] keeps that failure live — s12 will fail gate 2 on 60 again and spend
+ *  its one corrective retry. That is the deliberate cost of not widening the gate. Admitting 60
+ *  would not have carried s12 on its own anyway: `80` fired just as often and is not structural,
+ *  and gate 2 returns on the first offender only.
+ *
+ *  Scoped per-section for the same reason gate 2 itself is scoped: a global allowance would let
+ *  the horizon migrate into a section that is not summarising the roadmap window. A correctness
+ *  fix, not a relaxation. */
+const STRUCTURAL_NUMBERS: Partial<Record<AiSectionId, readonly number[]>> = { s12: [90] };
+
 /** The two sections whose payload is an array keyed to a category, and the field carrying it.
  *  Partial because the other five have no category-keyed array at all — an entry here is what
  *  opts a section into gate 1b, so adding one is deliberate. */
 const COVERAGE_FIELD: Partial<Record<AiSectionId, 'strengths' | 'areas'>> = { s5: 'strengths', s6: 'areas' };
 
-export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext): string | null {
+/**
+ * The one place a RequiredMention key becomes the string the model is actually judged against.
+ * Gate 3 below uses it to decide whether the mention is present; compose.ts calls the SAME
+ * function to build the corrective, so a retry can never name a value the gate would not accept.
+ * Keyed by RequiredMention, so the compiler requires an entry per enum member.
+ *
+ * An absent primary constraint resolves to '' — callers must read empty as "nothing to state".
+ */
+export function resolveRequiredMention(key: RequiredMention, facts: FactsPack): string {
+  const resolved: Record<RequiredMention, string> = {
+    tier_name: facts.overall.tier.name,
+    primary_name: facts.primary_constraint?.name ?? '',
+    overall_percent: String(facts.overall.capacity),
+  };
+  return resolved[key];
+}
+
+/**
+ * One fanned unit's view of its section (design §3.4): the narrowed slice gates 1b and 2 judge
+ * against, and the per-unit ceiling gate 6 measures against.
+ *
+ * OPTIONAL at every call site. `unit === undefined` is today's behaviour, exactly — the whole
+ * safety argument of this change rests on that, and tests/ai/section-gates.test.ts's
+ * "with NO unit is byte-for-byte today" block is what holds it.
+ */
+export interface GateUnit { slice: unknown; lengthCeiling: number }
+
+export function gateSection(
+  id: AiSectionId, parsed: unknown, ctx: GateContext, unit?: GateUnit,
+): GateFailure | null {
+  // Resolved ONCE, so gates 1b and 2 cannot disagree about what this call's subject is.
+  const sectionSlice = unit ? unit.slice : SECTION_REGISTRY[id].slice(ctx.facts);
+
   // 1. Field parity — the schema is the expectation. A shape miss and a blank required field
   // are the same failure: the section did not come back whole.
   const check = SECTION_REGISTRY[id].schema.safeParse(parsed);
-  if (!check.success) return 'field parity';
+  if (!check.success) return fail('field parity');
   const strings = allStrings(check.data);
-  if (strings.some((s) => s.trim().length === 0)) return 'field parity';
+  if (strings.some((s) => s.trim().length === 0)) return fail('field parity');
 
   // 1b. Category coverage — s5/s6 only. Their payload is an array keyed to this section's own
   // category slice, and no other gate constrains it: gate 1's blank check is `.some()` over a
@@ -70,13 +148,18 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
   const coverageField = COVERAGE_FIELD[id];
   if (coverageField) {
     const entries = (check.data as Record<string, { category_id: string }[]>)[coverageField] ?? [];
-    if (entries.length === 0) return 'category coverage';
+    if (entries.length === 0) return fail('category coverage', 'empty');
     const known = new Set(
-      (SECTION_REGISTRY[id].slice(ctx.facts) as { categories: CategoryFact[] }).categories.map((c) => c.id),
+      (sectionSlice as { categories: CategoryFact[] }).categories.map((c) => c.id),
     );
     const seen = new Set<string>();
     for (const entry of entries) {
-      if (!known.has(entry.category_id) || seen.has(entry.category_id)) return 'category coverage';
+      // Split from the original combined `||` so the detail can distinguish the two. Behaviour is
+      // identical; this order preserves today's precedence — unknown wins over duplicate.
+      if (!known.has(entry.category_id)) {
+        return fail('category coverage', `unknown: ${entry.category_id.slice(0, MAX_ECHOED_ID)}`);
+      }
+      if (seen.has(entry.category_id)) return fail('category coverage', `duplicate: ${entry.category_id}`);
       seen.add(entry.category_id);
     }
     // Completeness. The loop above constrains only the ids that ARE present, so a proper subset
@@ -85,7 +168,10 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
     // "Three areas are carrying real weight" against a slice of exactly three, so a 2-of-3
     // response renders two strengths under a heading claiming three. s6's read "Each area below".
     // Uniqueness above makes size equality sufficient: `seen` cannot exceed `known`.
-    if (seen.size !== known.size) return 'category coverage';
+    if (seen.size !== known.size) {
+      const missing = [...known].filter((k) => !seen.has(k));
+      return fail('category coverage', `missing: ${missing.join(', ')}`);
+    }
   }
 
   const text = strings.join(' ');
@@ -94,49 +180,51 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
   // 2. Scoped numeric containment — against THIS section's slice, not the whole pack. The pack
   // densely covers 0-100 with every score and percentile, so a global allowed set would let a
   // number migrate from one section's subject to another's. Same rationale as prose.ts:70-78.
-  const allowed = new Set([SCALE_DENOMINATOR, ...extractNumbers(JSON.stringify(SECTION_REGISTRY[id].slice(ctx.facts)))]);
-  for (const n of extractNumbers(text)) if (!allowed.has(n)) return 'numeric containment';
+  const allowed = new Set([
+    SCALE_DENOMINATOR,
+    ...(STRUCTURAL_NUMBERS[id] ?? []),
+    ...extractNumbers(JSON.stringify(sectionSlice)),
+  ]);
+  for (const n of extractNumbers(text)) if (!allowed.has(n)) return fail('numeric containment', String(n));
 
   // 3. Required and banned mentions.
   const required = ctx.methodology.report.sections[id].required_mentions;
-  const resolved: Record<RequiredMention, string> = {
-    tier_name: ctx.facts.overall.tier.name,
-    primary_name: ctx.facts.primary_constraint?.name ?? '',
-    overall_percent: String(ctx.facts.overall.capacity),
-  };
   for (const key of required) {
-    const needle = resolved[key];
-    // Keyed by RequiredMention, so the compiler requires a resolver entry per enum member. An
-    // absent primary constraint resolves to '', and includes('') is true — vacuously satisfied.
-    if (!lower.includes(needle.toLowerCase())) return 'required mention';
+    const needle = resolveRequiredMention(key, ctx.facts);
+    // An absent primary constraint resolves to '', and includes('') is true — vacuously
+    // satisfied, which is the intended reading: there is no constraint to name.
+    if (!lower.includes(needle.toLowerCase())) return fail('required mention', key);
   }
   if (ctx.facts.archetype === 'constraint' && ctx.facts.primary_constraint && (id === 's2' || id === 's4')) {
-    if (!lower.includes(ctx.facts.primary_constraint.name.toLowerCase())) return 'required mention';
+    if (!lower.includes(ctx.facts.primary_constraint.name.toLowerCase())) return fail('required mention', 'primary_name');
   }
   for (const phrase of ctx.methodology.report.banned_phrases[ctx.facts.archetype]) {
-    if (lower.includes(phrase.toLowerCase())) return 'banned phrase';
+    if (lower.includes(phrase.toLowerCase())) return fail('banned phrase', phrase);
   }
   // P1 register calibration: below the 70 tier boundary, a report must not reach for the
-  // consolation register — banned_phrases.constraint's list ("healthy and ready to grow",
-  // "nothing in your chain is broken", "this is a capacity conversation", "every stage is
-  // strong"), despite that key naming the OTHER archetype (see gate 3's first loop above).
-  // Guarded off for the capacity archetype (product owner ruling, fix round 1): a
-  // capacity-archetype report scoring below 70 is REQUIRED to use exactly that register —
-  // "Nothing in the chain is broken" is its own S2 template — so banning it here would be a
-  // false rejection. For the constraint archetype this loop is already a harmless no-op (gate
-  // 3's first loop reads the identical banned_phrases.constraint array and fires first), so
-  // after this guard the loop does real, reachable work only for the foundation archetype,
-  // which must not claim "every stage is strong" just because it scored under 70.
+  // consolation register — banned_phrases.constraint's list, quoted from report.yaml:169-172:
+  // "every stage is carrying its load", "a question of capacity", "what to build next rather
+  // than what to repair", "nothing is capping you" — despite that key naming the OTHER
+  // archetype (see gate 3's first loop above).
+  // Guarded off for the capacity archetype (product owner ruling, fix round 1): s2's capacity
+  // template is BUILT from two of those very phrases — "Every stage is carrying its load" and
+  // "what to build next rather than what to repair" are both in it (report.yaml:41-42) — so a
+  // capacity-archetype report scoring below 70 would be rejected for composing exactly on
+  // template. For the constraint archetype this loop is already a harmless no-op (gate 3's
+  // first loop reads the identical banned_phrases.constraint array and fires first). So after
+  // this guard the loop does real, reachable work only for the foundation archetype, and there
+  // only for the two entries banned_phrases.foundation does not already carry: "what to build
+  // next rather than what to repair" and "nothing is capping you".
   if (ctx.facts.archetype !== 'capacity' && ctx.facts.overall.capacity < 70) {
     for (const phrase of ctx.methodology.report.banned_phrases.constraint) {
-      if (lower.includes(phrase.toLowerCase())) return 'banned phrase';
+      if (lower.includes(phrase.toLowerCase())) return fail('banned phrase', phrase);
     }
   }
 
   // 4. Anonymity — no respondent label anywhere in the section. Fail closed: the alternative is
   // a named individual on a rendered report.
-  for (const label of ctx.labels) {
-    if (label && lower.includes(label.toLowerCase())) return 'anonymity';
+  for (const [i, label] of ctx.labels.entries()) {
+    if (label && lower.includes(label.toLowerCase())) return fail('anonymity', `label ${i}`);
   }
 
   // 5. S7 pattern-claim consistency — a "none of these are X" claim is permitted only when the
@@ -148,14 +236,88 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
       if (c.includes('none')) {
         for (const [theme, words] of Object.entries(THEME_WORDS)) {
           if (!words.some((w) => c.includes(w))) continue;
-          if ((ctx.facts.pattern_counts[theme as keyof FactsPack['pattern_counts']] ?? 0) > 0) return 'pattern claim';
+          if ((ctx.facts.pattern_counts[theme as keyof FactsPack['pattern_counts']] ?? 0) > 0) return fail('pattern claim');
         }
       }
     }
   }
 
-  // 6. Length ceiling — total rendered characters for this section.
-  if (text.length > ctx.methodology.report.sections[id].length_ceiling) return 'length ceiling';
+  // 6. Length ceiling — total rendered characters for this section, or for this UNIT when the
+  // call was fanned out. A fanned section's units sum to at most the section ceiling
+  // (unitCeiling floors), so the merged whole clears this without a second pass.
+  const ceiling = unit ? unit.lengthCeiling : ctx.methodology.report.sections[id].length_ceiling;
+  if (text.length > ceiling) return fail('length ceiling', `${text.length}/${ceiling}`);
 
   return null;
+}
+
+export interface CorrectiveContext {
+  lengthCeiling: number;
+  /** This section's own slice ids. Empty for the five sections with no category array. */
+  categoryIds: readonly string[];
+  /**
+   * The value behind a `required mention` failure's key, resolved by resolveRequiredMention.
+   * Optional, and legitimately '': `primary_name` resolves to '' for a capacity-archetype
+   * church, which is why the corrective treats empty and absent identically.
+   */
+  requiredValue?: string;
+}
+
+/**
+ * The second attempt's extra system instruction (spec §4.3). `null` means RE-ROLL BLIND.
+ *
+ * The switch is exhaustive over GateFamily on purpose: `family satisfies never` in the default
+ * makes a newly-added family a compile error here, so it cannot silently inherit "no
+ * instruction" — which for a correctable family would quietly restore the blind retry this
+ * task exists to remove.
+ */
+export function correctiveInstruction(failure: GateFailure, ctx: CorrectiveContext): string | null {
+  switch (failure.family) {
+    case 'length ceiling': {
+      // Characters here, not words alone: by the retry the MEASURED overage is known. Restating
+      // the word budget alongside it keeps the corrective consistent with the first attempt's
+      // framing (§4.2) rather than switching units mid-conversation.
+      const actual = failure.detail.split('/')[0] ?? '';
+      return `Your previous response was ${actual} characters. The limit is ${ctx.lengthCeiling} characters, about ${wordBudget(ctx.lengthCeiling)} words. Rewrite it substantially shorter.`;
+    }
+    case 'numeric containment':
+      return 'You used a number that does not appear in the facts. Use only numbers present in the facts you were given.';
+    case 'category coverage':
+      return `Return exactly one entry for each of these category ids, and no others: ${ctx.categoryIds.join(', ')}.`;
+    // `detail` stays the RequiredMention KEY — a reason, exactly as the §4.1 boundary requires,
+    // so the log line is unchanged. But the key is a SCHEMA identifier the model has never been
+    // shown: echoing it into the prompt asked for the literal string "tier_name". The call site
+    // resolves the key through resolveRequiredMention — the same map gate 3 judges against — and
+    // passes the value here, so the retry names precisely what the gate will look for. When
+    // nothing resolves (`primary_name` on a capacity church, or a caller that sent no value) the
+    // key sentence stands, rather than an instruction to state the empty string.
+    case 'required mention':
+      return ctx.requiredValue
+        ? `Your response must state "${ctx.requiredValue}" somewhere in the prose.`
+        : `Your response must mention: ${failure.detail}.`;
+    case 'banned phrase':
+      return `Do not use the phrase: "${failure.detail}".`;
+    // Feeding the offending label back into a prompt is the single worst response to an
+    // anonymity hit. Blind re-roll, deliberately.
+    case 'anonymity':
+      return null;
+    // No actionable, leak-free correction exists for either.
+    case 'field parity':
+    case 'pattern claim':
+      return null;
+    default:
+      failure.family satisfies never;
+      return null;
+  }
+}
+
+/** This section's slice category ids, read off the SAME registry slice the coverage gate uses —
+ *  re-deriving `categories.slice(0, 3)` / `.slice(3)` here would drift the moment the registry
+ *  changes, exactly as the gate's own comment warns. */
+export function sliceCategoryIds(
+  id: AiSectionId, facts: FactsPack, unit?: GateUnit,
+): readonly string[] {
+  if (!COVERAGE_FIELD[id]) return [];
+  const slice = (unit ? unit.slice : SECTION_REGISTRY[id].slice(facts)) as { categories?: CategoryFact[] };
+  return (slice.categories ?? []).map((c) => c.id);
 }

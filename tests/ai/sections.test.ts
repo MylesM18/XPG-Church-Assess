@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { loadMethodology } from '../../lib/methodology/load';
 import type { CategoryState, Diagnosis, DiagnosisCategory, Response } from '../../lib/engine/types';
-import { buildFacts, type BuildFactsArgs, type ChurchFacts, type FactsPack } from '../../lib/report/facts';
+import { buildFacts, type BuildFactsArgs, type CategoryFact, type ChurchFacts, type FactsPack } from '../../lib/report/facts';
 
 // vi.hoisted so `mockParse` exists before the hoisted vi.mock factory runs.
 // Idiom copied verbatim from tests/ai/themes-generate.test.ts:5-13 / tests/ai/prose-generate.test.ts:7-17
@@ -16,7 +16,7 @@ vi.mock('openai/helpers/zod', () => ({
 }));
 
 // Imported AFTER the mocks are declared (vitest hoists vi.mock above imports regardless).
-import { AI_SECTION_IDS, SECTION_REGISTRY, composeSection, type AiSectionId } from '../../lib/ai/sections';
+import { AI_SECTION_IDS, SECTION_REGISTRY, composeSection, FAN_OUT, S6Schema, type AiSectionId } from '../../lib/ai/sections';
 import type { SectionId } from '../../lib/methodology/schema';
 
 const methodology = loadMethodology();
@@ -236,5 +236,221 @@ describe('composeSection', () => {
   it('returns the parsed object on success', async () => {
     mockParse.mockResolvedValue({ status: 'completed', output_parsed: { summary: 's', what_this_is_not: 'n', context_bullets: [] } });
     expect(await composeSection('s2', capacityFacts, methodology)).toEqual({ summary: 's', what_this_is_not: 'n', context_bullets: [] });
+  });
+
+  // The budget.test.ts unit tests prove the arithmetic; these two prove the WIRING — that the
+  // sentence reaches the model, and that it is derived per section rather than once globally.
+  // The plan's sketch used a `constraintFacts` fixture that does not exist in this file (see
+  // line 24: only the capacity archetype was built here). budgetSentence reads
+  // `copy.length_ceiling`, never the archetype, so capacityFacts proves the same thing.
+  it('sends the length budget in the system prompt (spec §4.2)', async () => {
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    await composeSection('s12', capacityFacts, methodology);
+    const call = mockParse.mock.calls[0]![0];
+    const system = call.input.filter((m: { role: string }) => m.role === 'system')
+      .map((m: { content: string }) => m.content).join('\n');
+    expect(system).toContain('128 words');                    // s12's ceiling is 900
+    expect(system).toContain(methodology.report.style_spine); // the spine is still there
+  });
+
+  it('derives the budget per section, not once globally', async () => {
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    await composeSection('s2', capacityFacts, methodology);
+    const call = mockParse.mock.calls[0]![0];
+    const system = call.input.filter((m: { role: string }) => m.role === 'system')
+      .map((m: { content: string }) => m.content).join('\n');
+    expect(system).toContain('200 words');  // s2's ceiling is 1400
+    expect(system).not.toContain('128 words');
+  });
+
+  // The request OPTIONS, not the request body — `mockParse.mock.calls[0]![1]` is the same house
+  // idiom as the `[0]` assertions above, one argument over. Both numbers were sized against
+  // measured per-call latency in docs/superpowers/plans/2026-08-17-2a-measurements.md
+  // ("### The three numbers, derived"); this pins them so a later edit cannot quietly shrink the
+  // budget back under the slowest well-formed call.
+  it('asks the SDK for the measured per-attempt timeout and retry budget (spec §4.5)', async () => {
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    await composeSection('s6', capacityFacts, methodology);
+    expect(mockParse.mock.calls[0]![1]).toEqual({ timeout: 45_000, maxRetries: 1 });
+  });
+
+  // The unit wiring. tests/report/compose.test.ts mocks composeSection wholesale, so it observes
+  // only the ARGUMENT passed — never the payload that went over the wire. This is the only place
+  // the unit slice and the unit budget are proven to reach the model.
+  const systemOf = () =>
+    (mockParse.mock.calls[0]![0].input as Array<{ role: string; content: string }>)
+      .filter((m) => m.role === 'system').map((m) => m.content).join('\n');
+  const userOf = () =>
+    (mockParse.mock.calls[0]![0].input as Array<{ role: string; content: string }>)
+      .filter((m) => m.role === 'user').map((m) => m.content).join('\n');
+
+  it('sends only the named category when given a unit key', async () => {
+    mockParse.mockReset();
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    const ids = FAN_OUT.s6!.keys(capacityFacts);
+    await composeSection('s6', capacityFacts, methodology, null, ids[0]!);
+    const payload = JSON.parse(userOf().slice(userOf().indexOf('{'))) as { categories: { id: string }[] };
+    expect(payload.categories.map((c) => c.id)).toEqual([ids[0]!]);
+  });
+
+  it('states the unit budget, not the section budget, on a unit call', async () => {
+    mockParse.mockReset();
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    const ids = FAN_OUT.s6!.keys(capacityFacts);
+    await composeSection('s6', capacityFacts, methodology, null, ids[0]!);
+    expect(systemOf()).toContain('171 words');       // wordBudget(unitCeiling(6000, 5))
+    expect(systemOf()).not.toContain('857 words');   // never the whole section's
+  });
+
+  // E1. Delete this test with the `beats` field if E1 resolves as alternative (a).
+  it('states the budget per beat as well as per unit (design §3.5)', async () => {
+    mockParse.mockReset();
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    const ids = FAN_OUT.s6!.keys(capacityFacts);
+    await composeSection('s6', capacityFacts, methodology, null, ids[0]!);
+    expect(systemOf()).toContain('28 words per field'); // floor(171 / 6)
+  });
+
+  // The negative control, and the reason `unitKey` is optional.
+  it('sends the whole five-category slice and the section budget with no unit key', async () => {
+    mockParse.mockReset();
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    await composeSection('s6', capacityFacts, methodology);
+    const payload = JSON.parse(userOf().slice(userOf().indexOf('{'))) as { categories: { id: string }[] };
+    expect(payload.categories).toHaveLength(5);
+    expect(systemOf()).toContain('857 words');
+    expect(systemOf()).not.toContain('per field');
+  });
+});
+
+// D1. Nothing in the suite proved the corrective ever reached the model: deleting the
+// `...(corrective ? [...] : [])` spread at sections.ts:183 left EVERY test green. All ten other
+// `composeSection(` calls in this file are 3-arity, and tests/report/compose.test.ts mocks
+// composeSection wholesale, so it observes only the ARGUMENT that was passed, never the payload
+// that went over the wire. This block is the branch's headline claim.
+//
+// Asserted by POSITION, not presence. `expect(payload).toContain(SENTINEL)` also passes when the
+// correction is concatenated onto the style-spine system message, or appended after the facts —
+// both change what the model is being asked, and neither is what spec §4.3 specifies. The
+// contract is exactly three messages, in order: spine, correction, facts.
+describe('composeSection — the corrective on the wire (spec §4.3, D1)', () => {
+  const SENTINEL = 'CORRECTIVE SENTINEL';
+  const inputOf = () =>
+    mockParse.mock.calls[0]![0].input as Array<{ role: string; content: string }>;
+
+  beforeEach(() => {
+    mockParse.mockReset();
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+  });
+
+  it('inserts the corrective as its own system message between the spine and the facts', async () => {
+    await composeSection('s2', capacityFacts, methodology, SENTINEL);
+    const input = inputOf();
+    expect(input).toHaveLength(3);
+    expect(input[1]!.role).toBe('system');
+    expect(input[1]!.content).toBe(SENTINEL);
+    // The bookends, so "three messages, one of which is the sentinel" cannot be satisfied by a
+    // duplicated spine, nor by the correction displacing the facts the gate constrains against.
+    expect(input[0]!.role).toBe('system');
+    expect(input[0]!.content).toContain(methodology.report.style_spine);
+    expect(input[2]!.role).toBe('user');
+    expect(input[2]!.content).toContain(`"capacity": ${capacityFacts.overall.capacity}`);
+  });
+
+  it('sends two messages, and no corrective, when none is given', async () => {
+    await composeSection('s2', capacityFacts, methodology);
+    const input = inputOf();
+    expect(input).toHaveLength(2);
+    expect(input[0]!.role).toBe('system');
+    expect(input[1]!.role).toBe('user');
+    expect(JSON.stringify(input)).not.toContain(SENTINEL);
+  });
+
+  // correctiveInstruction returns null for anonymity, field parity and pattern claim, and
+  // compose.ts passes null straight through when the call itself failed. A blind re-roll must
+  // produce the SAME two-message payload as a first attempt — never a third message holding
+  // "null" or an empty string, which would read to the model as a blank instruction.
+  it('sends two messages for a null or empty corrective — the blind re-roll', async () => {
+    for (const corrective of [null, ''] as const) {
+      mockParse.mockReset();
+      mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+      await composeSection('s2', capacityFacts, methodology, corrective);
+      const input = inputOf();
+      expect(input, JSON.stringify(corrective)).toHaveLength(2);
+      expect(input[1]!.role, JSON.stringify(corrective)).toBe('user');
+    }
+  });
+
+  it('carries the corrective for every AI section, not just the one measured', async () => {
+    for (const id of AI_SECTION_IDS) {
+      mockParse.mockReset();
+      mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+      await composeSection(id, capacityFacts, methodology, SENTINEL);
+      const input = inputOf();
+      expect(input, id).toHaveLength(3);
+      expect(input[1]!.content, id).toBe(SENTINEL);
+    }
+  });
+});
+
+describe('FAN_OUT (spec §3.1-§3.3)', () => {
+  const s6Ids = (SECTION_REGISTRY.s6.slice(capacityFacts) as { categories: CategoryFact[] })
+    .categories.map((c) => c.id);
+
+  // Non-vacuity FIRST, asserted on the fixture rather than on the code under test: without it
+  // every expectation below is satisfiable by an empty `keys` paired with empty expectations.
+  it('has a non-empty five-id slice to assert against', () => {
+    expect(s6Ids.length).toBe(5);
+    expect(new Set(s6Ids).size).toBe(5);
+  });
+
+  it('opts in s6 and nothing else', () => {
+    expect(Object.keys(FAN_OUT)).toEqual(['s6']);
+    for (const id of AI_SECTION_IDS) if (id !== 's6') expect(FAN_OUT[id], id).toBeUndefined();
+  });
+
+  // Read off the SECTION slice, never by re-deriving `.slice(3)` here — the same discipline
+  // sliceCategoryIds and gate 1b already follow.
+  it('reads its keys off the section slice, in slice order', () => {
+    expect(FAN_OUT.s6!.keys(capacityFacts)).toEqual(s6Ids);
+  });
+
+  it('narrows ONLY categories and leaves every other slice field deep-equal', () => {
+    const base = SECTION_REGISTRY.s6.slice(capacityFacts) as Record<string, unknown>;
+    const unit = FAN_OUT.s6!.slice(capacityFacts, s6Ids[1]!) as Record<string, unknown>;
+    expect((unit.categories as CategoryFact[]).map((c) => c.id)).toEqual([s6Ids[1]!]);
+    // Occurrence-for-occurrence over the OTHER keys: a slice that quietly dropped
+    // blind_spots/top_three/bottom_items would still pass a categories-only assertion.
+    expect(Object.keys(unit).sort()).toEqual(Object.keys(base).sort());
+    for (const k of Object.keys(base)) {
+      if (k === 'categories') continue;
+      expect(unit[k], k).toEqual(base[k]);
+    }
+  });
+
+  // Fails CLOSED (spec §3.2): a key matching nothing yields an empty categories array, so gate
+  // 1b's known set is empty and any returned entry fails `unknown:`.
+  it('yields an empty category list for a key that matches nothing', () => {
+    const unit = FAN_OUT.s6!.slice(capacityFacts, 'no-such-category') as { categories: CategoryFact[] };
+    expect(unit.categories).toEqual([]);
+  });
+
+  it('merges units back into the persisted shape, in key order, and round-trips S6Schema', () => {
+    const area = (id: string) => ({
+      category_id: id, affirm: 'a', pivot: 'p', evidence: 'e',
+      not_statement: 'n', reframe: 'r', trajectory: 't',
+    });
+    const merged = FAN_OUT.s6!.merge(s6Ids.map((id) => ({ areas: [area(id)] })));
+    expect(S6Schema.safeParse(merged).success).toBe(true);
+    expect((merged as { areas: { category_id: string }[] }).areas.map((a) => a.category_id))
+      .toEqual(s6Ids);
+  });
+
+  // E1. Delete this test and the `beats` field together if E1 resolves as alternative (a).
+  it('declares the per-unit beat count S6Schema actually carries', () => {
+    const beatFields = Object.keys(S6Schema.shape.areas.element.shape)
+      .filter((k) => k !== 'category_id');
+    expect(beatFields).toHaveLength(6);
+    expect(FAN_OUT.s6!.beats).toBe(beatFields.length);
   });
 });

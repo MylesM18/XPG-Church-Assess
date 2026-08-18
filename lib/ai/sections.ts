@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import type { FactsPack } from '../report/facts';
+import type { CategoryFact, FactsPack } from '../report/facts';
 import type { SectionId } from '../methodology/schema';
 
 /**
@@ -118,6 +118,53 @@ export const SECTION_REGISTRY: Record<AiSectionId, SectionRegistryEntry> = {
   s12: { schema: S12Schema, maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories }) },
 };
 
+/**
+ * Fan-out: the sections whose ONE model call is split into several, one per unit.
+ *
+ * A third opt-in table beside SECTION_REGISTRY, in the same `Partial<Record<AiSectionId, …>>`
+ * idiom COVERAGE_FIELD and STRUCTURAL_NUMBERS use in section-gates.ts: an entry opts a section
+ * in, absence is today's single-call behaviour. **s6 only.** s5 has the same array shape and
+ * could be added later without redesign, but nothing has measured a problem there — do not add
+ * it speculatively.
+ *
+ * WHY s6 and not the others (design doc §1): gateSection returns on the FIRST failure and
+ * composeReport allows exactly ONE re-attempt, so s6's single corrective is ALWAYS spent on
+ * `category coverage`; attempt 2 clears coverage and dies on `length ceiling` with no attempt
+ * left. The measured length corrective has never once been issued for s6. One call per category
+ * makes coverage unfailable (one id, one entry) and hands the retry to the failure that
+ * actually kills the section.
+ */
+export interface FanOutEntry {
+  /** The unit keys, read off the SECTION slice — never by re-deriving `.slice(3)` here. */
+  keys: (facts: FactsPack) => readonly string[];
+  /** One unit's slice: the section slice with ONLY `categories` narrowed (design §3.2). */
+  slice: (facts: FactsPack, key: string) => unknown;
+  /** Units back to the section's persisted shape. */
+  merge: (parts: readonly unknown[]) => unknown;
+  /** Prose beats one unit must fill, for the per-beat budget sentence (design §3.5). */
+  beats: number;
+}
+
+export const FAN_OUT: Partial<Record<AiSectionId, FanOutEntry>> = {
+  s6: {
+    keys: (f) => (SECTION_REGISTRY.s6.slice(f) as { categories: CategoryFact[] }).categories.map((c) => c.id),
+    // Defined by SUBTRACTION from the section slice, not by copying it: head, blind_spots,
+    // dispersion, top_three, bottom_items and growth_trajectory keep exactly one source and
+    // cannot drift from SECTION_REGISTRY.s6.slice. Only `categories` narrows. A key matching
+    // nothing yields an empty array, which fails closed at gate 1b.
+    slice: (f, key) => {
+      const base = SECTION_REGISTRY.s6.slice(f) as { categories: CategoryFact[] };
+      return { ...base, categories: base.categories.filter((c) => c.id === key) };
+    },
+    // No new schema: a unit reuses S6Schema and returns `{ areas: [ one ] }`. Because each part
+    // was already gated — parity-checked against S6Schema, coverage-checked to exactly its own
+    // id — the merged whole satisfies S6Schema by construction and carries exactly one entry per
+    // key, in `keys` order.
+    merge: (parts) => ({ areas: parts.flatMap((p) => (p as { areas: unknown[] }).areas) }),
+    beats: 6,
+  },
+};
+
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import type { Methodology } from '../methodology/schema';
@@ -137,6 +184,50 @@ function warnIfKeyAbsent(): void {
 }
 
 /**
+ * The model's stated budget, in WORDS, derived from the character ceiling the gate enforces
+ * (spec §4.2). Models count words far better than characters. Dividing by 7 rather than ~6
+ * builds in roughly 15% headroom, so a section that obeys the stated budget lands comfortably
+ * under `length_ceiling` instead of at it.
+ *
+ * This is code, not copy: report.yaml carries what Natalie edits, and a budget that must stay
+ * consistent with a compiler-checked ceiling is not copy.
+ */
+export function wordBudget(lengthCeiling: number): number {
+  return Math.floor(lengthCeiling / 7);
+}
+
+/**
+ * One unit's share of a fanned section's character ceiling (design §3.5). Code, not copy, for
+ * the same reason wordBudget is: a budget that must stay consistent with a compiler-checked
+ * ceiling is not copy, and report.yaml carries only what Natalie edits.
+ *
+ * FLOOR, so the units never sum above the section ceiling — that is what lets the merged
+ * section clear gate 6 by construction, with no second gate pass over the whole.
+ *
+ * unitCeiling(6000, 5) = 1200 -> wordBudget(1200) = 171 words, IDENTICAL to today's effective
+ * per-area budget (857 / 5). Natalie's ruling 2026-08-17: hold 6000 and split it evenly.
+ * Re-costing report.yaml's s6.length_ceiling to 9000 is the documented escalation if 1200
+ * proves too tight (design §8 R2) — never an improvisation.
+ */
+export function unitCeiling(sectionCeiling: number, unitCount: number): number {
+  return Math.floor(sectionCeiling / unitCount);
+}
+
+/**
+ * `beats` is the per-FIELD budget a fanned unit is additionally held to (design §3.5). The
+ * measured s6 failure is a model writing to the beat count rather than to the ceiling — 1.48x
+ * over, consistently — so a total-only budget is the instruction it has already been observed
+ * to miss. Absent for an unfanned section: today's sentence, unchanged.
+ */
+export function budgetSentence(lengthCeiling: number, beats?: number): string {
+  const total = wordBudget(lengthCeiling);
+  const sentence = `Keep your entire response under ${total} words in total, counting every field.`;
+  return beats && beats > 0
+    ? `${sentence} That is about ${Math.floor(total / beats)} words per field — hold every field to that.`
+    : sentence;
+}
+
+/**
  * One section call. NEVER throws — incomplete, unparseable and request failure all resolve to
  * null, and the caller renders that section's deterministic fallback.
  *
@@ -146,10 +237,19 @@ function warnIfKeyAbsent(): void {
  * and admin prose.
  */
 export async function composeSection(
-  id: AiSectionId, facts: FactsPack, methodology: Methodology,
+  id: AiSectionId, facts: FactsPack, methodology: Methodology, corrective?: string | null,
+  unitKey?: string,
 ): Promise<unknown | null> {
   const entry = SECTION_REGISTRY[id];
   const copy = methodology.report.sections[id];
+  // A unit call (design §3.6). No membership check on unitKey: an unknown key yields an empty
+  // `categories`, which fails CLOSED at gate 1b rather than silently widening back to the whole
+  // slice (design §3.2).
+  const fan = unitKey !== undefined ? FAN_OUT[id] : undefined;
+  const slice = fan ? fan.slice(facts, unitKey!) : entry.slice(facts);
+  const budget = fan
+    ? budgetSentence(unitCeiling(copy.length_ceiling, fan.keys(facts).length), fan.beats)
+    : budgetSentence(copy.length_ceiling);
   try {
     warnIfKeyAbsent();
     const client = new OpenAI();
@@ -160,12 +260,19 @@ export async function composeSection(
         max_output_tokens: entry.maxOutputTokens,
         reasoning: { effort: 'low' },
         input: [
-          { role: 'system', content: `${methodology.report.style_spine}\n\n${copy.templates[facts.archetype]}` },
-          { role: 'user', content: `Facts for "${copy.title}" — use no number or name absent from this:\n${JSON.stringify(entry.slice(facts), null, 2)}` },
+          { role: 'system', content: `${methodology.report.style_spine}\n\n${copy.templates[facts.archetype]}\n\n${budget}` },
+          // The re-attempt's correction (spec §4.3). Absent on the first attempt, and absent on
+          // any re-attempt whose failure carries no leak-free correction.
+          ...(corrective ? [{ role: 'system' as const, content: corrective }] : []),
+          { role: 'user', content: `Facts for "${copy.title}" — use no number or name absent from this:\n${JSON.stringify(slice, null, 2)}` },
         ],
         text: { format: zodTextFormat(entry.schema, `report_${id}`) },
       },
-      { timeout: 30000, maxRetries: 0 },
+      // Sized against the slowest COMPLIANT call measured after §4.1-§4.4 (see
+      // docs/superpowers/plans/2026-08-17-2a-measurements.md), not against the old failure mix.
+      // Worst case is 2 rounds x (timeout x (1 + maxRetries)); it must fit inside the route
+      // segment's maxDuration with margin.
+      { timeout: 45_000, maxRetries: 1 },
     );
 
     if (response.status === 'incomplete') {

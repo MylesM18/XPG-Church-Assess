@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { loadMethodology } from '../../lib/methodology/load';
 import type { Diagnosis, DiagnosisCategory, Response } from '../../lib/engine/types';
-import { buildFacts, type BuildFactsArgs, type ChurchFacts, type FactsPack } from '../../lib/report/facts';
-import { gateSection } from '../../lib/ai/section-gates';
-import { S6Schema } from '../../lib/ai/sections';
+import { buildFacts, type BuildFactsArgs, type CategoryFact, type ChurchFacts, type FactsPack } from '../../lib/report/facts';
+import { gateSection, sliceCategoryIds, type GateUnit } from '../../lib/ai/section-gates';
+import { AI_SECTION_IDS, SECTION_REGISTRY, S6Schema } from '../../lib/ai/sections';
 import { CAPACITY_FACTS } from '../fixtures/facts';
 
 // No importable constraintFacts/shared FactsPack fixture exists anywhere in tests/ or lib/
@@ -164,15 +164,42 @@ const goodS9 = {
   working_model: 'Keep investing broadly across the enablers rather than concentrating effort on one area.',
 };
 
+// The valid ids are DERIVED from the pack, never hardcoded: buildFacts re-sorts
+// facts.categories score-desc (ties by id asc), so a literal list would bake in that sort.
+const s5Ids = constraintFacts.categories.slice(0, 3).map((c) => c.id);
+const s6Ids = constraintFacts.categories.slice(3).map((c) => c.id);
+
+// Digit-free prose (gate 2 rejects any number outside the section's own slice), clear of the
+// respondent label in ctx.labels (gate 4) and of every banned_phrases.constraint entry (gate
+// 3), and far under the ceilings (s5 = 2200, s6 = 6000).
+const goodS5 = {
+  strengths: s5Ids.map((id) => ({
+    category_id: id,
+    heading: 'Carrying real weight',
+    body: 'This area is holding steady and gives the repair somewhere solid to stand.',
+  })),
+};
+const goodS6 = {
+  areas: s6Ids.map((id) => ({
+    category_id: id,
+    affirm: 'There is real work happening here already.',
+    pivot: 'It sits behind the areas already carrying the church forward.',
+    evidence: 'Responses point to steady but uneven practice across the team.',
+    not_statement: 'This is not a sign nobody cares — the practice has not caught up yet.',
+    reframe: 'Read this as room to grow rather than a failure to fix.',
+    trajectory: 'Left alone, that gap will not close on its own.',
+  })),
+};
+
 describe('gate 1 — field parity', () => {
   it('accepts a fully populated section', () => {
     expect(gateSection('s2', goodS2, ctx)).toBeNull();
   });
   it('rejects a section with a blank required field', () => {
-    expect(gateSection('s2', { ...goodS2, what_this_is_not: '   ' }, ctx)).toBe('field parity');
+    expect(gateSection('s2', { ...goodS2, what_this_is_not: '   ' }, ctx)).toMatchObject({ family: 'field parity' });
   });
   it('rejects output that does not match the schema at all', () => {
-    expect(gateSection('s2', { nope: 1 }, ctx)).toBe('field parity');
+    expect(gateSection('s2', { nope: 1 }, ctx)).toMatchObject({ family: 'field parity' });
   });
 });
 
@@ -188,44 +215,20 @@ describe('gate 1b — s5/s6 category coverage', () => {
   // content requirement precisely here. An empty s5 therefore shipped as a passing AI section
   // that rendered nothing at all.
   //
-  // The valid ids are DERIVED from the pack, never hardcoded: buildFacts re-sorts
-  // facts.categories score-desc (ties by id asc), so a literal list would bake in that sort.
-  const s5Ids = constraintFacts.categories.slice(0, 3).map((c) => c.id);
-  const s6Ids = constraintFacts.categories.slice(3).map((c) => c.id);
-
-  // Digit-free prose (gate 2 rejects any number outside the section's own slice), clear of the
-  // respondent label in ctx.labels (gate 4) and of every banned_phrases.constraint entry (gate
-  // 3), and far under the ceilings (s5 = 2200, s6 = 6000).
-  const goodS5 = {
-    strengths: s5Ids.map((id) => ({
-      category_id: id,
-      heading: 'Carrying real weight',
-      body: 'This area is holding steady and gives the repair somewhere solid to stand.',
-    })),
-  };
-  const goodS6 = {
-    areas: s6Ids.map((id) => ({
-      category_id: id,
-      affirm: 'There is real work happening here already.',
-      pivot: 'It sits behind the areas already carrying the church forward.',
-      evidence: 'Responses point to steady but uneven practice across the team.',
-      not_statement: 'This is not a sign nobody cares — the practice has not caught up yet.',
-      reframe: 'Read this as room to grow rather than a failure to fix.',
-      trajectory: 'Left alone, that gap will not close on its own.',
-    })),
-  };
+  // s5Ids/s6Ids and the goodS5/goodS6 payloads are module-scoped above: the gate-failure-detail
+  // block reuses them rather than building a second set of fixtures.
 
   it('rejects an s5 whose strengths array is empty', () => {
-    expect(gateSection('s5', { strengths: [] }, ctx)).toBe('category coverage');
+    expect(gateSection('s5', { strengths: [] }, ctx)).toMatchObject({ family: 'category coverage' });
   });
 
   it('rejects an s6 whose areas array is empty', () => {
-    expect(gateSection('s6', { areas: [] }, ctx)).toBe('category coverage');
+    expect(gateSection('s6', { areas: [] }, ctx)).toMatchObject({ family: 'category coverage' });
   });
 
   it('rejects an s5 that covers the same category twice', () => {
     const duplicated = { strengths: [goodS5.strengths[0]!, goodS5.strengths[0]!, goodS5.strengths[1]!] };
-    expect(gateSection('s5', duplicated, ctx)).toBe('category coverage');
+    expect(gateSection('s5', duplicated, ctx)).toMatchObject({ family: 'category coverage' });
   });
 
   // Deliberately a REAL category drawn from s6's slice rather than a fabricated string — the
@@ -236,7 +239,7 @@ describe('gate 1b — s5/s6 category coverage', () => {
   it('rejects an s5 naming a category outside its own slice', () => {
     expect(s5Ids).not.toContain(s6Ids[0]!);
     const outOfSlice = { strengths: [{ ...goodS5.strengths[0]!, category_id: s6Ids[0]! }] };
-    expect(gateSection('s5', outOfSlice, ctx)).toBe('category coverage');
+    expect(gateSection('s5', outOfSlice, ctx)).toMatchObject({ family: 'category coverage' });
   });
 
   // Completeness, one per section. The membership + uniqueness loop above constrains only the
@@ -251,13 +254,13 @@ describe('gate 1b — s5/s6 category coverage', () => {
   it('rejects an s5 that covers only part of its slice', () => {
     const shortByOne = { strengths: goodS5.strengths.slice(0, -1) };
     expect(shortByOne.strengths).toHaveLength(s5Ids.length - 1);
-    expect(gateSection('s5', shortByOne, ctx)).toBe('category coverage');
+    expect(gateSection('s5', shortByOne, ctx)).toMatchObject({ family: 'category coverage' });
   });
 
   it('rejects an s6 that covers only part of its slice', () => {
     const shortByOne = { areas: goodS6.areas.slice(0, -1) };
     expect(shortByOne.areas).toHaveLength(s6Ids.length - 1);
-    expect(gateSection('s6', shortByOne, ctx)).toBe('category coverage');
+    expect(gateSection('s6', shortByOne, ctx)).toMatchObject({ family: 'category coverage' });
   });
 
   // Anti-vacuity, one per section: without these, a gate that rejected every s5 and s6 payload
@@ -276,7 +279,7 @@ describe('gate 2 — scoped numeric containment', () => {
     expect(gateSection('s2', goodS2, ctx)).toBeNull();
   });
   it('rejects an invented number', () => {
-    expect(gateSection('s2', { ...goodS2, summary: goodS2.summary + ' Growth is up 37 percent.' }, ctx)).toBe('numeric containment');
+    expect(gateSection('s2', { ...goodS2, summary: goodS2.summary + ' Growth is up 37 percent.' }, ctx)).toMatchObject({ family: 'numeric containment' });
   });
   it("rejects a number that exists in the pack but not in this section's slice", () => {
     // Scoped, not global: the whole pack densely covers 0-100, so a global allowed-set would
@@ -293,7 +296,7 @@ describe('gate 2 — scoped numeric containment', () => {
     // number that gate 2 must still reject when reattached to s2.
     const other = constraintFacts.bottom_items[4]!.mean;
     expect(other).toBe(75);
-    expect(gateSection('s2', { ...goodS2, summary: `${goodS2.summary} And ${other}.` }, ctx)).toBe('numeric containment');
+    expect(gateSection('s2', { ...goodS2, summary: `${goodS2.summary} And ${other}.` }, ctx)).toMatchObject({ family: 'numeric containment' });
   });
 });
 
@@ -302,10 +305,10 @@ describe('gate 3 — required and banned mentions', () => {
     expect(gateSection('s2', goodS2, ctx)).toBeNull();
   });
   it('rejects a constraint S2 missing the tier name', () => {
-    expect(gateSection('s2', { ...goodS2, summary: goodS2.summary.replace(constraintFacts.overall.tier.name, 'fine') }, ctx)).toBe('required mention');
+    expect(gateSection('s2', { ...goodS2, summary: goodS2.summary.replace(constraintFacts.overall.tier.name, 'fine') }, ctx)).toMatchObject({ family: 'required mention' });
   });
   it('rejects capacity framing inside a constraint report', () => {
-    expect(gateSection('s2', { ...goodS2, what_this_is_not: 'Every stage is carrying its load.' }, ctx)).toBe('banned phrase');
+    expect(gateSection('s2', { ...goodS2, what_this_is_not: 'Every stage is carrying its load.' }, ctx)).toMatchObject({ family: 'banned phrase' });
   });
   it('accepts a stage name, which is shared vocabulary and never banned', () => {
     const withStage = { ...goodS2, what_this_is_not: `This is not a verdict on ${constraintFacts.categories[0]!.name}.` };
@@ -330,7 +333,7 @@ describe('gate 3 — constraint-archetype primary-name requirement (fix round 1,
     };
     expect(withoutPrimary.summary).toContain(constraintFacts.overall.tier.name); // tier_name still present
     expect(withoutPrimary.summary).not.toContain(constraintFacts.primary_constraint!.name);
-    expect(gateSection('s2', withoutPrimary, ctx)).toBe('required mention');
+    expect(gateSection('s2', withoutPrimary, ctx)).toMatchObject({ family: 'required mention' });
   });
 });
 
@@ -390,7 +393,7 @@ describe('gate 3 — sub-70 register calibration (product owner ruling, fix roun
       what_this_is_not: 'This is not a verdict on anyone.',
       context_bullets: [],
     };
-    expect(gateSection('s2', s2, { ...ctx, facts: lowCapacityFoundationFacts })).toBe('banned phrase');
+    expect(gateSection('s2', s2, { ...ctx, facts: lowCapacityFoundationFacts })).toMatchObject({ family: 'banned phrase' });
   });
 });
 
@@ -426,7 +429,7 @@ describe('gate 3 — s9 required_mentions against a non-constraint pack (fix rou
   // numeric containment) on the same pack.
   it('still rejects an invented number in an otherwise well-formed s9 against the same CAPACITY pack', () => {
     const withInventedNumber = { ...goodS9, narrative: `${goodS9.narrative} Growth is up 37 percent.` };
-    expect(gateSection('s9', withInventedNumber, { ...ctx, facts: lowCapacityFacts })).toBe('numeric containment');
+    expect(gateSection('s9', withInventedNumber, { ...ctx, facts: lowCapacityFacts })).toMatchObject({ family: 'numeric containment' });
   });
 });
 
@@ -435,7 +438,7 @@ describe('gate 4 — anonymity', () => {
     expect(gateSection('s2', goodS2, ctx)).toBeNull();
   });
   it('rejects prose naming a respondent, case-insensitively', () => {
-    expect(gateSection('s2', { ...goodS2, what_this_is_not: 'priscilla vandermeer disagreed.' }, ctx)).toBe('anonymity');
+    expect(gateSection('s2', { ...goodS2, what_this_is_not: 'priscilla vandermeer disagreed.' }, ctx)).toMatchObject({ family: 'anonymity' });
   });
 });
 
@@ -445,7 +448,7 @@ describe('gate 5 — S7 pattern-claim consistency', () => {
     expect(gateSection('s7', { narrative: 'Systems dominate.', pattern_claim: 'None of the six lowest indicators are theological.' }, { ...ctx, facts: zeroTheology })).toBeNull();
   });
   it('rejects a none-claim the counts make false', () => {
-    expect(gateSection('s7', { narrative: 'Systems dominate.', pattern_claim: 'None of the six lowest indicators are systems.' }, { ...ctx, facts: zeroTheology })).toBe('pattern claim');
+    expect(gateSection('s7', { narrative: 'Systems dominate.', pattern_claim: 'None of the six lowest indicators are systems.' }, { ...ctx, facts: zeroTheology })).toMatchObject({ family: 'pattern claim' });
   });
   it('accepts a null pattern claim', () => {
     expect(gateSection('s7', { narrative: 'Systems dominate.', pattern_claim: null }, { ...ctx, facts: zeroTheology })).toBeNull();
@@ -458,7 +461,7 @@ describe('gate 6 — length ceilings', () => {
   });
   it('rejects a section over its ceiling', () => {
     const ceiling = methodology.report.sections.s2.length_ceiling;
-    expect(gateSection('s2', { ...goodS2, summary: goodS2.summary + 'x'.repeat(ceiling) }, ctx)).toBe('length ceiling');
+    expect(gateSection('s2', { ...goodS2, summary: goodS2.summary + 'x'.repeat(ceiling) }, ctx)).toMatchObject({ family: 'length ceiling' });
   });
 });
 
@@ -485,22 +488,327 @@ describe('S6Schema carries all six beats', () => {
   it('gate 1 rejects a blank in ANY of the three new fields, not just the old three', () => {
     for (const field of ['pivot', 'not_statement', 'trajectory']) {
       const payload = { areas: slice.map((c) => area({ category_id: c.id, [field]: '   ' })) };
-      expect(gateSection('s6', payload, capacityCtx), field).toBe('field parity');
+      expect(gateSection('s6', payload, capacityCtx), field).toMatchObject({ family: 'field parity' });
     }
   });
 
   it('gate 2 rejects an invented number in a new field, same as in an old one', () => {
     const payload = { areas: slice.map((c) => area({ category_id: c.id, pivot: 'It sits 9999 points behind.' })) };
-    expect(gateSection('s6', payload, capacityCtx)).toBe('numeric containment');
+    expect(gateSection('s6', payload, capacityCtx)).toMatchObject({ family: 'numeric containment' });
   });
 
   it('gate 4 rejects a respondent label in a new field', () => {
     const payload = { areas: slice.map((c) => area({ category_id: c.id, trajectory: 'Dana said growth is fine.' })) };
-    expect(gateSection('s6', payload, { ...capacityCtx, labels: ['Dana'] })).toBe('anonymity');
+    expect(gateSection('s6', payload, { ...capacityCtx, labels: ['Dana'] })).toMatchObject({ family: 'anonymity' });
   });
 
   it('gate 1b still requires full slice coverage with the wider schema', () => {
     const partial = { areas: [area({ category_id: slice[0]!.id })] };
-    expect(gateSection('s6', partial, capacityCtx)).toBe('category coverage');
+    expect(gateSection('s6', partial, capacityCtx)).toMatchObject({ family: 'category coverage' });
+  });
+});
+
+describe('gate failure detail (spec §4.1)', () => {
+  it('length ceiling reports actual/limit', () => {
+    const ceiling = methodology.report.sections.s2.length_ceiling;
+    const bloated = { ...goodS2, summary: goodS2.summary + 'x'.repeat(ceiling) };
+    const f = gateSection('s2', bloated, ctx);
+    expect(f?.family).toBe('length ceiling');
+    expect(f?.detail).toMatch(/^\d+\/1400$/);
+    expect(Number(f!.detail.split('/')[0])).toBeGreaterThan(ceiling);
+  });
+
+  it('numeric containment reports the offending number and nothing else', () => {
+    const f = gateSection('s2', { ...goodS2, summary: goodS2.summary + ' Growth is up 37 percent.' }, ctx);
+    expect(f).toEqual({ family: 'numeric containment', detail: '37' });
+  });
+
+  it('category coverage distinguishes empty, unknown, duplicate and missing', () => {
+    expect(gateSection('s5', { strengths: [] }, ctx)).toEqual({ family: 'category coverage', detail: 'empty' });
+
+    const unknown = { strengths: [{ category_id: 'not-a-real-id', heading: 'H', body: 'B' }] };
+    expect(gateSection('s5', unknown, ctx)).toEqual({ family: 'category coverage', detail: 'unknown: not-a-real-id' });
+
+    const dupe = { strengths: [goodS5.strengths[0]!, goodS5.strengths[0]!, goodS5.strengths[2]!] };
+    const d = gateSection('s5', dupe, ctx);
+    expect(d?.family).toBe('category coverage');
+    expect(d?.detail).toBe(`duplicate: ${goodS5.strengths[0]!.category_id}`);
+
+    const short = { strengths: goodS5.strengths.slice(0, 2) };
+    const m = gateSection('s5', short, ctx);
+    expect(m?.family).toBe('category coverage');
+    expect(m?.detail).toBe(`missing: ${goodS5.strengths[2]!.category_id}`);
+  });
+
+  it('truncates an unknown category id to 24 characters', () => {
+    const long = { strengths: [{ category_id: 'z'.repeat(80), heading: 'H', body: 'B' }] };
+    const f = gateSection('s5', long, ctx);
+    expect(f?.detail).toBe(`unknown: ${'z'.repeat(24)}`);
+    expect(f!.detail.length).toBeLessThan(40);
+  });
+
+  it('required mention reports the key, never the resolved value', () => {
+    const stripped = { ...goodS2, summary: goodS2.summary.replace(constraintFacts.overall.tier.name, 'fine') };
+    const f = gateSection('s2', stripped, ctx);
+    expect(f?.family).toBe('required mention');
+    expect(f?.detail).toBe('tier_name');
+    expect(f!.detail).not.toContain(constraintFacts.overall.tier.name);
+  });
+
+  it('banned phrase reports the matched phrase', () => {
+    const f = gateSection('s2', { ...goodS2, what_this_is_not: 'Every stage is carrying its load.' }, ctx);
+    expect(f?.family).toBe('banned phrase');
+    expect(f!.detail.length).toBeGreaterThan(0);
+    expect(methodology.report.banned_phrases[constraintFacts.archetype].map((p) => p.toLowerCase()))
+      .toContain(f!.detail.toLowerCase());
+  });
+
+  // THE security assertion of this task. Not "an index is present" — the LABEL IS ABSENT.
+  it('anonymity reports the label index and NEVER the label', () => {
+    const labels = ['Alice Brown', 'priscilla vandermeer', 'Carol Danvers'];
+    const leaked = { ...goodS2, what_this_is_not: 'priscilla vandermeer disagreed.' };
+    const f = gateSection('s2', leaked, { ...ctx, labels });
+    expect(f?.family).toBe('anonymity');
+    expect(f?.detail).toBe('label 1');
+    for (const label of labels) expect(f!.detail.toLowerCase()).not.toContain(label.toLowerCase());
+  });
+
+  it('field parity and pattern claim carry an empty detail', () => {
+    expect(gateSection('s2', { nope: 1 }, ctx)).toEqual({ family: 'field parity', detail: '' });
+    expect(gateSection('s2', { ...goodS2, what_this_is_not: '   ' }, ctx)).toEqual({ family: 'field parity', detail: '' });
+    const zeroTheology = { ...constraintFacts, pattern_counts: { ...constraintFacts.pattern_counts, systems: 2 } };
+    const claim = { narrative: 'Systems dominate.', pattern_claim: 'None of the six lowest indicators are systems.' };
+    expect(gateSection('s7', claim, { ...ctx, facts: zeroTheology })).toEqual({ family: 'pattern claim', detail: '' });
+  });
+
+  // Non-vacuity: a gateSection that returned a constant object would pass several asserts above.
+  it('still returns null for every good payload', () => {
+    expect(gateSection('s2', goodS2, ctx)).toBeNull();
+    expect(gateSection('s5', goodS5, ctx)).toBeNull();
+    expect(gateSection('s6', goodS6, ctx)).toBeNull();
+  });
+});
+
+// Task 4a — the roadmap horizons s12 is required to state.
+//
+// ctx.facts (constraintFacts) cannot carry these tests: its s12 slice (head + categories)
+// already contains 30 (conn's score) and 60 (overall.throughput), so two of the three horizons
+// would be vacuously allowed. This pack keeps 30, 60 and 90 out of the slice entirely, and each
+// horizon gets its OWN test because gate 2 returns on the FIRST offender — one combined string
+// would prove only whichever number appears first.
+const s12Facts: FactsPack = buildFacts({
+  ...baseArgs,
+  diagnosis: makeDiagnosis({
+    capacity: 71,
+    throughput: 62,
+    gap: 9,
+    categories: CAT_IDS.map((id, i) => makeCategory(id, [72, 68, 66, 61, 58, 71, 55, 64][i]!)),
+  }),
+});
+const s12Ctx = { facts: s12Facts, methodology, labels: ['Priscilla Vandermeer'] };
+
+/** A well-formed s12 whose only digits are the capacity and the scale denominator. */
+function s12With(primary_objective: string) {
+  return {
+    assessment: `The church finishes at ${s12Facts.overall.capacity} out of 100, in the ${s12Facts.overall.tier.name} band.`,
+    overall_percent: s12Facts.overall.capacity,
+    tier_name: s12Facts.overall.tier.name,
+    primary_objective,
+  };
+}
+
+describe('gate 2 — s12 roadmap horizons (spec §4.4)', () => {
+  it('rejects the 30-day horizon in s12', () => {
+    expect(gateSection('s12', s12With('Name a single owner within the first 30 days.'), s12Ctx))
+      .toMatchObject({ family: 'numeric containment', detail: '30' });
+  });
+
+  it('rejects the 60-day horizon in s12', () => {
+    expect(gateSection('s12', s12With('By 60 days that rhythm should be running weekly.'), s12Ctx))
+      .toMatchObject({ family: 'numeric containment', detail: '60' });
+  });
+
+  it('permits the 90-day horizon in s12', () => {
+    // s12's own template says "the next ninety days"; this is that word written in digits.
+    expect(gateSection('s12', s12With('Review what held at 90 days and reset from there.'), s12Ctx)).toBeNull();
+  });
+
+  it('still rejects a number in s12 that is neither in the slice nor a horizon', () => {
+    expect(gateSection('s12', s12With('Name a single owner within the first 45 days.'), s12Ctx))
+      .toMatchObject({ family: 'numeric containment', detail: '45' });
+  });
+
+  it('does not extend the horizons to other sections', () => {
+    // 30 and 90 are both absent from s2's slice (its number set is dumped at the gate 2
+    // describe above), so this stays a real rejection: the allowance is scoped to s12.
+    const withThirty = { ...goodS2, summary: `${goodS2.summary} Thirty is written 30 here.` };
+    expect(gateSection('s2', withThirty, ctx)).toMatchObject({ family: 'numeric containment', detail: '30' });
+    const withNinety = { ...goodS2, summary: `${goodS2.summary} Ninety is written 90 here.` };
+    expect(gateSection('s2', withNinety, ctx)).toMatchObject({ family: 'numeric containment', detail: '90' });
+  });
+});
+
+// D3. `sliceCategoryIds` had ZERO tests: `return []` unconditionally left the whole suite green,
+// and it is the sole producer of s5/s6's category-coverage corrective. It reads the registry
+// slice through an optional cast (`as { categories?: CategoryFact[] }`) with `?? []`, so a
+// registry reshape degrades it SILENTLY to an empty list rather than failing loudly — and the
+// one-call-per-category change reshapes exactly that slice. These tests are the tripwire.
+describe('sliceCategoryIds (D3)', () => {
+  // Non-vacuity FIRST, and asserted on the fixture rather than on the function: without this,
+  // every `toEqual` below is satisfiable by `return []` paired with empty expectations.
+  it('has a non-empty, disjoint, exhaustive pair of slices to assert against', () => {
+    expect(s5Ids.length).toBe(3);
+    expect(s6Ids.length).toBe(5);
+    expect(s5Ids.filter((id) => s6Ids.includes(id))).toEqual([]);
+    expect([...s5Ids, ...s6Ids].sort()).toEqual([...CAT_IDS].sort());
+  });
+
+  it('returns s5 own slice ids, in slice order', () => {
+    expect(sliceCategoryIds('s5', constraintFacts)).toEqual(s5Ids);
+  });
+
+  it('returns s6 own slice ids, in slice order', () => {
+    expect(sliceCategoryIds('s6', constraintFacts)).toEqual(s6Ids);
+  });
+
+  // Cross-slice guard: the two must not be interchangeable. A body that returned the other
+  // section's ids, or the whole category list, satisfies "non-empty" and "known ids" but not
+  // this — and shipping it would send s5 a corrective naming s6's categories.
+  it('does not hand a section the other section slice', () => {
+    expect(sliceCategoryIds('s5', constraintFacts)).not.toEqual(s6Ids);
+    expect(sliceCategoryIds('s6', constraintFacts)).not.toEqual(s5Ids);
+    expect(sliceCategoryIds('s5', constraintFacts)).not.toEqual(constraintFacts.categories.map((c) => c.id));
+  });
+
+  it('returns an empty list for every section with no category array', () => {
+    for (const id of AI_SECTION_IDS) {
+      if (id === 's5' || id === 's6') continue;
+      expect(sliceCategoryIds(id, constraintFacts), id).toEqual([]);
+    }
+  });
+
+  // THE registry-coupling assertion. Occurrence-for-occurrence equality against the registry's
+  // own slice, computed here independently of the function under test. If a registry reshape
+  // moves or renames `categories`, the optional cast's `?? []` returns [] while this expectation
+  // still reads the real ids — so the silent degradation becomes a red test instead of a
+  // corrective that names no categories at all.
+  it('reads the ids off the same registry slice the coverage gate uses', () => {
+    for (const id of ['s5', 's6'] as const) {
+      const registrySlice = SECTION_REGISTRY[id].slice(constraintFacts) as { categories: CategoryFact[] };
+      const fromRegistry = registrySlice.categories.map((c) => c.id);
+      expect(fromRegistry.length, id).toBeGreaterThan(0);
+      expect(sliceCategoryIds(id, constraintFacts), id).toEqual(fromRegistry);
+    }
+  });
+});
+
+// Per-unit gating (design §3.4). `unit` is OPTIONAL and defaults to today's behaviour, so every
+// assertion in this block would pass by construction the moment the parameter merely exists.
+// RED is watched BY MUTATION for each — see the plan's "RED discipline" block. The negative
+// controls at the end are what keep D3's block (:656) honest.
+describe('gateSection with a unit (design §3.4)', () => {
+  const S6_CEILING = methodology.report.sections.s6.length_ceiling; // 6000
+  const UNIT_CEILING = Math.floor(S6_CEILING / s6Ids.length);       // 1200
+  const unitFor = (key: string): GateUnit => ({
+    slice: {
+      ...(SECTION_REGISTRY.s6.slice(constraintFacts) as { categories: CategoryFact[] }),
+      categories: (SECTION_REGISTRY.s6.slice(constraintFacts) as { categories: CategoryFact[] })
+        .categories.filter((c) => c.id === key),
+    },
+    lengthCeiling: UNIT_CEILING,
+  });
+  const oneArea = (key: string) => ({ areas: goodS6.areas.filter((a) => a.category_id === key) });
+
+  it('has a five-id slice and a real unit ceiling to assert against', () => {
+    expect(s6Ids.length).toBe(5);
+    expect(UNIT_CEILING).toBe(1200);
+    expect(oneArea(s6Ids[0]!).areas).toHaveLength(1);
+  });
+
+  it('accepts a single-entry payload for its own unit', () => {
+    expect(gateSection('s6', oneArea(s6Ids[0]!), ctx, unitFor(s6Ids[0]!))).toBeNull();
+  });
+
+  // Gate 1b: the known set is the SINGLE id, so a sibling is out of slice.
+  it('rejects a sibling category id as unknown under a unit', () => {
+    expect(gateSection('s6', oneArea(s6Ids[1]!), ctx, unitFor(s6Ids[0]!)))
+      .toMatchObject({ family: 'category coverage', detail: `unknown: ${s6Ids[1]!}` });
+  });
+
+  // Gate 1b completeness, the other direction: the full five-area payload now over-covers.
+  it('rejects the whole five-area payload under a single unit', () => {
+    expect(gateSection('s6', goodS6, ctx, unitFor(s6Ids[0]!)))
+      .toMatchObject({ family: 'category coverage' });
+  });
+
+  // Gate 2 narrows with the slice (design §8 R1): the other four categories' scores leave the
+  // allowed set, so a dossier on one area can no longer quote a sibling's score. A deliberate
+  // tightening.
+  it('rejects a sibling category score under a unit', () => {
+    const sibling = constraintFacts.categories.find((c) => c.id === s6Ids[1]!)!;
+    const withSiblingScore = {
+      areas: oneArea(s6Ids[0]!).areas.map((a) => ({
+        ...a, evidence: `${a.evidence} It scores ${sibling.score} here.`,
+      })),
+    };
+    expect(gateSection('s6', withSiblingScore, ctx, unitFor(s6Ids[0]!)))
+      .toMatchObject({ family: 'numeric containment', detail: String(sibling.score) });
+    // ...and the SAME payload passes gate 2 with no unit, where the sibling is in slice. If this
+    // second half ever fails, the first half is proving the wrong thing.
+    expect(gateSection('s6', withSiblingScore, ctx)).not.toMatchObject({ family: 'numeric containment' });
+  });
+
+  // Gate 6 measures against the UNIT ceiling, not the section's.
+  it('measures length against the unit ceiling, not the section ceiling', () => {
+    const pad = 'x '.repeat(UNIT_CEILING); // digit-free, so gate 2 stays clear
+    const overUnit = {
+      areas: oneArea(s6Ids[0]!).areas.map((a) => ({ ...a, affirm: `${a.affirm} ${pad}` })),
+    };
+    const failure = gateSection('s6', overUnit, ctx, unitFor(s6Ids[0]!));
+    expect(failure).toMatchObject({ family: 'length ceiling' });
+    expect(failure!.detail.endsWith(`/${UNIT_CEILING}`)).toBe(true);
+    expect(failure!.detail.endsWith(`/${S6_CEILING}`)).toBe(false);
+  });
+});
+
+// THE negative controls. Everything above could be satisfied by a gateSection that ignores its
+// fourth argument and happens to agree; these prove the no-unit path is unchanged, which is the
+// whole safety claim of an optional parameter.
+describe('gateSection with NO unit is byte-for-byte today (design §2)', () => {
+  it('still accepts the full five-area payload', () => {
+    expect(gateSection('s6', goodS6, ctx)).toBeNull();
+  });
+  it('still rejects a one-of-five payload for incomplete coverage', () => {
+    const oneOfFive = { areas: goodS6.areas.slice(0, 1) };
+    expect(gateSection('s6', oneOfFive, ctx)).toMatchObject({ family: 'category coverage' });
+  });
+  it('still measures s6 against the section ceiling', () => {
+    const pad = 'x '.repeat(methodology.report.sections.s6.length_ceiling);
+    const over = { areas: goodS6.areas.map((a, i) => (i === 0 ? { ...a, affirm: `${a.affirm} ${pad}` } : a)) };
+    const failure = gateSection('s6', over, ctx);
+    expect(failure).toMatchObject({ family: 'length ceiling' });
+    expect(failure!.detail.endsWith(`/${methodology.report.sections.s6.length_ceiling}`)).toBe(true);
+  });
+});
+
+describe('sliceCategoryIds with a unit (design §3.4)', () => {
+  const unit: GateUnit = {
+    slice: {
+      ...(SECTION_REGISTRY.s6.slice(constraintFacts) as { categories: CategoryFact[] }),
+      categories: (SECTION_REGISTRY.s6.slice(constraintFacts) as { categories: CategoryFact[] })
+        .categories.filter((c) => c.id === s6Ids[2]!),
+    },
+    lengthCeiling: 1200,
+  };
+  // So a unit's `category coverage` corrective names ONE id rather than five.
+  it('names one id, not five', () => {
+    expect(sliceCategoryIds('s6', constraintFacts, unit)).toEqual([s6Ids[2]!]);
+  });
+  it('still names all five with no unit', () => {
+    expect(sliceCategoryIds('s6', constraintFacts)).toEqual(s6Ids);
+  });
+  // A unit cannot smuggle a category array into a section that has none.
+  it('stays empty for a section with no category array, even given a unit', () => {
+    expect(sliceCategoryIds('s2', constraintFacts, unit)).toEqual([]);
   });
 });

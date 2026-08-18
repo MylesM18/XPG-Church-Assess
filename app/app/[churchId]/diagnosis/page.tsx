@@ -26,6 +26,16 @@ import { regenerateReport } from '../actions'
 
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'
 
+/** Report generation runs inside a Server Action on this segment: 7 concurrent model calls,
+ *  worst case two rounds. Measured worst case is 181 s (docs/superpowers/plans/
+ *  2026-08-17-2a-measurements.md); on Vercel Pro the fluid default is already 300 s, so this
+ *  export is numerically identical to what was in force — it changes nothing today. It is here
+ *  to PIN that value: the ceiling survives a plan or platform-default change, and is positively
+ *  verifiable in .next/server/functions-config-manifest.json. It matters because exceeding it
+ *  kills the Server Action OUTSIDE the try/catch in actions.ts, so save_report never runs and
+ *  nothing at all is persisted — strictly worse than a 100%-fallback report. */
+export const maxDuration = 300
+
 // Raw shape of one get_completed_run_responses row (supabase.rpc returns it untyped).
 // respondent_user_id is null for a submission the RPC never resolved to a member id; the map
 // below falls back to the label in that case, exactly as generateDiagnosis (actions.ts) does.
