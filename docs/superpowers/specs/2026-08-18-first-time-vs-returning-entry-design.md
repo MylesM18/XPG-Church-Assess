@@ -25,9 +25,10 @@ is a bare "Confirm your email" with no orientation.
 ## Non-goals
 
 - Cross-links between the two pages ("Already have an account?" etc.) — not asked for.
-- The invitation flow (`/accept/[token]` → `/sign-in?email=…`) keeps pointing at `/sign-in`.
-  Invitees are first-time users too and would arguably suit the first-time page; flagged as a
-  follow-up, not changed here.
+- ~~The invitation flow (`/accept/[token]` → `/sign-in?email=…`) keeps pointing at `/sign-in`.~~
+  **Done as a follow-up (2026-08-18, after PR #74 merged):** the signed-out "Sign in to accept"
+  link now goes to `/sign-up?next=…&email=…` — invitees are almost always first-time users. The
+  `wrong_email` state's "Go to sign in" link stays on `/sign-in` (that visitor *is* signed in).
 - Any change to auth mechanics, redirect guards, templates' link string, or Google OAuth.
 
 ## Design
@@ -36,8 +37,8 @@ is a bare "Confirm your email" with no orientation.
 
 | Entry | Route | Heading | Sub-line |
 | --- | --- | --- | --- |
-| `BEGIN THE ASSESSMENT →` (both homepage CTAs), `/get-started` unauthenticated redirect | **`/sign-up`** (new) | "Glad you're here." | first-time greeting |
-| `SIGN IN` (homepage header, site header), sign-out, auth-error bounces, membership guard, accept flow | `/sign-in` (existing) | "Welcome back" | welcome-back greeting |
+| `BEGIN THE ASSESSMENT →` (both homepage CTAs), `/get-started` unauthenticated redirect, signed-out `/accept/[token]` "Sign in to accept" (follow-up, see Non-goals) | **`/sign-up`** (new) | "Glad you're here." | first-time greeting |
+| `SIGN IN` (homepage header, site header), sign-out, auth-error bounces, membership guard, `/accept/[token]` wrong-account link | `/sign-in` (existing) | "Welcome back" | welcome-back greeting |
 
 Both default `next` to `/get-started`; `/get-started` still routes an existing member to their
 church dashboard, so a returning leader who clicks *Begin* is not harmed — they simply read the

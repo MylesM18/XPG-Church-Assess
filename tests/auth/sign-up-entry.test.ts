@@ -4,6 +4,8 @@
 //   • BEGIN THE ASSESSMENT → (both homepage CTAs) and the unauthenticated /get-started redirect
 //     must land on /sign-up, the first-time page ("Glad you're here."), not on /sign-in ("Welcome
 //     back") — a first-time leader must never be greeted as a returning one.
+//   • The invite-accept page's signed-out "Sign in to accept" link also lands on /sign-up —
+//     invitees are almost always first-time users — carrying the same next= + email= hints.
 //   • SIGN IN and the returning-member guard keep pointing at /sign-in.
 //   • Both pages render the shared PasswordlessEntry component; only copy differs.
 //
@@ -24,6 +26,7 @@ const HOME = strip(read('app', 'page.tsx'))
 const GET_STARTED_PAGE = strip(read('app', 'get-started', 'page.tsx'))
 const GET_STARTED_ACTIONS = strip(read('app', 'get-started', 'actions.ts'))
 const MEMBERSHIP_GUARD = strip(read('lib', 'auth', 'require-church-membership.ts'))
+const ACCEPT_PAGE = strip(read('app', 'accept', '[token]', 'page.tsx'))
 
 describe('/sign-up — first-time entry page', () => {
   it('exists and renders the shared PasswordlessEntry component', () => {
@@ -64,6 +67,17 @@ describe('/get-started unauthenticated redirect', () => {
   ])('%s sends an unauthenticated visitor to /sign-up', (_name, code) => {
     expect(code).toContain("redirect('/sign-up?next=/get-started')")
     expect(code).not.toContain('/sign-in?next=/get-started')
+  })
+})
+
+describe('/accept/[token] signed-out state — invitees are first-time users', () => {
+  it('"Sign in to accept" links to /sign-up with the next= and email= hints, never /sign-in', () => {
+    expect(count(ACCEPT_PAGE, 'href={`/sign-up?next=${next}&email=${email}`}')).toBe(1)
+    expect(ACCEPT_PAGE).not.toContain('/sign-in?next=')
+  })
+
+  it('the wrong-account recovery link still points at /sign-in (they ARE signed in)', () => {
+    expect(count(ACCEPT_PAGE, 'href="/sign-in"')).toBe(1)
   })
 })
 

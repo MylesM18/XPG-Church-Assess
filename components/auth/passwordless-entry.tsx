@@ -31,7 +31,7 @@ export function PasswordlessEntry({ copy }: { copy: PasswordlessEntryCopy }) {
     if (sent) sentRef.current?.focus()
   }, [sent])
 
-  // Pre-fill the email when arriving from an accept link (/sign-in?email=…). Display convenience
+  // Pre-fill the email when arriving from an accept link (/sign-up?email=…). Display convenience
   // only — the accept RPC still gates on the exact signed-in email server-side.
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -60,10 +60,10 @@ export function PasswordlessEntry({ copy }: { copy: PasswordlessEntryCopy }) {
     window.history.replaceState(null, '', url.toString())
   }, [])
 
-  // Forward the `?next=` the sign-in page was loaded with (e.g. the answer page
-  // or the accept-invitation page redirecting here when unauthenticated) through the
-  // sign-in round-trip so the user lands back where they started. Falls back to
-  // /get-started for a bare sign-in visit. Open-redirect guarded in resolveNext.
+  // Forward the `?next=` this page was loaded with (e.g. the answer page bouncing to
+  // /sign-in, or the accept-invitation page linking to /sign-up when unauthenticated)
+  // through the sign-in round-trip so the user lands back where they started. Falls back
+  // to /get-started for a bare visit. Open-redirect guarded in resolveNext.
   const currentOrigin = () => (typeof window !== 'undefined' ? window.location.origin : '')
   const nextPath = () =>
     typeof window !== 'undefined' ? resolveNext(window.location.search) : '/get-started'
