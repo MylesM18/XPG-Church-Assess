@@ -223,6 +223,23 @@ describe('composeSection', () => {
     warn.mockRestore();
   });
 
+  // Final-review Important-1. A live run's "unit X failed both rounds → whole-section fallback" is
+  // unreadable from "five units hiccuped once each" unless the call-failure line names the unit,
+  // the way the gate-failure line in lib/report/compose.ts already does. `unitKey` is a
+  // facts-derived category id, so naming it does not widen the log boundary. The no-unit half is
+  // the negative control: a section call must keep logging byte-identically to today.
+  it('names the unit in the call-failure log on a unit call, and only then', async () => {
+    mockParse.mockRejectedValue(new Error('boom'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ids = FAN_OUT.s6!.keys(capacityFacts);
+    await composeSection('s6', capacityFacts, methodology, null, ids[0]!);
+    expect(warn).toHaveBeenCalledWith(`[report] section s6 unit ${ids[0]!}: request failed:`, 'boom');
+    warn.mockClear();
+    await composeSection('s6', capacityFacts, methodology);
+    expect(warn).toHaveBeenCalledWith('[report] section s6: request failed:', 'boom');
+    warn.mockRestore();
+  });
+
   it('logs no payload, section text or church data on any failure path', async () => {
     mockParse.mockRejectedValue(new Error('secret-church-name leaked in the message'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
