@@ -1,5 +1,6 @@
-// Source-reading tripwire (node env, no DOM): /sign-in now drives TWO different redirect shapes,
-// and swapping them silently breaks one flow each way.
+// Source-reading tripwire (node env, no DOM): the passwordless entry (shared by /sign-in and
+// /sign-up via components/auth/passwordless-entry.tsx — the SOURCE read here) drives TWO different
+// redirect shapes, and swapping them silently breaks one flow each way.
 //
 //   • Magic link → `emailRedirectTo` must be the bare destination `${origin}${next}`. Supabase
 //     renders that value into the email template as {{ .RedirectTo }}, which the token_hash link
@@ -17,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
-const SOURCE = fs.readFileSync(path.join(ROOT, 'app', 'sign-in', 'page.tsx'), 'utf8')
+const SOURCE = fs.readFileSync(path.join(ROOT, 'components', 'auth', 'passwordless-entry.tsx'), 'utf8')
 const CODE = SOURCE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 
 // The helper actually handed to emailRedirectTo, whatever it ends up being called.
@@ -28,7 +29,7 @@ const HELPER_BODY = MAGIC_LINK_HELPER
     )[0]
   : ''
 
-describe('/sign-in magic-link destination', () => {
+describe('passwordless-entry magic-link destination', () => {
   it('hands emailRedirectTo a helper, not an inline string', () => {
     expect(MAGIC_LINK_HELPER, 'expected `emailRedirectTo: someHelper()`').toBeTruthy()
   })
@@ -49,7 +50,7 @@ describe('/sign-in magic-link destination', () => {
   })
 })
 
-describe('/sign-in Google OAuth destination — unchanged', () => {
+describe('passwordless-entry Google OAuth destination — unchanged', () => {
   it('keeps signInWithOAuth pointed at the callback route', () => {
     expect(CODE).toMatch(/redirectTo:\s*callbackUrl\(\)/)
   })

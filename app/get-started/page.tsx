@@ -8,7 +8,10 @@ export default async function GetStartedPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) redirect('/sign-in?next=/get-started')
+  // Unauthenticated visitors are first-time by default (BEGIN THE ASSESSMENT → lands here), so
+  // send them to the first-time entry page. Returning members are unharmed: /sign-up runs the same
+  // passwordless flow and lands them back here, where the membership check below takes over.
+  if (!user) redirect('/sign-up?next=/get-started')
 
   // A returning member already belongs to a church — route them to their assessment
   // dashboard instead of the church-creation form. This covers both the bare sign-in

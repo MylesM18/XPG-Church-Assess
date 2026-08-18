@@ -81,11 +81,13 @@ app), so it can only be rebranded in the Supabase dashboard.
 
 ### B1. Paste the branded template (into BOTH tabs)
 
+> **Updated 2026-08-18** — the Confirm-signup template is now the first-time onboarding welcome (steps + overview). Re-paste it; Magic Link is unchanged.
+
 Two template files live beside this doc, same visual design, different copy for each flow:
 
 | Supabase tab | File | Who receives it | Subject to set |
 | --- | --- | --- | --- |
-| **Confirm signup** | `docs/owner/confirm-signup-template.html` | **First-time invitees** — the common case | `Confirm your email — 360 Church Health Assessment` |
+| **Confirm signup** | `docs/owner/confirm-signup-template.html` | **First-time users** — a leader beginning the assessment, or a first-time invitee | `Welcome — your first step in the 360 Church Health Assessment` |
 | **Magic Link** | `docs/owner/magic-link-template.html` | Returning users signing in again | `Your sign-in link — 360 Church Health Assessment` |
 
 1. Supabase Dashboard → **Authentication → Emails → Templates**. Open each tab, paste the matching
