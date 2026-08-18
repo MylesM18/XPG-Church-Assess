@@ -2,6 +2,12 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadChurchForMember, loadChurchProfile } from '@/lib/data/churches'
+import { churchMembers } from '@/lib/data/members'
+import { buildMemberMatrix, type MatrixMember, type MemberCategoryCoverageRow } from '@/lib/coverage/member-matrix'
+import { isExemptMember } from '@/lib/coverage/exemption'
+import { effectiveMethodologyForRun } from '@/lib/methodology/effective'
+import { finishedMemberCount } from '@/lib/coverage/finished-members'
+import { openNoteText } from '@/lib/runs/close-reopen'
 import type { ChurchProfile } from '@/lib/data/churches'
 import { loadMethodology } from '@/lib/methodology/load'
 import { resolveBrand } from '@/lib/brand/resolve'
@@ -111,6 +117,28 @@ export default async function DiagnosisPage({
 
   const methodology = loadMethodology()
   const brand = resolveBrand(church.name)
+
+  // ADR 0003 (Q4): an OPEN run can be diagnosed. Say so, with N of M finished, so the admin knows the
+  // report may not include everyone yet. Same roster + matrix the dashboard builds (admin-gated RPC;
+  // this page is admin-only), fetched ONLY while the run is open — a closed run pays nothing.
+  const runIsOpen = run!.status === 'in_progress'
+  let openNote: string | null = null
+  if (runIsOpen) {
+    const rosterRows = await churchMembers<MatrixMember>(supabase, churchId)
+    const { data: matrixRows } = await supabase.rpc('get_member_category_coverage', { p_church_id: churchId })
+    const runVersion = run!.methodology_version ?? null
+    const matrix = buildMemberMatrix(
+      rosterRows,
+      (matrixRows ?? []) as MemberCategoryCoverageRow[],
+      methodology.questions.categories,
+      {
+        isExempt: () => isExemptMember(runVersion),
+        effectiveCategories: effectiveMethodologyForRun(methodology, runVersion).questions.categories,
+      },
+    )
+    const { finished, total } = finishedMemberCount(matrix)
+    openNote = openNoteText(finished, total)
+  }
 
   // CT-2(c): re-derive the Diagnosis from the completed run's RESPONSES under the CURRENT
   // methodology instead of trusting diagnoses.payload. These raw per-respondent rows are
@@ -259,6 +287,11 @@ export default async function DiagnosisPage({
               />
             )}
           </ReportToolbar>
+          {openNote && (
+            <ReportNotice>
+              <p>{openNote}</p>
+            </ReportNotice>
+          )}
           {stale && (
             <ReportNotice>
               <p>This report predates your latest settings change.</p>
