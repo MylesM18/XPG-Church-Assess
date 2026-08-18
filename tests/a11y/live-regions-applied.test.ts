@@ -42,7 +42,7 @@ const FILES = SCAN_DIRS.flatMap(tsxFilesUnder).map((file) => ({
 // on this list, so it is also the complete set of LiveStatus consumers.
 const EXPECTED_CONSUMERS = [
   path.join('components', 'answer-form.tsx'),
-  path.join('app', 'sign-in', 'page.tsx'),
+  path.join('components', 'auth', 'passwordless-entry.tsx'),
   path.join('app', 'get-started', 'form.tsx'),
   path.join('app', 'app', '[churchId]', 'generate-button.tsx'),
   path.join('app', 'app', '[churchId]', 'access', 'invite-member-form.tsx'),
@@ -184,13 +184,15 @@ describe('live-region application', () => {
     ).toContain('ref={headingRef}')
     expect(answerForm!.source, 'the focused heading must carry tabIndex={-1}').toContain('tabIndex={-1}')
 
-    const signIn = FILES.find((f) => f.path === path.join('app', 'sign-in', 'page.tsx'))
+    // The sign-in mechanics (and this focus-move) live in the shared PasswordlessEntry component,
+    // rendered by both /sign-in and /sign-up.
+    const signIn = FILES.find((f) => f.path === path.join('components', 'auth', 'passwordless-entry.tsx'))
     expect(
       signIn,
-      'expected app/sign-in/page.tsx to be present in the scanned file set — if it was renamed or ' +
-        'moved, update this test',
+      'expected components/auth/passwordless-entry.tsx to be present in the scanned file set — if it ' +
+        'was renamed or moved, update this test',
     ).toBeDefined()
-    expect(signIn!.source, 'sign-in must keep a ref on the sent confirmation').toContain('ref={sentRef}')
+    expect(signIn!.source, 'passwordless-entry must keep a ref on the sent confirmation').toContain('ref={sentRef}')
   })
 
   // --- ShareResult.status must stay required (Fix 5) -----------------------------------------

@@ -1,28 +1,37 @@
-// Source-reading tripwire (node env, no DOM): the /sign-in page restyle is additive/visual only.
-// It must gain the official "+ XP GATHERING" logo (public/landing/logo-dark.png, rendered via
-// next/image with an alt="XP Gathering" fallback) + the "Church Health" eyebrow, a warmer
-// reassurance line, and a real 4-color Google "G" on the OAuth button — WITHOUT dropping any of the
-// preserved auth logic (magic-link OTP, Google OAuth, redirect guard, dual-channel error surfacing,
-// LiveStatus, focus management, ?email= prefill). Comments are stripped so an explanatory comment
-// can neither satisfy nor break the markup assertions.
+// Source-reading tripwire (node env, no DOM): the passwordless-entry restyle is additive/visual
+// only. The mechanics that used to live in app/sign-in/page.tsx were extracted into the shared
+// components/auth/passwordless-entry.tsx (rendered by both /sign-in and /sign-up with page-specific
+// copy), so that component is the SOURCE here. It must keep the official "+ XP GATHERING" logo
+// (public/landing/logo-dark.png, rendered via next/image with an alt="XP Gathering" fallback) + the
+// "Church Health" eyebrow, render the caller's greeting under the heading, and a real 4-color Google
+// "G" on the OAuth button — WITHOUT dropping any of the preserved auth logic (magic-link OTP, Google
+// OAuth, redirect guard, dual-channel error surfacing, LiveStatus, focus management, ?email=
+// prefill). Comments are stripped so an explanatory comment can neither satisfy nor break the
+// markup assertions.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
-const SOURCE = fs.readFileSync(path.join(ROOT, 'app', 'sign-in', 'page.tsx'), 'utf8')
+const SOURCE = fs.readFileSync(path.join(ROOT, 'components', 'auth', 'passwordless-entry.tsx'), 'utf8')
 const CODE = SOURCE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+const SIGN_IN_PAGE = fs.readFileSync(path.join(ROOT, 'app', 'sign-in', 'page.tsx'), 'utf8')
 
-describe('/sign-in brand restyle (additive markup)', () => {
+describe('passwordless-entry brand restyle (additive markup)', () => {
   it('shows the official XP Gathering logo and Church Health eyebrow', () => {
     expect(CODE).toContain('logo-dark.png') // official "+ XP GATHERING" homepage lockup
     expect(CODE).toContain('XP Gathering') // survives as the logo's alt fallback
     expect(CODE).toContain('Church Health')
   })
 
-  it('reassures the user that sign-in is passwordless', () => {
-    expect(CODE).toContain('secure sign-in link — no password needed')
+  it('renders the caller-supplied greeting under the heading', () => {
+    expect(CODE).toContain('{copy.greeting}')
+  })
+
+  it('/sign-in greets a returning member and reassures them sign-in is passwordless', () => {
+    expect(SIGN_IN_PAGE).toContain('Welcome back')
+    expect(SIGN_IN_PAGE).toContain('no password needed')
   })
 
   it('renders a real 4-color Google "G" on the OAuth button', () => {
@@ -33,7 +42,7 @@ describe('/sign-in brand restyle (additive markup)', () => {
   })
 })
 
-describe('/sign-in preserved auth logic', () => {
+describe('passwordless-entry preserved auth logic', () => {
   it('keeps the magic-link + Google OAuth calls', () => {
     expect(CODE).toContain('signInWithOtp')
     expect(CODE).toContain('signInWithOAuth')

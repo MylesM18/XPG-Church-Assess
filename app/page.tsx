@@ -139,7 +139,7 @@ export default function Home() {
               and where your leaders should focus next.
             </p>
             <div className="xp-hero-ctas">
-              <Link href="/get-started" className="xp-cta">BEGIN THE ASSESSMENT →</Link>
+              <Link href="/sign-up" className="xp-cta">BEGIN THE ASSESSMENT →</Link>
               <a href="#how" className="xp-cta-ghost">HOW IT WORKS ↓</a>
             </div>
           </div>
@@ -546,7 +546,7 @@ export default function Home() {
             your church should strengthen next to expand Kingdom impact.
           </p>
           <div data-reveal="120" className="xp-start-cta-row">
-            <Link href="/get-started" className="xp-cta xp-cta-lg">BEGIN THE ASSESSMENT →</Link>
+            <Link href="/sign-up" className="xp-cta xp-cta-lg">BEGIN THE ASSESSMENT →</Link>
             <a href="#how" className="xp-cta-ghost">SEE HOW THE ASSESSMENT WORKS ↓</a>
           </div>
         </section>

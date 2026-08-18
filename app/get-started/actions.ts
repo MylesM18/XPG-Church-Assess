@@ -37,7 +37,7 @@ export async function createChurch(
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) redirect('/sign-in?next=/get-started')
+  if (!user) redirect('/sign-up?next=/get-started')
 
   const brand = resolveBrand(name)
   const methodology = loadMethodology()

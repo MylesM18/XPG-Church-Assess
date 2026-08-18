@@ -82,6 +82,23 @@ describe('auth email templates — the three copies stay in sync', () => {
   })
 })
 
+describe('auth email templates — first-time vs. returning copy', () => {
+  // Confirm signup fires for a NEW address (a leader beginning the assessment, or a first-time
+  // invitee), so it is the onboarding welcome: overview + "What happens next" steps. Magic Link
+  // fires for a returning address and stays the plain sign-in email.
+  it('confirm-signup is the first-time onboarding welcome', () => {
+    expect(CONFIRM_SIGNUP).toContain('let&rsquo;s begin')
+    expect(CONFIRM_SIGNUP).toContain('What happens next')
+    expect(CONFIRM_SIGNUP).toContain('Confirm and begin')
+    expect(CONFIRM_SIGNUP).not.toContain('Confirm your email address to finish setting up')
+  })
+
+  it('magic-link stays the returning sign-in email', () => {
+    expect(MAGIC_LINK).toContain('Your sign-in link')
+    expect(MAGIC_LINK).toContain('Sign in to your assessment')
+  })
+})
+
 describe('owner setup doc — prose matches the shipped flow', () => {
   it('no longer tells the owner to preserve {{ .ConfirmationURL }}', () => {
     expect(OWNER_DOC, 'B1 prose, the inlined template, and the checklist all said this').not.toContain(
