@@ -1,5 +1,5 @@
 import { composeSection, SECTION_REGISTRY, AI_SECTION_IDS, type AiSectionId } from '../ai/sections';
-import { gateSection } from '../ai/section-gates';
+import { gateSection, correctiveInstruction, sliceCategoryIds, type GateFailure } from '../ai/section-gates';
 import { fallbackSections, type FallbackSectionArgs, type SectionBody } from './fallback-sections';
 import type { FactsPack } from './facts';
 import type { Methodology, SectionId } from '../methodology/schema';
@@ -45,26 +45,39 @@ export async function composeReport(args: {
   const ctx = { facts, methodology, labels };
   const sections: Partial<Record<AiSectionId, unknown>> = {};
 
-  const attempt = async (id: AiSectionId): Promise<boolean> => {
-    const parsed = await composeSection(id, facts, methodology); // never throws → null on failure
-    if (parsed === null) return false;
+  /** `failure: null` on a call/parse failure — no gate ran, so there is nothing to correct. */
+  type AttemptResult = { ok: true } | { ok: false; failure: GateFailure | null };
+
+  const attempt = async (id: AiSectionId, corrective?: string | null): Promise<AttemptResult> => {
+    const parsed = await composeSection(id, facts, methodology, corrective); // never throws → null
+    if (parsed === null) return { ok: false, failure: null };
     const failure = gateSection(id, parsed, ctx);
     if (failure !== null) {
       // detail is omitted when empty so a reasonless family does not log a bare "()".
       console.warn(`[report] section ${id}: ${failure.family}${failure.detail ? ` (${failure.detail})` : ''}`);
-      return false;
+      return { ok: false, failure };
     }
     sections[id] = parsed;
-    return true;
+    return { ok: true };
   };
 
   // Promise.allSettled, not Promise.all: one rejection must not cancel six good sections. The
   // per-section functions already never throw, so this is belt and braces at a boundary where
   // the cost of being wrong is the whole report.
-  const first = await Promise.allSettled(AI_SECTION_IDS.map((id) => attempt(id).then((ok) => ({ id, ok }))));
+  const first = await Promise.allSettled(
+    AI_SECTION_IDS.map((id) => attempt(id).then((result) => ({ id, result }))),
+  );
+
+  // Carry each failure forward so the re-attempt can correct it instead of re-rolling into the
+  // same wall (spec §4.3). A settled-but-rejected promise has no failure to carry: treat it as
+  // a call failure, which is what it is.
   const failed = first
-    .map((r, i) => (r.status === 'fulfilled' && r.value.ok ? null : AI_SECTION_IDS[i]!))
-    .filter((id): id is AiSectionId => id !== null);
+    .map((r, i) => {
+      const id = AI_SECTION_IDS[i]!;
+      if (r.status !== 'fulfilled') return { id, failure: null };
+      return r.value.result.ok ? null : { id, failure: r.value.result.failure };
+    })
+    .filter((x): x is { id: AiSectionId; failure: GateFailure | null } => x !== null);
 
   // ONE re-attempt of only the failed sections (C2). Gate failures are retried alongside call
   // failures: the model is nondeterministic, so a re-roll is a genuine fix. Worst case 2x calls,
@@ -72,7 +85,19 @@ export async function composeReport(args: {
   // completes the run and get_run_responses filters in_progress — actions.ts:135), so this
   // bounded retry is the only defence against a transient blip pinning a section to fallback
   // permanently.
-  if (failed.length > 0) await Promise.allSettled(failed.map((id) => attempt(id)));
+  if (failed.length > 0) {
+    await Promise.allSettled(
+      failed.map(({ id, failure }) => {
+        const corrective = failure
+          ? correctiveInstruction(failure, {
+              lengthCeiling: methodology.report.sections[id].length_ceiling,
+              categoryIds: sliceCategoryIds(id, facts),
+            })
+          : null;
+        return attempt(id, corrective);
+      }),
+    );
+  }
 
   const section_sources = Object.fromEntries(
     (Object.keys(methodology.report.sections) as SectionId[]).map((id) => [

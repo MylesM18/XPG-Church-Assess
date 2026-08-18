@@ -1,6 +1,6 @@
 import type { CategoryFact, FactsPack } from '../report/facts';
 import type { Methodology, RequiredMention } from '../methodology/schema';
-import { SECTION_REGISTRY, type AiSectionId } from './sections';
+import { SECTION_REGISTRY, wordBudget, type AiSectionId } from './sections';
 
 /**
  * The eight gate families. A NAMED UNION, not a widened string: adding a family here is a
@@ -191,4 +191,62 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
   if (text.length > ceiling) return fail('length ceiling', `${text.length}/${ceiling}`);
 
   return null;
+}
+
+export interface CorrectiveContext {
+  lengthCeiling: number;
+  /** This section's own slice ids. Empty for the five sections with no category array. */
+  categoryIds: readonly string[];
+}
+
+/**
+ * The second attempt's extra system instruction (spec §4.3). `null` means RE-ROLL BLIND.
+ *
+ * The switch is exhaustive over GateFamily on purpose: `family satisfies never` in the default
+ * makes a newly-added family a compile error here, so it cannot silently inherit "no
+ * instruction" — which for a correctable family would quietly restore the blind retry this
+ * task exists to remove.
+ */
+export function correctiveInstruction(failure: GateFailure, ctx: CorrectiveContext): string | null {
+  switch (failure.family) {
+    case 'length ceiling': {
+      // Characters here, not words alone: by the retry the MEASURED overage is known. Restating
+      // the word budget alongside it keeps the corrective consistent with the first attempt's
+      // framing (§4.2) rather than switching units mid-conversation.
+      const actual = failure.detail.split('/')[0] ?? '';
+      return `Your previous response was ${actual} characters. The limit is ${ctx.lengthCeiling} characters, about ${wordBudget(ctx.lengthCeiling)} words. Rewrite it substantially shorter.`;
+    }
+    case 'numeric containment':
+      return 'You used a number that does not appear in the facts. Use only numbers present in the facts you were given.';
+    case 'category coverage':
+      return `Return exactly one entry for each of these category ids, and no others: ${ctx.categoryIds.join(', ')}.`;
+    // `detail` here is the RequiredMention key, not the resolved value — the value lives in the
+    // facts slice the user message already carries, and GateFailure deliberately carries reasons
+    // only (§4.1). Named as specified in spec §4.3; this family fired zero times across the
+    // three measured baseline runs, so it is not on the critical path either way.
+    case 'required mention':
+      return `Your response must mention: ${failure.detail}.`;
+    case 'banned phrase':
+      return `Do not use the phrase: "${failure.detail}".`;
+    // Feeding the offending label back into a prompt is the single worst response to an
+    // anonymity hit. Blind re-roll, deliberately.
+    case 'anonymity':
+      return null;
+    // No actionable, leak-free correction exists for either.
+    case 'field parity':
+    case 'pattern claim':
+      return null;
+    default:
+      failure.family satisfies never;
+      return null;
+  }
+}
+
+/** This section's slice category ids, read off the SAME registry slice the coverage gate uses —
+ *  re-deriving `categories.slice(0, 3)` / `.slice(3)` here would drift the moment the registry
+ *  changes, exactly as the gate's own comment warns. */
+export function sliceCategoryIds(id: AiSectionId, facts: FactsPack): readonly string[] {
+  if (!COVERAGE_FIELD[id]) return [];
+  const slice = SECTION_REGISTRY[id].slice(facts) as { categories?: CategoryFact[] };
+  return (slice.categories ?? []).map((c) => c.id);
 }

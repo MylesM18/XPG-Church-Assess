@@ -253,6 +253,21 @@ function gateFailingSix() {
   };
 }
 
+// Overshoots s2's length ceiling by exactly 434 characters, so the gate's detail reads
+// "1834/1400" — the spec's worked example — and the assertion on '1400' cannot be satisfied
+// accidentally by the ceiling appearing twice in the corrective.
+//
+// The plan's sketch REPLACED `summary` with filler. That would trip gate 3 first, not gate 6:
+// goodS2's summary is the only field carrying the tier name, the overall percent and
+// "Community / Connection", so replacing it fails `required mention` before the length gate is
+// ever reached — and this test exists to assert the LENGTH corrective. Pad instead of replace,
+// and keep the filler digit-free so gate 2 stays clear.
+function overlongS2() {
+  const ceiling = methodology.report.sections.s2.length_ceiling;
+  const base = `${goodS2.summary} ${goodS2.what_this_is_not}`.length;
+  return { ...goodS2, what_this_is_not: `${goodS2.what_this_is_not} ${'x'.repeat(ceiling + 434 - base - 1)}` };
+}
+
 function mockSections(fn: (id: AiSectionId) => unknown) {
   mockComposeSection.mockImplementation(async (id: AiSectionId) => fn(id));
 }
@@ -333,6 +348,78 @@ describe('composeReport', () => {
     expect(joined).toContain('[report] section s6: numeric containment');
     expect(joined).not.toContain('field parity');
     warn.mockRestore();
+  });
+
+  it('sends the corrective instruction on the re-attempt of a length failure', async () => {
+    // Dedicated per-section counter, matching the idiom at :299-307 — the plan's own sketch used
+    // a counter over every section's calls, which is fragile the moment call order shifts.
+    const correctives: (string | null)[] = [];
+    let s2Calls = 0;
+    mockComposeSection.mockImplementation(
+      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null) => {
+        if (id !== 's2') return Promise.resolve(good(id));
+        s2Calls += 1;
+        correctives.push(corrective ?? null);
+        return Promise.resolve(s2Calls === 1 ? overlongS2() : good('s2'));
+      },
+    );
+    const r = await composeReport({ facts: constraintFacts, methodology, labels: [] });
+    expect(s2Calls).toBe(2);
+    const s2Corrective = correctives[1]!;
+    expect(s2Corrective).toContain('1834'); // the MEASURED overage, not just the ceiling
+    expect(s2Corrective).toContain('1400');
+    expect(s2Corrective).toContain('200'); // wordBudget(1400) — same framing as attempt one
+    expect(s2Corrective.toLowerCase()).toContain('shorter');
+    expect(r.section_sources.s2).toBe('ai');
+  });
+
+  it('sends NO corrective after an anonymity failure, and never the label', async () => {
+    const label = 'priscilla vandermeer';
+    const correctives: (string | null)[] = [];
+    let n = 0;
+    mockComposeSection.mockImplementation(
+      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null) => {
+        if (id !== 's2') return Promise.resolve(good(id));
+        correctives.push(corrective ?? null);
+        n += 1;
+        // Hung on what_this_is_not, not summary: summary carries s2's required mentions, and
+        // gate 3 fires before gate 4 would ever see the label.
+        return Promise.resolve(n === 1 ? { ...goodS2, what_this_is_not: `${label} disagreed.` } : good('s2'));
+      },
+    );
+    await composeReport({ facts: constraintFacts, methodology, labels: [label] });
+    expect(n).toBe(2); // it DID re-attempt
+    expect(correctives[1]).toBeNull(); // ...blind
+    const joined = correctives.map((c) => c ?? '').join(' ');
+    expect(joined.toLowerCase()).not.toContain(label);
+  });
+
+  it('sends no corrective when the call itself failed (no gate ran)', async () => {
+    const correctives: (string | null)[] = [];
+    let n = 0;
+    mockComposeSection.mockImplementation(
+      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null) => {
+        if (id !== 's6') return Promise.resolve(good(id));
+        correctives.push(corrective ?? null);
+        n += 1;
+        return Promise.resolve(n === 1 ? null : good('s6'));
+      },
+    );
+    await composeReport({ facts: constraintFacts, methodology, labels: [] });
+    expect(correctives).toEqual([null, null]);
+  });
+
+  it('sends no corrective on any first attempt', async () => {
+    const seen: (string | null)[] = [];
+    mockComposeSection.mockImplementation(
+      (id: AiSectionId, _f: unknown, _m: unknown, c?: string | null) => {
+        seen.push(c ?? null);
+        return Promise.resolve(good(id));
+      },
+    );
+    await composeReport({ facts: constraintFacts, methodology, labels: [] });
+    expect(seen).toHaveLength(AI_SECTION_IDS.length);
+    expect(seen.every((c) => c === null)).toBe(true);
   });
 });
 

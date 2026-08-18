@@ -163,7 +163,7 @@ export function budgetSentence(lengthCeiling: number): string {
  * and admin prose.
  */
 export async function composeSection(
-  id: AiSectionId, facts: FactsPack, methodology: Methodology,
+  id: AiSectionId, facts: FactsPack, methodology: Methodology, corrective?: string | null,
 ): Promise<unknown | null> {
   const entry = SECTION_REGISTRY[id];
   const copy = methodology.report.sections[id];
@@ -178,6 +178,9 @@ export async function composeSection(
         reasoning: { effort: 'low' },
         input: [
           { role: 'system', content: `${methodology.report.style_spine}\n\n${copy.templates[facts.archetype]}\n\n${budgetSentence(copy.length_ceiling)}` },
+          // The re-attempt's correction (spec §4.3). Absent on the first attempt, and absent on
+          // any re-attempt whose failure carries no leak-free correction.
+          ...(corrective ? [{ role: 'system' as const, content: corrective }] : []),
           { role: 'user', content: `Facts for "${copy.title}" — use no number or name absent from this:\n${JSON.stringify(entry.slice(facts), null, 2)}` },
         ],
         text: { format: zodTextFormat(entry.schema, `report_${id}`) },
