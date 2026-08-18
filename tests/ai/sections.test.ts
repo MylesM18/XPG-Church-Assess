@@ -273,6 +273,54 @@ describe('composeSection', () => {
     await composeSection('s6', capacityFacts, methodology);
     expect(mockParse.mock.calls[0]![1]).toEqual({ timeout: 45_000, maxRetries: 1 });
   });
+
+  // The unit wiring. tests/report/compose.test.ts mocks composeSection wholesale, so it observes
+  // only the ARGUMENT passed — never the payload that went over the wire. This is the only place
+  // the unit slice and the unit budget are proven to reach the model.
+  const systemOf = () =>
+    (mockParse.mock.calls[0]![0].input as Array<{ role: string; content: string }>)
+      .filter((m) => m.role === 'system').map((m) => m.content).join('\n');
+  const userOf = () =>
+    (mockParse.mock.calls[0]![0].input as Array<{ role: string; content: string }>)
+      .filter((m) => m.role === 'user').map((m) => m.content).join('\n');
+
+  it('sends only the named category when given a unit key', async () => {
+    mockParse.mockReset();
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    const ids = FAN_OUT.s6!.keys(capacityFacts);
+    await composeSection('s6', capacityFacts, methodology, null, ids[0]!);
+    const payload = JSON.parse(userOf().slice(userOf().indexOf('{'))) as { categories: { id: string }[] };
+    expect(payload.categories.map((c) => c.id)).toEqual([ids[0]!]);
+  });
+
+  it('states the unit budget, not the section budget, on a unit call', async () => {
+    mockParse.mockReset();
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    const ids = FAN_OUT.s6!.keys(capacityFacts);
+    await composeSection('s6', capacityFacts, methodology, null, ids[0]!);
+    expect(systemOf()).toContain('171 words');       // wordBudget(unitCeiling(6000, 5))
+    expect(systemOf()).not.toContain('857 words');   // never the whole section's
+  });
+
+  // E1. Delete this test with the `beats` field if E1 resolves as alternative (a).
+  it('states the budget per beat as well as per unit (design §3.5)', async () => {
+    mockParse.mockReset();
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    const ids = FAN_OUT.s6!.keys(capacityFacts);
+    await composeSection('s6', capacityFacts, methodology, null, ids[0]!);
+    expect(systemOf()).toContain('28 words per field'); // floor(171 / 6)
+  });
+
+  // The negative control, and the reason `unitKey` is optional.
+  it('sends the whole five-category slice and the section budget with no unit key', async () => {
+    mockParse.mockReset();
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    await composeSection('s6', capacityFacts, methodology);
+    const payload = JSON.parse(userOf().slice(userOf().indexOf('{'))) as { categories: { id: string }[] };
+    expect(payload.categories).toHaveLength(5);
+    expect(systemOf()).toContain('857 words');
+    expect(systemOf()).not.toContain('per field');
+  });
 });
 
 // D1. Nothing in the suite proved the corrective ever reached the model: deleting the

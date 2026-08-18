@@ -213,8 +213,18 @@ export function unitCeiling(sectionCeiling: number, unitCount: number): number {
   return Math.floor(sectionCeiling / unitCount);
 }
 
-export function budgetSentence(lengthCeiling: number): string {
-  return `Keep your entire response under ${wordBudget(lengthCeiling)} words in total, counting every field.`;
+/**
+ * `beats` is the per-FIELD budget a fanned unit is additionally held to (design §3.5). The
+ * measured s6 failure is a model writing to the beat count rather than to the ceiling — 1.48x
+ * over, consistently — so a total-only budget is the instruction it has already been observed
+ * to miss. Absent for an unfanned section: today's sentence, unchanged.
+ */
+export function budgetSentence(lengthCeiling: number, beats?: number): string {
+  const total = wordBudget(lengthCeiling);
+  const sentence = `Keep your entire response under ${total} words in total, counting every field.`;
+  return beats && beats > 0
+    ? `${sentence} That is about ${Math.floor(total / beats)} words per field — hold every field to that.`
+    : sentence;
 }
 
 /**
@@ -228,9 +238,18 @@ export function budgetSentence(lengthCeiling: number): string {
  */
 export async function composeSection(
   id: AiSectionId, facts: FactsPack, methodology: Methodology, corrective?: string | null,
+  unitKey?: string,
 ): Promise<unknown | null> {
   const entry = SECTION_REGISTRY[id];
   const copy = methodology.report.sections[id];
+  // A unit call (design §3.6). No membership check on unitKey: an unknown key yields an empty
+  // `categories`, which fails CLOSED at gate 1b rather than silently widening back to the whole
+  // slice (design §3.2).
+  const fan = unitKey !== undefined ? FAN_OUT[id] : undefined;
+  const slice = fan ? fan.slice(facts, unitKey!) : entry.slice(facts);
+  const budget = fan
+    ? budgetSentence(unitCeiling(copy.length_ceiling, fan.keys(facts).length), fan.beats)
+    : budgetSentence(copy.length_ceiling);
   try {
     warnIfKeyAbsent();
     const client = new OpenAI();
@@ -241,11 +260,11 @@ export async function composeSection(
         max_output_tokens: entry.maxOutputTokens,
         reasoning: { effort: 'low' },
         input: [
-          { role: 'system', content: `${methodology.report.style_spine}\n\n${copy.templates[facts.archetype]}\n\n${budgetSentence(copy.length_ceiling)}` },
+          { role: 'system', content: `${methodology.report.style_spine}\n\n${copy.templates[facts.archetype]}\n\n${budget}` },
           // The re-attempt's correction (spec §4.3). Absent on the first attempt, and absent on
           // any re-attempt whose failure carries no leak-free correction.
           ...(corrective ? [{ role: 'system' as const, content: corrective }] : []),
-          { role: 'user', content: `Facts for "${copy.title}" — use no number or name absent from this:\n${JSON.stringify(entry.slice(facts), null, 2)}` },
+          { role: 'user', content: `Facts for "${copy.title}" — use no number or name absent from this:\n${JSON.stringify(slice, null, 2)}` },
         ],
         text: { format: zodTextFormat(entry.schema, `report_${id}`) },
       },
