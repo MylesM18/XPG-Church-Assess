@@ -80,11 +80,18 @@ export async function composeReport(args: {
     .filter((x): x is { id: AiSectionId; failure: GateFailure | null } => x !== null);
 
   // ONE re-attempt of only the failed sections (C2). Gate failures are retried alongside call
-  // failures: the model is nondeterministic, so a re-roll is a genuine fix. Worst case 2x calls,
-  // typical case 1x. generateDiagnosis is effectively one-shot per church (save_diagnosis
-  // completes the run and get_run_responses filters in_progress — actions.ts:135), so this
-  // bounded retry is the only defence against a transient blip pinning a section to fallback
-  // permanently.
+  // failures: the model is nondeterministic, so a re-roll is a genuine fix.
+  //
+  // COST, stated deliberately: these are APP-level rounds, and each one is separately multiplied
+  // by the SDK's own `maxRetries: 1` (sections.ts:192). Worst case is therefore 2 rounds x 2 SDK
+  // attempts = 4 live calls per section, 28 per report — up from 2/14 before this branch. The
+  // SDK retry is insurance with no observed claim: across the measured runs (54/54, then 65/65
+  // bar a single transport abort) every call that was made returned parsed output. It is kept
+  // because the alternative failure — a transient blip pinning a section to fallback with no
+  // regenerate path — is permanent: generateDiagnosis is effectively one-shot per church
+  // (save_diagnosis completes the run and get_run_responses filters in_progress —
+  // actions.ts:135). Any change that adds calls per section (e.g. one call per category) must be
+  // costed against this 4x, not against 1x.
   if (failed.length > 0) {
     await Promise.allSettled(
       failed.map(({ id, failure }) => {

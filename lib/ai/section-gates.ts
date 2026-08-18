@@ -174,16 +174,19 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
     if (lower.includes(phrase.toLowerCase())) return fail('banned phrase', phrase);
   }
   // P1 register calibration: below the 70 tier boundary, a report must not reach for the
-  // consolation register — banned_phrases.constraint's list ("healthy and ready to grow",
-  // "nothing in your chain is broken", "this is a capacity conversation", "every stage is
-  // strong"), despite that key naming the OTHER archetype (see gate 3's first loop above).
-  // Guarded off for the capacity archetype (product owner ruling, fix round 1): a
-  // capacity-archetype report scoring below 70 is REQUIRED to use exactly that register —
-  // "Nothing in the chain is broken" is its own S2 template — so banning it here would be a
-  // false rejection. For the constraint archetype this loop is already a harmless no-op (gate
-  // 3's first loop reads the identical banned_phrases.constraint array and fires first), so
-  // after this guard the loop does real, reachable work only for the foundation archetype,
-  // which must not claim "every stage is strong" just because it scored under 70.
+  // consolation register — banned_phrases.constraint's list, quoted from report.yaml:169-172:
+  // "every stage is carrying its load", "a question of capacity", "what to build next rather
+  // than what to repair", "nothing is capping you" — despite that key naming the OTHER
+  // archetype (see gate 3's first loop above).
+  // Guarded off for the capacity archetype (product owner ruling, fix round 1): s2's capacity
+  // template is BUILT from two of those very phrases — "Every stage is carrying its load" and
+  // "what to build next rather than what to repair" are both in it (report.yaml:41-42) — so a
+  // capacity-archetype report scoring below 70 would be rejected for composing exactly on
+  // template. For the constraint archetype this loop is already a harmless no-op (gate 3's
+  // first loop reads the identical banned_phrases.constraint array and fires first). So after
+  // this guard the loop does real, reachable work only for the foundation archetype, and there
+  // only for the two entries banned_phrases.foundation does not already carry: "what to build
+  // next rather than what to repair" and "nothing is capping you".
   if (ctx.facts.archetype !== 'capacity' && ctx.facts.overall.capacity < 70) {
     for (const phrase of ctx.methodology.report.banned_phrases.constraint) {
       if (lower.includes(phrase.toLowerCase())) return fail('banned phrase', phrase);
