@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import type { FactsPack } from '../report/facts';
+import type { CategoryFact, FactsPack } from '../report/facts';
 import type { SectionId } from '../methodology/schema';
 
 /**
@@ -118,6 +118,53 @@ export const SECTION_REGISTRY: Record<AiSectionId, SectionRegistryEntry> = {
   s12: { schema: S12Schema, maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories }) },
 };
 
+/**
+ * Fan-out: the sections whose ONE model call is split into several, one per unit.
+ *
+ * A third opt-in table beside SECTION_REGISTRY, in the same `Partial<Record<AiSectionId, …>>`
+ * idiom COVERAGE_FIELD and STRUCTURAL_NUMBERS use in section-gates.ts: an entry opts a section
+ * in, absence is today's single-call behaviour. **s6 only.** s5 has the same array shape and
+ * could be added later without redesign, but nothing has measured a problem there — do not add
+ * it speculatively.
+ *
+ * WHY s6 and not the others (design doc §1): gateSection returns on the FIRST failure and
+ * composeReport allows exactly ONE re-attempt, so s6's single corrective is ALWAYS spent on
+ * `category coverage`; attempt 2 clears coverage and dies on `length ceiling` with no attempt
+ * left. The measured length corrective has never once been issued for s6. One call per category
+ * makes coverage unfailable (one id, one entry) and hands the retry to the failure that
+ * actually kills the section.
+ */
+export interface FanOutEntry {
+  /** The unit keys, read off the SECTION slice — never by re-deriving `.slice(3)` here. */
+  keys: (facts: FactsPack) => readonly string[];
+  /** One unit's slice: the section slice with ONLY `categories` narrowed (design §3.2). */
+  slice: (facts: FactsPack, key: string) => unknown;
+  /** Units back to the section's persisted shape. */
+  merge: (parts: readonly unknown[]) => unknown;
+  /** Prose beats one unit must fill, for the per-beat budget sentence (design §3.5). */
+  beats: number;
+}
+
+export const FAN_OUT: Partial<Record<AiSectionId, FanOutEntry>> = {
+  s6: {
+    keys: (f) => (SECTION_REGISTRY.s6.slice(f) as { categories: CategoryFact[] }).categories.map((c) => c.id),
+    // Defined by SUBTRACTION from the section slice, not by copying it: head, blind_spots,
+    // dispersion, top_three, bottom_items and growth_trajectory keep exactly one source and
+    // cannot drift from SECTION_REGISTRY.s6.slice. Only `categories` narrows. A key matching
+    // nothing yields an empty array, which fails closed at gate 1b.
+    slice: (f, key) => {
+      const base = SECTION_REGISTRY.s6.slice(f) as { categories: CategoryFact[] };
+      return { ...base, categories: base.categories.filter((c) => c.id === key) };
+    },
+    // No new schema: a unit reuses S6Schema and returns `{ areas: [ one ] }`. Because each part
+    // was already gated — parity-checked against S6Schema, coverage-checked to exactly its own
+    // id — the merged whole satisfies S6Schema by construction and carries exactly one entry per
+    // key, in `keys` order.
+    merge: (parts) => ({ areas: parts.flatMap((p) => (p as { areas: unknown[] }).areas) }),
+    beats: 6,
+  },
+};
+
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import type { Methodology } from '../methodology/schema';
@@ -147,6 +194,23 @@ function warnIfKeyAbsent(): void {
  */
 export function wordBudget(lengthCeiling: number): number {
   return Math.floor(lengthCeiling / 7);
+}
+
+/**
+ * One unit's share of a fanned section's character ceiling (design §3.5). Code, not copy, for
+ * the same reason wordBudget is: a budget that must stay consistent with a compiler-checked
+ * ceiling is not copy, and report.yaml carries only what Natalie edits.
+ *
+ * FLOOR, so the units never sum above the section ceiling — that is what lets the merged
+ * section clear gate 6 by construction, with no second gate pass over the whole.
+ *
+ * unitCeiling(6000, 5) = 1200 -> wordBudget(1200) = 171 words, IDENTICAL to today's effective
+ * per-area budget (857 / 5). Natalie's ruling 2026-08-17: hold 6000 and split it evenly.
+ * Re-costing report.yaml's s6.length_ceiling to 9000 is the documented escalation if 1200
+ * proves too tight (design §8 R2) — never an improvisation.
+ */
+export function unitCeiling(sectionCeiling: number, unitCount: number): number {
+  return Math.floor(sectionCeiling / unitCount);
 }
 
 export function budgetSentence(lengthCeiling: number): string {

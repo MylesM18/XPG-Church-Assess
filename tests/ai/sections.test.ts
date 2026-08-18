@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { loadMethodology } from '../../lib/methodology/load';
 import type { CategoryState, Diagnosis, DiagnosisCategory, Response } from '../../lib/engine/types';
-import { buildFacts, type BuildFactsArgs, type ChurchFacts, type FactsPack } from '../../lib/report/facts';
+import { buildFacts, type BuildFactsArgs, type CategoryFact, type ChurchFacts, type FactsPack } from '../../lib/report/facts';
 
 // vi.hoisted so `mockParse` exists before the hoisted vi.mock factory runs.
 // Idiom copied verbatim from tests/ai/themes-generate.test.ts:5-13 / tests/ai/prose-generate.test.ts:7-17
@@ -16,7 +16,7 @@ vi.mock('openai/helpers/zod', () => ({
 }));
 
 // Imported AFTER the mocks are declared (vitest hoists vi.mock above imports regardless).
-import { AI_SECTION_IDS, SECTION_REGISTRY, composeSection, type AiSectionId } from '../../lib/ai/sections';
+import { AI_SECTION_IDS, SECTION_REGISTRY, composeSection, FAN_OUT, S6Schema, type AiSectionId } from '../../lib/ai/sections';
 import type { SectionId } from '../../lib/methodology/schema';
 
 const methodology = loadMethodology();
@@ -342,5 +342,67 @@ describe('composeSection — the corrective on the wire (spec §4.3, D1)', () =>
       expect(input, id).toHaveLength(3);
       expect(input[1]!.content, id).toBe(SENTINEL);
     }
+  });
+});
+
+describe('FAN_OUT (spec §3.1-§3.3)', () => {
+  const s6Ids = (SECTION_REGISTRY.s6.slice(capacityFacts) as { categories: CategoryFact[] })
+    .categories.map((c) => c.id);
+
+  // Non-vacuity FIRST, asserted on the fixture rather than on the code under test: without it
+  // every expectation below is satisfiable by an empty `keys` paired with empty expectations.
+  it('has a non-empty five-id slice to assert against', () => {
+    expect(s6Ids.length).toBe(5);
+    expect(new Set(s6Ids).size).toBe(5);
+  });
+
+  it('opts in s6 and nothing else', () => {
+    expect(Object.keys(FAN_OUT)).toEqual(['s6']);
+    for (const id of AI_SECTION_IDS) if (id !== 's6') expect(FAN_OUT[id], id).toBeUndefined();
+  });
+
+  // Read off the SECTION slice, never by re-deriving `.slice(3)` here — the same discipline
+  // sliceCategoryIds and gate 1b already follow.
+  it('reads its keys off the section slice, in slice order', () => {
+    expect(FAN_OUT.s6!.keys(capacityFacts)).toEqual(s6Ids);
+  });
+
+  it('narrows ONLY categories and leaves every other slice field deep-equal', () => {
+    const base = SECTION_REGISTRY.s6.slice(capacityFacts) as Record<string, unknown>;
+    const unit = FAN_OUT.s6!.slice(capacityFacts, s6Ids[1]!) as Record<string, unknown>;
+    expect((unit.categories as CategoryFact[]).map((c) => c.id)).toEqual([s6Ids[1]!]);
+    // Occurrence-for-occurrence over the OTHER keys: a slice that quietly dropped
+    // blind_spots/top_three/bottom_items would still pass a categories-only assertion.
+    expect(Object.keys(unit).sort()).toEqual(Object.keys(base).sort());
+    for (const k of Object.keys(base)) {
+      if (k === 'categories') continue;
+      expect(unit[k], k).toEqual(base[k]);
+    }
+  });
+
+  // Fails CLOSED (spec §3.2): a key matching nothing yields an empty categories array, so gate
+  // 1b's known set is empty and any returned entry fails `unknown:`.
+  it('yields an empty category list for a key that matches nothing', () => {
+    const unit = FAN_OUT.s6!.slice(capacityFacts, 'no-such-category') as { categories: CategoryFact[] };
+    expect(unit.categories).toEqual([]);
+  });
+
+  it('merges units back into the persisted shape, in key order, and round-trips S6Schema', () => {
+    const area = (id: string) => ({
+      category_id: id, affirm: 'a', pivot: 'p', evidence: 'e',
+      not_statement: 'n', reframe: 'r', trajectory: 't',
+    });
+    const merged = FAN_OUT.s6!.merge(s6Ids.map((id) => ({ areas: [area(id)] })));
+    expect(S6Schema.safeParse(merged).success).toBe(true);
+    expect((merged as { areas: { category_id: string }[] }).areas.map((a) => a.category_id))
+      .toEqual(s6Ids);
+  });
+
+  // E1. Delete this test and the `beats` field together if E1 resolves as alternative (a).
+  it('declares the per-unit beat count S6Schema actually carries', () => {
+    const beatFields = Object.keys(S6Schema.shape.areas.element.shape)
+      .filter((k) => k !== 'category_id');
+    expect(beatFields).toHaveLength(6);
+    expect(FAN_OUT.s6!.beats).toBe(beatFields.length);
   });
 });
