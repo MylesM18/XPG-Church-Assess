@@ -37,6 +37,11 @@ export interface ResolvedReportSections {
   inputsHash: string
   /** A report exists for this run, but not for these inputs. Drives the D-P5-4 notice. */
   stale: boolean
+  /** No AI section is usable for the LIVE inputs — either no row exists at all, or the
+   * live-hash row is 100 % fallback. Computed from the assembled sections (no extra column
+   * read), so both states collapse into one signal. Drives the page's "Generate report"
+   * affordance; it does NOT alter `stale`, which keeps its own notice. */
+  needsGeneration: boolean
   cover: CoverModel
   /** Web-only visual models (spec §5.1). Attached beside `cover`, never to
    * section.charts. The PDF route destructures this object and simply does not
@@ -87,7 +92,9 @@ export async function resolveReportSections(
   const cover = coverModel(facts, inputs.methodology)
   const visuals = webVisuals(facts, inputs.methodology)
 
-  return { sections, inputsHash, stale, cover, visuals }
+  const needsGeneration = !sections.some((s) => s.source === 'ai')
+
+  return { sections, inputsHash, stale, needsGeneration, cover, visuals }
 }
 
 /**

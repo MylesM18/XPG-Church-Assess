@@ -50,6 +50,63 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
     expect(page.indexOf('<ReportToolbar')).toBeGreaterThan(page.indexOf('</StaleMethodologyNotice>'))
   })
 
+  // H7 (2026-08-18): a completed run whose report has never been written by the model — no
+  // `reports` row (H7-A) or a 100 %-fallback row at the live hash (H7-B) — is NOT stale, so the
+  // only regenerate affordance never rendered and the model could never be invoked, whatever the
+  // env was later set to. The page now offers the SAME `regenerateReport` form under a second,
+  // distinct notice when the resolver reports `needsGeneration` and prose is enabled (mirroring
+  // the action's own PROSE_MODE gate form exactly, so the button never renders when the action
+  // would silently return).
+  describe('generate affordance when no AI section is usable (H7-A / H7-B)', () => {
+    it('reads needsGeneration off the resolver into a `let`, like `stale`', () => {
+      expect(page).toContain('let needsGeneration = false')
+      expect(page).toContain('needsGeneration = resolved.needsGeneration')
+    })
+
+    it("mirrors regenerateReport's PROSE_MODE gate form exactly, once", () => {
+      // The action returns early when `(process.env.PROSE_MODE ?? 'fallback') === 'fallback'`;
+      // the page must key the button on the same expression so the two can never disagree.
+      expect(count(page, /\(process\.env\.PROSE_MODE \?\? 'fallback'\) !== 'fallback'/g)).toBe(1)
+      expect(page).toContain("const proseEnabled = (process.env.PROSE_MODE ?? 'fallback') !== 'fallback'")
+    })
+
+    it('renders the regenerateReport form exactly twice — the stale block AND the generate block, each with the hidden churchId', () => {
+      // Occurrence-count equality, not presence (feedback_nonvacuity_two_classes): the stale
+      // block already carried one form, so a bare `toContain` here proves nothing.
+      expect(count(page, /<form action=\{regenerateReport\}>/g)).toBe(2)
+      expect(count(page, /<input type="hidden" name="churchId" value=\{churchId\} \/>/g)).toBe(2)
+    })
+
+    it('gates the generate block on !stale && needsGeneration && proseEnabled, wrapped in ReportNotice, with its own copy', () => {
+      const m = page.match(/\{!stale\s*&&\s*needsGeneration\s*&&\s*proseEnabled\s*&&\s*\(\s*<ReportNotice>([\s\S]*?)<\/ReportNotice>/)
+      expect(m).not.toBeNull()
+      const block = m![1]!
+      expect(block).toContain('<form action={regenerateReport}>')
+      expect(block).toContain('<input type="hidden" name="churchId" value={churchId} />')
+      // Distinct copy: this is not a settings-change situation, so it must not reuse the D-P5-8
+      // stale sentence, and the button says Generate, not Regenerate.
+      expect(block).not.toContain('predates your latest settings change')
+      expect(block).toContain('This report hasn’t been written by the model yet.')
+      expect(block).toMatch(/>\s*Generate report\s*</)
+      expect(block).not.toMatch(/>\s*Regenerate report\s*</)
+    })
+
+    it('keeps the stale copy exactly once and the generate copy exactly once', () => {
+      expect(count(page, /This report predates your latest settings change\./g)).toBe(1)
+      expect(count(page, /This report hasn’t been written by the model yet\./g)).toBe(1)
+      expect(count(page, />\s*Regenerate report\s*</g)).toBe(1)
+      expect(count(page, />\s*Generate report\s*</g)).toBe(1)
+    })
+
+    it('places the generate block after the stale block and before the cover', () => {
+      const stale = page.indexOf('{stale &&')
+      const gen = page.indexOf('{!stale && needsGeneration && proseEnabled &&')
+      const cover = page.indexOf('<ReportCover')
+      expect(gen).toBeGreaterThan(stale)
+      expect(gen).toBeLessThan(cover)
+    })
+  })
+
   it('moved the monogram + church name into the cover (no separate identity row) and formats the date like the PDF', () => {
     expect(count(page, /brand\.monogram/g)).toBe(1)
     expect(page).toContain('monogram={brand.monogram}')
