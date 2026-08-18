@@ -287,3 +287,104 @@ so two of three horizons would have been vacuously allowed. A dedicated `s12Fact
 three out of the slice, and each horizon gets its own test because gate 2 returns on the first
 offender. RED was watched: all three failed before the change; the `45` control passed throughout,
 which proves the shared scaffold contributed no other offending number.
+
+## Task 5 Step 1 — Context7 on the OpenAI Node SDK (done 2026-08-17)
+
+Context7's Node pages redirect to `/websites/developers_openai`, whose retry/timeout prose is
+written against the **Python** reference. So the semantics below were confirmed against the
+**installed SDK source** — `node_modules/openai` @ **7.4.0**, the version in `package.json:22` —
+which governs. Line numbers are `client.mjs`.
+
+- **`timeout` is PER ATTEMPT, not total across retries.** `makeRequest` rebuilds the request each
+  attempt via `buildRequest`, which returns `{ req, url, timeout: options.timeout }` (`:377`,
+  `:644`), and `fetchWithTimeout` starts a **fresh** `setTimeout(abort, ms)` per attempt (`:535`).
+  `retryRequest` recurses back into `makeRequest(options, retriesRemaining - 1)` (`:607`).
+- **A timed-out attempt is itself retried.** The abort surfaces as an error, `isAbortError` matches
+  (`:410`), and the request is retried while `retriesRemaining` (`:412-420`). Timeouts are
+  therefore **additive**, not capped by the timeout value.
+- **`maxRetries` retries on:** connection errors and aborts (`:399-420`), plus any response where
+  `shouldRetry` is true (`:557-578`) — `x-should-retry: true`, **408**, **409**, **429**, and
+  **>= 500**. 400-class errors other than 408/409 are terminal. Default is 2; ours was 0.
+- **The plan's Step 3 formula under-counts.** Between attempts the SDK sleeps
+  `min(0.5 x 2^n, 8) s x jitter(0.75-1.0)` (`calculateDefaultRetryTimeoutMillis`, `:609-620`), or
+  the server's `retry-after-ms` / `retry-after` header **verbatim** when present (`:580-601`) —
+  and OpenAI does send `retry-after` on 429. So the true worst case per section is
+  `(1 + maxRetries) x timeout + SUM(backoff)`, and per report that x 2 app-level rounds. The
+  server-directed backoff term is the one we cannot bound from our side; bounding `maxRetries`
+  bounds how many times we can pay it.
+- **`responses.parse` is one HTTP request per attempt** — it is `responses.create(...)
+  ._thenUnwrap(parseResponse)` (`resources/responses/responses.mjs:60-64`). No polling loop, no
+  second round trip. `zodTextFormat` only builds the `text.format` JSON schema; the parse is
+  client-side.
+
+## Task 5 Step 2 — the segments that host `composeReport` (verified in source)
+
+No `maxDuration` is exported **anywhere** in the repo (`grep -rn "maxDuration" app/ lib/
+next.config.* vercel.json` is empty), so report generation runs at the platform default.
+
+Two segments reach `composeReport`, and **both** need the export:
+
+1. `app/app/[churchId]/page.tsx` — renders `<GenerateButton>` (`:20`, `:282`), whose
+   `generateDiagnosis` action reaches `composeReport` at `actions.ts:253`.
+2. `app/app/[churchId]/diagnosis/page.tsx` — hosts `<form action={regenerateReport}>` (`:245`)
+   reaching `composeReport` at `actions.ts:396`, **and** renders `EmptyState` /
+   `StaleMethodologyNotice` from `./report/shared` (`:23`), which itself renders `GenerateButton`.
+
+`app/r/[shareToken]/page.tsx` is **excluded**: it imports `SharedStaleMethodologyNotice` only and
+composes via `assembleFallbackOnly` — it never calls `composeReport`.
+
+## Task 5 latency probe — post-Tasks-2-4, pre-Task-5 (2026-08-17)
+
+One Appendix-A probe run at `5b2aef5`, still on the **old** `{ timeout: 30000, maxRetries: 0 }`.
+Same synthetic church shape as the baseline — 5 respondents x 8 categories, `attendance_band
+'100_249'`, `conn` depressed — reproduced to the baseline's recorded invariants: **archetype
+`constraint`, capacity 65, tier `strained` ("Growth Constrained"), `primary_constraint` conn,
+5 labels, 12 profile keys**. The per-item answer values from the baseline probe were not recorded
+anywhere and are not recoverable, so the derived pack matches on those invariants but not
+necessarily item-for-item; category scores this run were
+`gen 80 · comm 70 · guest 70 · vol 70 · gov 68 · disc 64 · sys 64 · conn 34`.
+
+**Result: AI 5/7 · `composeReport` wall clock 42,722 ms · 12 of 12 calls returned parsed output.**
+(Baseline was 0/7 at 54.2-56.5 s.) Gate lines verbatim, in emission order:
+
+```
+[report] section s4: numeric containment (60)
+[report] section s12: required mention (overall_percent)
+[report] section s2: length ceiling (1612/1400)
+[report] section s9: length ceiling (2351/2000)
+[report] section s6: category coverage (unknown: comm)
+[report] section s2: length ceiling (1507/1400)
+[report] section s6: length ceiling (6987/6000)
+[report] section_sources: ai 5/12 · fallback: s1, s2, s3, s6, s8, s10, s11
+```
+
+Sources: `s2 fallback · s4 ai · s5 ai · s6 fallback · s7 ai · s9 ai · s12 ai`. **Only s2 and s6
+fail.** Every round-1 failure except s2's and s6's was corrected on the re-attempt — Task 3's
+corrective retry is visibly working (s4, s9, s12 all recovered).
+
+**Per-call latency, ms** (round 1 then round 2; `!` would mark an unparsed call, none occurred):
+
+```
+s7=5241 s4=6130 s12=7331 s2=7597 s5=7610 s9=7840 s6=19158
+s2=4626 s4=4652 s12=7560 s9=7866 s6=23556
+```
+
+**Slowest call 23,556 ms** (s6, round 2) against the 30,000 ms timeout — **only 21% headroom**,
+and s6 is structurally the slow one (5 categories x 6 beats = 30 required strings at 8000 max
+tokens). Slowest *gate-passing* call was 7,866 ms; sizing off that would be wrong, because s6 will
+still take ~20 s on the day it starts passing. Size against the slowest **well-formed** call.
+
+### The three numbers, derived
+
+- Slowest observed call **23.6 s** → **`timeout: 45_000`** (1.9x headroom over the worst observed,
+  2.3x over the worst-but-one).
+- **`maxRetries: 1`**. 54 of 54 live calls across the baseline and this run returned parsed output,
+  so retries are insurance against 429/5xx under 7-way concurrency, not a measured need. Each extra
+  retry multiplies the per-call ceiling **and** buys another server-directed `retry-after` sleep of
+  unbounded length, so one is the defensible number.
+- Worst case per section = `(1 + 1) x 45 s + backoff(~0.5 s)` = **90.5 s**; x 2 app-level rounds =
+  **181 s**. The 7 section calls run concurrently, so that is also the report's worst case.
+- **`maxDuration = 300`** on both segments — the Vercel **Pro** fluid-compute default (ceiling
+  800 s), so no plan-tier risk. Margin over the 181 s worst case: **119 s (39%)**.
+
+No `length_ceiling` moves, so `methodology/report.yaml` stays at `0.3.0`.
