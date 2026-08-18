@@ -246,6 +246,10 @@ export async function composeSection(
   // `categories`, which fails CLOSED at gate 1b rather than silently widening back to the whole
   // slice (design §3.2).
   const fan = unitKey !== undefined ? FAN_OUT[id] : undefined;
+  // Log tag. Names the unit on a unit call so a live run can tell "unit X failed both rounds"
+  // from "five units hiccuped once each"; `unitKey` is a facts-derived category id, so this
+  // widens no log boundary (same argument as lib/report/compose.ts's gate-failure line).
+  const where = unitKey === undefined ? id : `${id} unit ${unitKey}`;
   const slice = fan ? fan.slice(facts, unitKey!) : entry.slice(facts);
   const budget = fan
     ? budgetSentence(unitCeiling(copy.length_ceiling, fan.keys(facts).length), fan.beats)
@@ -276,17 +280,17 @@ export async function composeSection(
     );
 
     if (response.status === 'incomplete') {
-      console.warn(`[report] section ${id}: response incomplete (${response.incomplete_details?.reason ?? 'reason unreported'})`);
+      console.warn(`[report] section ${where}: response incomplete (${response.incomplete_details?.reason ?? 'reason unreported'})`);
       return null;
     }
     const parsed = response.output_parsed;
     if (!parsed) {
-      console.warn(`[report] section ${id}: model returned no parsed output`);
+      console.warn(`[report] section ${where}: model returned no parsed output`);
       return null;
     }
     return parsed;
   } catch (err) {
-    console.warn(`[report] section ${id}: request failed:`, err instanceof Error ? err.message : 'unknown error');
+    console.warn(`[report] section ${where}: request failed:`, err instanceof Error ? err.message : 'unknown error');
     return null;
   }
 }
