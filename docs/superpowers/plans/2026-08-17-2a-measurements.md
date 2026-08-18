@@ -217,3 +217,31 @@ anywhere — a real deployment ceiling of 60 s would be inside the observed rang
   (s2 3,246 → 4,666; s6 7,995 → 9,761; s7 8,332 → 8,758). A re-roll without the reason is not a fix.
 - **Task 4a**: applies, s12 `60`. **Task 4b**: does not apply — see above.
 - **Task 5**: re-measure after 2–4; today's slowest is 29.8 s against a 30 s timeout.
+
+## Task 4 decision
+
+**Task 4b (scrub labels from the s2 slice at source): DROPPED. Not a STOP.** Two independent
+reasons, both checked against source rather than against the plan:
+
+1. `anonymity` fired **zero** times across all 42 calls (§"3 questions", Q2 above).
+2. Its premise is already false in source. `lib/report/facts.ts:181-189` omits any free-text
+   profile field that contains a label, so the leak path 4b exists to close — a respondent name
+   typed into `leadership_history` or `consultant_notes` reaching the model in s2's slice — is
+   already closed upstream of the gate.
+
+The gate itself is untouched: fail-closed, full-label case-insensitive substring, unnarrowed.
+Spec §4.4's "fix for (2) is not a gate change in 2a" still stands and is not revisited.
+
+**Task 4a (structural numbers for s12): STILL APPLIES, justification NOT yet re-derived.**
+The measured fact is solid — `60` tripped `numeric containment` on s12 in all three runs — but
+the plan's stated rationale ("report.yaml's s12 template asks for exactly those horizons") is
+**false as written**: that template says "the next ninety days" in WORDS, not `30`/`60`/`90` in
+digits. Re-read s12's schema and template and re-derive before writing the test. Note also that
+`80` fires as often as `60` and is *not* structural, gate 2 returns on the FIRST offender only,
+and s12 has never yet reached its 900-character length gate — so 4a alone will not make s12 pass.
+
+## Task 5 input, confirmed by the product owner (2026-08-17)
+
+**Vercel plan tier: Pro.** Fluid compute caps `maxDuration` at 800 s (default 300 s). The
+measured `composeReport` total was 43.5–56.5 s *before* Tasks 2–4, so the ceiling is not the
+binding constraint — re-measure after Task 4 and size from that, not from this number.
