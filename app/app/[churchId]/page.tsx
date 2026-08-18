@@ -18,10 +18,12 @@ import { diagnosisGateFromMatrix } from '@/lib/coverage/diagnosis-gate'
 import { isExemptMember } from '@/lib/coverage/exemption'
 import { ChainGlyph } from './chain-glyph'
 import { GenerateButton } from './generate-button'
+import { CloseReopenControls } from './close-reopen-controls'
 import { RefreshOnFocus } from './refresh-on-focus'
 import { InviteMemberForm } from './access/invite-member-form'
 import { buildMemberMatrix, type MatrixMember, type MemberCategoryCoverageRow, type MemberMatrixRow } from '@/lib/coverage/member-matrix'
 import { partialNudges } from '@/lib/coverage/partial-nudge'
+import { finishedMemberCount } from '@/lib/coverage/finished-members'
 import { MemberCoverageMatrix } from './member-coverage-matrix'
 import { AnonymityNote } from '@/components/anonymity-note'
 
@@ -83,10 +85,10 @@ export default async function DashboardPage({
   // Run fetch, hoisted above the coverage RPC: RLS runs_select lets any church member (admin or
   // viewer) read it, so this is legitimate for both roles. methodology_version feeds the exemption
   // check below; `id` is reused by the admin hasDiagnosis probe further down instead of a second,
-  // duplicate select.
+  // duplicate select; status + closed_at feed the admin Close / Reopen control (ADR 0003).
   const { data: run } = await supabase
     .from('assessment_runs')
-    .select('id, methodology_version')
+    .select('id, methodology_version, status, closed_at')
     .eq('church_id', churchId)
     .order('created_at', { ascending: true })
     .limit(1)
@@ -175,6 +177,11 @@ export default async function DashboardPage({
       },
     )
   }
+
+  // "N of M members have finished" for the Close confirm (ADR 0003): a member has finished when
+  // every cell in their matrix row is 'covered' — the per-member notion assessmentCta maps to
+  // 'complete'. Viewers get an empty matrix (0 of 0), but the control never renders for them.
+  const finishedMembers = finishedMemberCount(memberMatrix)
 
   // Mirrors the server-side diagnosisGate() in actions.ts: an area is only covered if some ONE
   // member finished every item in it, not merely that the area has responses somewhere across
@@ -302,6 +309,16 @@ export default async function DashboardPage({
               </span>
             </button>
           )
+        )}
+
+        {isAdmin && run && (
+          <CloseReopenControls
+            churchId={churchId}
+            status={run.status}
+            closedAt={run.closed_at}
+            finished={finishedMembers.finished}
+            total={finishedMembers.total}
+          />
         )}
 
         {role === 'admin' && (
