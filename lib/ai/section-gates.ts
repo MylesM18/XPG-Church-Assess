@@ -110,7 +110,22 @@ export function resolveRequiredMention(key: RequiredMention, facts: FactsPack): 
   return resolved[key];
 }
 
-export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext): GateFailure | null {
+/**
+ * One fanned unit's view of its section (design §3.4): the narrowed slice gates 1b and 2 judge
+ * against, and the per-unit ceiling gate 6 measures against.
+ *
+ * OPTIONAL at every call site. `unit === undefined` is today's behaviour, exactly — the whole
+ * safety argument of this change rests on that, and tests/ai/section-gates.test.ts's
+ * "with NO unit is byte-for-byte today" block is what holds it.
+ */
+export interface GateUnit { slice: unknown; lengthCeiling: number }
+
+export function gateSection(
+  id: AiSectionId, parsed: unknown, ctx: GateContext, unit?: GateUnit,
+): GateFailure | null {
+  // Resolved ONCE, so gates 1b and 2 cannot disagree about what this call's subject is.
+  const sectionSlice = unit ? unit.slice : SECTION_REGISTRY[id].slice(ctx.facts);
+
   // 1. Field parity — the schema is the expectation. A shape miss and a blank required field
   // are the same failure: the section did not come back whole.
   const check = SECTION_REGISTRY[id].schema.safeParse(parsed);
@@ -135,7 +150,7 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
     const entries = (check.data as Record<string, { category_id: string }[]>)[coverageField] ?? [];
     if (entries.length === 0) return fail('category coverage', 'empty');
     const known = new Set(
-      (SECTION_REGISTRY[id].slice(ctx.facts) as { categories: CategoryFact[] }).categories.map((c) => c.id),
+      (sectionSlice as { categories: CategoryFact[] }).categories.map((c) => c.id),
     );
     const seen = new Set<string>();
     for (const entry of entries) {
@@ -168,7 +183,7 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
   const allowed = new Set([
     SCALE_DENOMINATOR,
     ...(STRUCTURAL_NUMBERS[id] ?? []),
-    ...extractNumbers(JSON.stringify(SECTION_REGISTRY[id].slice(ctx.facts))),
+    ...extractNumbers(JSON.stringify(sectionSlice)),
   ]);
   for (const n of extractNumbers(text)) if (!allowed.has(n)) return fail('numeric containment', String(n));
 
@@ -227,8 +242,10 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
     }
   }
 
-  // 6. Length ceiling — total rendered characters for this section.
-  const ceiling = ctx.methodology.report.sections[id].length_ceiling;
+  // 6. Length ceiling — total rendered characters for this section, or for this UNIT when the
+  // call was fanned out. A fanned section's units sum to at most the section ceiling
+  // (unitCeiling floors), so the merged whole clears this without a second pass.
+  const ceiling = unit ? unit.lengthCeiling : ctx.methodology.report.sections[id].length_ceiling;
   if (text.length > ceiling) return fail('length ceiling', `${text.length}/${ceiling}`);
 
   return null;
@@ -297,8 +314,10 @@ export function correctiveInstruction(failure: GateFailure, ctx: CorrectiveConte
 /** This section's slice category ids, read off the SAME registry slice the coverage gate uses —
  *  re-deriving `categories.slice(0, 3)` / `.slice(3)` here would drift the moment the registry
  *  changes, exactly as the gate's own comment warns. */
-export function sliceCategoryIds(id: AiSectionId, facts: FactsPack): readonly string[] {
+export function sliceCategoryIds(
+  id: AiSectionId, facts: FactsPack, unit?: GateUnit,
+): readonly string[] {
   if (!COVERAGE_FIELD[id]) return [];
-  const slice = SECTION_REGISTRY[id].slice(facts) as { categories?: CategoryFact[] };
+  const slice = (unit ? unit.slice : SECTION_REGISTRY[id].slice(facts)) as { categories?: CategoryFact[] };
   return (slice.categories ?? []).map((c) => c.id);
 }

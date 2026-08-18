@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { loadMethodology } from '../../lib/methodology/load';
 import type { Diagnosis, DiagnosisCategory, Response } from '../../lib/engine/types';
 import { buildFacts, type BuildFactsArgs, type CategoryFact, type ChurchFacts, type FactsPack } from '../../lib/report/facts';
-import { gateSection, sliceCategoryIds } from '../../lib/ai/section-gates';
+import { gateSection, sliceCategoryIds, type GateUnit } from '../../lib/ai/section-gates';
 import { AI_SECTION_IDS, SECTION_REGISTRY, S6Schema } from '../../lib/ai/sections';
 import { CAPACITY_FACTS } from '../fixtures/facts';
 
@@ -699,5 +699,116 @@ describe('sliceCategoryIds (D3)', () => {
       expect(fromRegistry.length, id).toBeGreaterThan(0);
       expect(sliceCategoryIds(id, constraintFacts), id).toEqual(fromRegistry);
     }
+  });
+});
+
+// Per-unit gating (design §3.4). `unit` is OPTIONAL and defaults to today's behaviour, so every
+// assertion in this block would pass by construction the moment the parameter merely exists.
+// RED is watched BY MUTATION for each — see the plan's "RED discipline" block. The negative
+// controls at the end are what keep D3's block (:656) honest.
+describe('gateSection with a unit (design §3.4)', () => {
+  const S6_CEILING = methodology.report.sections.s6.length_ceiling; // 6000
+  const UNIT_CEILING = Math.floor(S6_CEILING / s6Ids.length);       // 1200
+  const unitFor = (key: string): GateUnit => ({
+    slice: {
+      ...(SECTION_REGISTRY.s6.slice(constraintFacts) as { categories: CategoryFact[] }),
+      categories: (SECTION_REGISTRY.s6.slice(constraintFacts) as { categories: CategoryFact[] })
+        .categories.filter((c) => c.id === key),
+    },
+    lengthCeiling: UNIT_CEILING,
+  });
+  const oneArea = (key: string) => ({ areas: goodS6.areas.filter((a) => a.category_id === key) });
+
+  it('has a five-id slice and a real unit ceiling to assert against', () => {
+    expect(s6Ids.length).toBe(5);
+    expect(UNIT_CEILING).toBe(1200);
+    expect(oneArea(s6Ids[0]!).areas).toHaveLength(1);
+  });
+
+  it('accepts a single-entry payload for its own unit', () => {
+    expect(gateSection('s6', oneArea(s6Ids[0]!), ctx, unitFor(s6Ids[0]!))).toBeNull();
+  });
+
+  // Gate 1b: the known set is the SINGLE id, so a sibling is out of slice.
+  it('rejects a sibling category id as unknown under a unit', () => {
+    expect(gateSection('s6', oneArea(s6Ids[1]!), ctx, unitFor(s6Ids[0]!)))
+      .toMatchObject({ family: 'category coverage', detail: `unknown: ${s6Ids[1]!}` });
+  });
+
+  // Gate 1b completeness, the other direction: the full five-area payload now over-covers.
+  it('rejects the whole five-area payload under a single unit', () => {
+    expect(gateSection('s6', goodS6, ctx, unitFor(s6Ids[0]!)))
+      .toMatchObject({ family: 'category coverage' });
+  });
+
+  // Gate 2 narrows with the slice (design §8 R1): the other four categories' scores leave the
+  // allowed set, so a dossier on one area can no longer quote a sibling's score. A deliberate
+  // tightening.
+  it('rejects a sibling category score under a unit', () => {
+    const sibling = constraintFacts.categories.find((c) => c.id === s6Ids[1]!)!;
+    const withSiblingScore = {
+      areas: oneArea(s6Ids[0]!).areas.map((a) => ({
+        ...a, evidence: `${a.evidence} It scores ${sibling.score} here.`,
+      })),
+    };
+    expect(gateSection('s6', withSiblingScore, ctx, unitFor(s6Ids[0]!)))
+      .toMatchObject({ family: 'numeric containment', detail: String(sibling.score) });
+    // ...and the SAME payload passes gate 2 with no unit, where the sibling is in slice. If this
+    // second half ever fails, the first half is proving the wrong thing.
+    expect(gateSection('s6', withSiblingScore, ctx)).not.toMatchObject({ family: 'numeric containment' });
+  });
+
+  // Gate 6 measures against the UNIT ceiling, not the section's.
+  it('measures length against the unit ceiling, not the section ceiling', () => {
+    const pad = 'x '.repeat(UNIT_CEILING); // digit-free, so gate 2 stays clear
+    const overUnit = {
+      areas: oneArea(s6Ids[0]!).areas.map((a) => ({ ...a, affirm: `${a.affirm} ${pad}` })),
+    };
+    const failure = gateSection('s6', overUnit, ctx, unitFor(s6Ids[0]!));
+    expect(failure).toMatchObject({ family: 'length ceiling' });
+    expect(failure!.detail.endsWith(`/${UNIT_CEILING}`)).toBe(true);
+    expect(failure!.detail.endsWith(`/${S6_CEILING}`)).toBe(false);
+  });
+});
+
+// THE negative controls. Everything above could be satisfied by a gateSection that ignores its
+// fourth argument and happens to agree; these prove the no-unit path is unchanged, which is the
+// whole safety claim of an optional parameter.
+describe('gateSection with NO unit is byte-for-byte today (design §2)', () => {
+  it('still accepts the full five-area payload', () => {
+    expect(gateSection('s6', goodS6, ctx)).toBeNull();
+  });
+  it('still rejects a one-of-five payload for incomplete coverage', () => {
+    const oneOfFive = { areas: goodS6.areas.slice(0, 1) };
+    expect(gateSection('s6', oneOfFive, ctx)).toMatchObject({ family: 'category coverage' });
+  });
+  it('still measures s6 against the section ceiling', () => {
+    const pad = 'x '.repeat(methodology.report.sections.s6.length_ceiling);
+    const over = { areas: goodS6.areas.map((a, i) => (i === 0 ? { ...a, affirm: `${a.affirm} ${pad}` } : a)) };
+    const failure = gateSection('s6', over, ctx);
+    expect(failure).toMatchObject({ family: 'length ceiling' });
+    expect(failure!.detail.endsWith(`/${methodology.report.sections.s6.length_ceiling}`)).toBe(true);
+  });
+});
+
+describe('sliceCategoryIds with a unit (design §3.4)', () => {
+  const unit: GateUnit = {
+    slice: {
+      ...(SECTION_REGISTRY.s6.slice(constraintFacts) as { categories: CategoryFact[] }),
+      categories: (SECTION_REGISTRY.s6.slice(constraintFacts) as { categories: CategoryFact[] })
+        .categories.filter((c) => c.id === s6Ids[2]!),
+    },
+    lengthCeiling: 1200,
+  };
+  // So a unit's `category coverage` corrective names ONE id rather than five.
+  it('names one id, not five', () => {
+    expect(sliceCategoryIds('s6', constraintFacts, unit)).toEqual([s6Ids[2]!]);
+  });
+  it('still names all five with no unit', () => {
+    expect(sliceCategoryIds('s6', constraintFacts)).toEqual(s6Ids);
+  });
+  // A unit cannot smuggle a category array into a section that has none.
+  it('stays empty for a section with no category array, even given a unit', () => {
+    expect(sliceCategoryIds('s2', constraintFacts, unit)).toEqual([]);
   });
 });
