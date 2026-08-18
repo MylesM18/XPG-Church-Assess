@@ -1,8 +1,8 @@
 import { composeSection, SECTION_REGISTRY, AI_SECTION_IDS, type AiSectionId } from '../ai/sections';
-import { gateSection, correctiveInstruction, sliceCategoryIds, type GateFailure } from '../ai/section-gates';
+import { gateSection, correctiveInstruction, sliceCategoryIds, resolveRequiredMention, type GateFailure } from '../ai/section-gates';
 import { fallbackSections, type FallbackSectionArgs, type SectionBody } from './fallback-sections';
 import type { FactsPack } from './facts';
-import type { Methodology, SectionId } from '../methodology/schema';
+import type { Methodology, RequiredMention, SectionId } from '../methodology/schema';
 import { statGridModel, rankListModel, verdictBlockModel, type ChartModel } from './charts';
 
 export type { SectionId } from '../methodology/schema';
@@ -99,6 +99,15 @@ export async function composeReport(args: {
           ? correctiveInstruction(failure, {
               lengthCeiling: methodology.report.sections[id].length_ceiling,
               categoryIds: sliceCategoryIds(id, facts),
+              // The gate reports the KEY (§4.1 carries reasons, never values), so the value is
+              // resolved back here through the same function gate 3 judged against. The cast is
+              // sound because every `required mention` failure is raised with a RequiredMention;
+              // were that ever untrue the lookup yields undefined and the corrective falls back
+              // to naming the key, which is exactly the old behaviour.
+              requiredValue:
+                failure.family === 'required mention'
+                  ? resolveRequiredMention(failure.detail as RequiredMention, facts)
+                  : undefined,
             })
           : null;
         return attempt(id, corrective);

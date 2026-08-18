@@ -79,10 +79,37 @@ describe('correctiveInstruction (spec §4.3)', () => {
   // Bound to the imperative, not to the echoed detail. Swapping these two case bodies used to
   // stay green: both sentences contain the detail, so `toContain(detail)` cannot tell "you must
   // include this" from "you must never write this" — opposite instructions to the model.
-  it('required mention tells the model to include the missing item', () => {
-    expect(correctiveInstruction({ family: 'required mention', detail: 'tier_name' }, ctx)).toBe(
-      'Your response must mention: tier_name.',
-    );
+  //
+  // D2 / escalation A. The corrective now carries the RESOLVED VALUE, not the RequiredMention
+  // key: the key is a schema identifier the model has never been shown, so "must mention:
+  // tier_name" asked it to write that literal string. `GateFailure.detail` still carries the
+  // key — the §4.1 reasons-only boundary is untouched — and the value is resolved at the call
+  // site from the same facts the user message already carries.
+  it('required mention tells the model to include the resolved value, not the schema key', () => {
+    const value = CAPACITY_FACTS.overall.tier.name;
+    const out = correctiveInstruction(
+      { family: 'required mention', detail: 'tier_name' },
+      { ...ctx, requiredValue: value },
+    )!;
+    expect(out).toBe(`Your response must state "${value}" somewhere in the prose.`);
+    // Non-vacuity for the sentence above: were the value empty, or equal to the key, the old
+    // key-echoing behaviour would satisfy it too.
+    expect(value).not.toBe('tier_name');
+    expect(value.length).toBeGreaterThan(0);
+    expect(out).not.toContain('tier_name');
+  });
+
+  // `requiredValue` is optional, and `primary_name` resolves to '' for every capacity-archetype
+  // church (no primary constraint) — so BOTH "the call site sent nothing" and "the facts
+  // resolved to nothing" must land on the old sentence rather than on `must state ""`, which
+  // would instruct the model to include an empty string.
+  it('required mention falls back to the key when no value resolved', () => {
+    for (const requiredValue of [undefined, '']) {
+      expect(
+        correctiveInstruction({ family: 'required mention', detail: 'primary_name' }, { ...ctx, requiredValue }),
+        `requiredValue: ${JSON.stringify(requiredValue)}`,
+      ).toBe('Your response must mention: primary_name.');
+    }
   });
 
   it('banned phrase tells the model NOT to use the offending phrase', () => {

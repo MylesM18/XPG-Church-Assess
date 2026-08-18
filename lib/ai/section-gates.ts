@@ -92,6 +92,23 @@ const STRUCTURAL_NUMBERS: Partial<Record<AiSectionId, readonly number[]>> = { s1
  *  opts a section into gate 1b, so adding one is deliberate. */
 const COVERAGE_FIELD: Partial<Record<AiSectionId, 'strengths' | 'areas'>> = { s5: 'strengths', s6: 'areas' };
 
+/**
+ * The one place a RequiredMention key becomes the string the model is actually judged against.
+ * Gate 3 below uses it to decide whether the mention is present; compose.ts calls the SAME
+ * function to build the corrective, so a retry can never name a value the gate would not accept.
+ * Keyed by RequiredMention, so the compiler requires an entry per enum member.
+ *
+ * An absent primary constraint resolves to '' — callers must read empty as "nothing to state".
+ */
+export function resolveRequiredMention(key: RequiredMention, facts: FactsPack): string {
+  const resolved: Record<RequiredMention, string> = {
+    tier_name: facts.overall.tier.name,
+    primary_name: facts.primary_constraint?.name ?? '',
+    overall_percent: String(facts.overall.capacity),
+  };
+  return resolved[key];
+}
+
 export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext): GateFailure | null {
   // 1. Field parity — the schema is the expectation. A shape miss and a blank required field
   // are the same failure: the section did not come back whole.
@@ -156,15 +173,10 @@ export function gateSection(id: AiSectionId, parsed: unknown, ctx: GateContext):
 
   // 3. Required and banned mentions.
   const required = ctx.methodology.report.sections[id].required_mentions;
-  const resolved: Record<RequiredMention, string> = {
-    tier_name: ctx.facts.overall.tier.name,
-    primary_name: ctx.facts.primary_constraint?.name ?? '',
-    overall_percent: String(ctx.facts.overall.capacity),
-  };
   for (const key of required) {
-    const needle = resolved[key];
-    // Keyed by RequiredMention, so the compiler requires a resolver entry per enum member. An
-    // absent primary constraint resolves to '', and includes('') is true — vacuously satisfied.
+    const needle = resolveRequiredMention(key, ctx.facts);
+    // An absent primary constraint resolves to '', and includes('') is true — vacuously
+    // satisfied, which is the intended reading: there is no constraint to name.
     if (!lower.includes(needle.toLowerCase())) return fail('required mention', key);
   }
   if (ctx.facts.archetype === 'constraint' && ctx.facts.primary_constraint && (id === 's2' || id === 's4')) {
@@ -225,6 +237,12 @@ export interface CorrectiveContext {
   lengthCeiling: number;
   /** This section's own slice ids. Empty for the five sections with no category array. */
   categoryIds: readonly string[];
+  /**
+   * The value behind a `required mention` failure's key, resolved by resolveRequiredMention.
+   * Optional, and legitimately '': `primary_name` resolves to '' for a capacity-archetype
+   * church, which is why the corrective treats empty and absent identically.
+   */
+  requiredValue?: string;
 }
 
 /**
@@ -248,12 +266,17 @@ export function correctiveInstruction(failure: GateFailure, ctx: CorrectiveConte
       return 'You used a number that does not appear in the facts. Use only numbers present in the facts you were given.';
     case 'category coverage':
       return `Return exactly one entry for each of these category ids, and no others: ${ctx.categoryIds.join(', ')}.`;
-    // `detail` here is the RequiredMention key, not the resolved value — the value lives in the
-    // facts slice the user message already carries, and GateFailure deliberately carries reasons
-    // only (§4.1). Named as specified in spec §4.3; this family fired zero times across the
-    // three measured baseline runs, so it is not on the critical path either way.
+    // `detail` stays the RequiredMention KEY — a reason, exactly as the §4.1 boundary requires,
+    // so the log line is unchanged. But the key is a SCHEMA identifier the model has never been
+    // shown: echoing it into the prompt asked for the literal string "tier_name". The call site
+    // resolves the key through resolveRequiredMention — the same map gate 3 judges against — and
+    // passes the value here, so the retry names precisely what the gate will look for. When
+    // nothing resolves (`primary_name` on a capacity church, or a caller that sent no value) the
+    // key sentence stands, rather than an instruction to state the empty string.
     case 'required mention':
-      return `Your response must mention: ${failure.detail}.`;
+      return ctx.requiredValue
+        ? `Your response must state "${ctx.requiredValue}" somewhere in the prose.`
+        : `Your response must mention: ${failure.detail}.`;
     case 'banned phrase':
       return `Do not use the phrase: "${failure.detail}".`;
     // Feeding the offending label back into a prompt is the single worst response to an

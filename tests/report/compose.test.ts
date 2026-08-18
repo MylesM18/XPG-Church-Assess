@@ -293,6 +293,16 @@ function shortS5() {
   return { strengths: s5.strengths.filter((s) => s.category_id !== 'disc') };
 }
 
+// D2. A REAL gate-3 failure for s12, whose required_mentions are [tier_name, overall_percent].
+// The tier name lives in BOTH `assessment` and the `tier_name` field, so it has to be scrubbed
+// from both or gate 3 never fires. "70 out of 100" stays: gate 2 runs FIRST and would otherwise
+// reject an unknown number, and `overall_percent` — the other required mention — must still
+// resolve, so that the failure detail is unambiguously `tier_name`.
+function s12MissingTierName() {
+  const s12 = good('s12') as Record<string, unknown>;
+  return { ...s12, assessment: 'Grace Chapel sits at 70 out of 100.', tier_name: 'Unstated' };
+}
+
 function mockSections(fn: (id: AiSectionId) => unknown) {
   mockComposeSection.mockImplementation(async (id: AiSectionId) => fn(id));
 }
@@ -443,6 +453,35 @@ describe('composeReport', () => {
 
     expect(r.section_sources.s12).toBe('ai');
     expect(r.section_sources.s5).toBe('ai');
+  });
+
+  // D2's load-bearing test. correctiveInstruction's own unit tests hand it a `requiredValue`, so
+  // they stay green even if compose.ts never populates one and every real corrective still says
+  // "tier_name". Only a genuine gate-3 rejection driven through composeReport proves the CALL
+  // SITE resolves the key against this church's facts.
+  it('resolves a required mention to its value in the corrective, never the schema key', async () => {
+    const correctives: (string | null)[] = [];
+    let s12Calls = 0;
+    mockComposeSection.mockImplementation(
+      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null) => {
+        if (id !== 's12') return Promise.resolve(good(id));
+        s12Calls += 1;
+        correctives.push(corrective ?? null);
+        return Promise.resolve(s12Calls === 1 ? s12MissingTierName() : good('s12'));
+      },
+    );
+    const r = await composeReport({ facts: constraintFacts, methodology, labels: [] });
+    expect(s12Calls).toBe(2);
+    const s12Corrective = correctives[1]!;
+    expect(s12Corrective).toBe(
+      `Your response must state "${constraintFacts.overall.tier.name}" somewhere in the prose.`,
+    );
+    // The key is a schema identifier the model has never seen; it must not reach the prompt.
+    expect(s12Corrective).not.toContain('tier_name');
+    // Non-vacuity: a tier name equal to the key, or empty, would make the pair above trivial.
+    expect(constraintFacts.overall.tier.name).not.toBe('tier_name');
+    expect(constraintFacts.overall.tier.name.length).toBeGreaterThan(0);
+    expect(r.section_sources.s12).toBe('ai');
   });
 
   it('sends NO corrective after an anonymity failure, and never the label', async () => {
