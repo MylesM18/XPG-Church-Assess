@@ -43,13 +43,16 @@ export default async function AcceptPage({ params }: { params: Promise<{ token: 
   const label = roleLabel(p.role)
 
   if (state === 'sign_in') {
+    // Invitees are almost always first-time users, so send them to /sign-up ("Glad you're here."),
+    // not /sign-in ("Welcome back"). Same PasswordlessEntry form either way; Supabase still picks
+    // Confirm-signup vs Magic-Link by whether the address already exists.
     const next = encodeURIComponent(`/accept/${token}`)
     const email = encodeURIComponent(p.invited_email)
     return (
       <main id="main-content" tabIndex={-1} className={shell}>
         <h1 className="font-display text-2xl text-ink">Join {p.church_name}</h1>
         <p className="font-body text-ink-soft">You’ve been invited to help lead {p.church_name} as a {label}. Sign in as {p.invited_email} to accept.</p>
-        <Link href={`/sign-in?next=${next}&email=${email}`}
+        <Link href={`/sign-up?next=${next}&email=${email}`}
           className="rounded-md border border-line bg-ink px-4 py-2 text-center font-body text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
           Sign in to accept
         </Link>
