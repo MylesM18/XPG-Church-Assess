@@ -43,8 +43,9 @@ names to seams that were previously expressed inline at many call sites. See
 
 - **Assessment run** — a church's assessment instance. **v1 is single-run**: exactly
   one run is created at church creation (`create_church_with_admin`) and never
-  recreated. `save_diagnosis` flips its status `in_progress → complete`, and
-  completion is **terminal** for v1.
+  recreated. An admin **closes** it (`close_run`, status `in_progress → complete`) and
+  may **reopen** it (`reopen_run`); `save_diagnosis` no longer touches status
+  (ADR 0003, amending ADR 0001's terminal completion).
 - **Current run** **(new)** — the church's single run resolved *status-agnostically*
   (`order by created_at limit 1`, no status clause). What the dashboard, coverage,
   the report, and the read-only review view mean by "the run". Interface:
@@ -53,10 +54,21 @@ names to seams that were previously expressed inline at many call sites. See
   "this run may still receive answers". Previously this policy hid inside the `WHERE`
   clause of the run lookup and was re-decided at every call site; it is now a named
   thing. What the write path and the answer form's editable/read-only state mean.
-- **Completeness** **(new)** — the single definition of "answered every item":
-  `isCategoryComplete(answered, total) = answered === total`, and
-  `isRunComplete = every category complete`. Replaces the copies previously living in
-  `lib/coverage/coverage.ts`, `lib/engine/fit.ts`, and the two diagnosis gates.
+- **Close assessment** **(new, ADR 0003)** — the explicit admin action that ends answering:
+  `close_run(church_id)` sets `status='complete'`, `completed_at`, and the audit pair
+  `closed_at` / `closed_by`. Members keep read-only review; `submit_self_response` refuses
+  writes; reminder emails stop. Interface: `closeRun` (`lib/data/runs.ts`) /
+  `closeAssessment` (server action). No coverage gate — the confirm shows "N of M finished".
+- **Reopen assessment** **(new, ADR 0003)** — the inverse: `reopen_run(church_id)` sets
+  `status='in_progress'` and clears `completed_at` / `closed_at` / `closed_by`. Members can
+  change answers again; a persisted report goes `stale` on the first changed answer;
+  reminders may resume. Interface: `reopenRun` / `reopenAssessment`.
+- **Completeness** — the single definition of "answered every item" is
+  `classify(answered, total)` in `lib/coverage/coverage.ts` (`'covered'` iff
+  `answered === total`). Per member, "finished" = every cell in their matrix row is
+  `'covered'` (`buildMemberMatrix`; counted by `finishedMemberCount`, ADR 0003). The
+  spec's `isCategoryComplete` / `isRunComplete` names were never implemented — do not
+  look for them.
 - **Coverage** — how much of the assessment is answered; drives the dashboard's
   per-category and per-member progress and gates the diagnosis (`lib/coverage/*`).
 - **Diagnosis gate** — the check that a run is scoreable (every category complete).
