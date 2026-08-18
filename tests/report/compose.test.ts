@@ -268,6 +268,31 @@ function overlongS2() {
   return { ...goodS2, what_this_is_not: `${goodS2.what_this_is_not} ${'x'.repeat(ceiling + 434 - base - 1)}` };
 }
 
+// The s12 twin of overlongS2 above, and deliberately a DIFFERENT ceiling: s12's is 900 where
+// s2's is 1400, so a corrective built from another section's ceiling is visible. Overshoots by
+// the same 434 characters, so the detail reads "1334/900" — a measured overage containing
+// neither "900" nor "128", so neither ceiling assertion can be satisfied by the overage instead.
+//
+// Pads rather than replaces, for the same reason overlongS2 does: s12's required_mentions are
+// [tier_name, overall_percent] (report.yaml) and `assessment` is the only field carrying both,
+// so replacing it fails gate 3 before gate 6 is ever reached. `overall_percent` is a NUMBER
+// field, which allStrings never collects — the base below is the three string fields only.
+function overlongS12() {
+  const s12 = good('s12') as { assessment: string; overall_percent: number; tier_name: string; primary_objective: string };
+  const ceiling = methodology.report.sections.s12.length_ceiling;
+  const base = `${s12.assessment} ${s12.tier_name} ${s12.primary_objective}`.length;
+  return { ...s12, primary_objective: `${s12.primary_objective} ${'x'.repeat(ceiling + 434 - base - 1)}` };
+}
+
+// One entry short of s5's three-category slice. Every id present is still known and unique, so
+// only gate 1b's COMPLETENESS check catches it — and S5Schema's array carries no `.min()`, so
+// gate 1's safeParse passes first and the failure is genuinely `category coverage`, not
+// `field parity`. Drops `disc` rather than truncating, so the two survivors stay gate-proven.
+function shortS5() {
+  const s5 = good('s5') as { strengths: { category_id: string }[] };
+  return { strengths: s5.strengths.filter((s) => s.category_id !== 'disc') };
+}
+
 function mockSections(fn: (id: AiSectionId) => unknown) {
   mockComposeSection.mockImplementation(async (id: AiSectionId) => fn(id));
 }
@@ -371,6 +396,53 @@ describe('composeReport', () => {
     expect(s2Corrective).toContain('200'); // wordBudget(1400) — same framing as attempt one
     expect(s2Corrective.toLowerCase()).toContain('shorter');
     expect(r.section_sources.s2).toBe('ai');
+  });
+
+  // The re-attempt maps over `failed`, so each corrective must be built from ITS OWN entry's
+  // failure and ITS OWN id's ceiling. With a single failing section that pairing is
+  // unfalsifiable — every wiring produces the same string. Fail TWO at once, with different
+  // families and different ceilings, and a crossed pair is visible from either side.
+  it('pairs each failed section with its own failure when two fail at once', async () => {
+    const s12Correctives: (string | null)[] = [];
+    const s5Correctives: (string | null)[] = [];
+    let s12Calls = 0;
+    let s5Calls = 0;
+    mockComposeSection.mockImplementation(
+      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null) => {
+        if (id === 's12') {
+          s12Calls += 1;
+          s12Correctives.push(corrective ?? null);
+          return Promise.resolve(s12Calls === 1 ? overlongS12() : good('s12'));
+        }
+        if (id === 's5') {
+          s5Calls += 1;
+          s5Correctives.push(corrective ?? null);
+          return Promise.resolve(s5Calls === 1 ? shortS5() : good('s5'));
+        }
+        return Promise.resolve(good(id));
+      },
+    );
+    const r = await composeReport({ facts: constraintFacts, methodology, labels: [] });
+    expect(s12Calls).toBe(2);
+    expect(s5Calls).toBe(2);
+
+    // s12 — a LENGTH corrective carrying s12's OWN ceiling and its own word budget.
+    const s12Corrective = s12Correctives[1]!;
+    expect(s12Corrective).toContain('1334'); // the measured overage
+    expect(s12Corrective).toContain('900'); // s12's ceiling...
+    expect(s12Corrective).toContain('128'); // ...and wordBudget(900) = floor(900/7)
+    expect(s12Corrective).not.toContain('1400'); // never s2's ceiling
+    expect(s12Corrective).not.toContain('2200'); // never s5's — the OTHER failing section's
+    expect(s12Corrective).not.toContain('guest'); // nor s5's family of corrective
+
+    // s5 — a COVERAGE corrective naming s5's own slice, with no length arithmetic at all.
+    const s5Corrective = s5Correctives[1]!;
+    expect(s5Corrective).toContain('guest, gov, disc');
+    expect(s5Corrective).not.toMatch(/\d/); // no ceiling, no budget, no measured length
+    expect(s5Corrective.toLowerCase()).not.toContain('characters');
+
+    expect(r.section_sources.s12).toBe('ai');
+    expect(r.section_sources.s5).toBe('ai');
   });
 
   it('sends NO corrective after an anonymity failure, and never the label', async () => {
