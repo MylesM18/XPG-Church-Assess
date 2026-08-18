@@ -17,7 +17,7 @@ vi.mock('@/lib/ai/sections', async (importOriginal) => {
 // Imported AFTER the mock is declared (vitest hoists vi.mock above imports regardless) — same
 // convention as tests/ai/sections.test.ts's own comment.
 import { composeReport, assembleReport, assembleFallbackOnly, chartsForSection, isUsableCachedReport } from '../../lib/report/compose';
-import { AI_SECTION_IDS, type AiSectionId } from '../../lib/ai/sections';
+import { AI_SECTION_IDS, SECTION_REGISTRY, type AiSectionId } from '../../lib/ai/sections';
 import { loadMethodology } from '../../lib/methodology/load';
 import type { Diagnosis, DiagnosisCategory, Response } from '../../lib/engine/types';
 import { buildFacts, type BuildFactsArgs, type ChurchFacts, type FactsPack } from '../../lib/report/facts';
@@ -237,22 +237,6 @@ const good = (id: AiSectionId): unknown => {
 function gateFailingS2() {
   return { ...goodS2, summary: goodS2.summary + ' Growth is up 37 percent.' };
 }
-// The invented number MUST be appended to a field S6Schema still declares. z.object() strips
-// unknown keys, so hanging it on a dropped beat (this used to use `trajectory`) would see the
-// whole mutation silently removed at gate 1's safeParse — the gate would then PASS and this
-// helper would stop failing anything, while tsc stayed at 0 because the cast is from `unknown`.
-// It must also keep EVERY area. This used to rebuild `areas` as a single-element array, which
-// gate 1b now rejects for incomplete coverage — and coverage is checked BEFORE numeric
-// containment, so the helper would still "fail" but for the wrong reason, silently invalidating
-// the reason-text assertion it exists to serve. Mutate the first entry in place, drop none.
-function gateFailingSix() {
-  const s6 = good('s6') as { areas: Array<{ reframe: string }> };
-  return {
-    ...s6,
-    areas: s6.areas.map((a, i) => (i === 0 ? { ...a, reframe: a.reframe + ' Growth is up 37 percent.' } : a)),
-  };
-}
-
 // Overshoots s2's length ceiling by exactly 434 characters, so the gate's detail reads
 // "1834/1400" — the spec's worked example — and the assertion on '1400' cannot be satisfied
 // accidentally by the ceiling appearing twice in the corrective.
@@ -303,12 +287,29 @@ function s12MissingTierName() {
   return { ...s12, assessment: 'Grace Chapel sits at 70 out of 100.', tier_name: 'Unstated' };
 }
 
-function mockSections(fn: (id: AiSectionId) => unknown) {
-  mockComposeSection.mockImplementation(async (id: AiSectionId) => fn(id));
+// A fanned section's unit call must return ONLY its own entry: under a unit, gate 1b's known set
+// is that single id, so the full five-area payload fails `unknown:` on the four siblings. Every
+// mock in this file routes through here so that stays true in one place.
+function goodUnit(id: AiSectionId, key: string): unknown {
+  if (id !== 's6') throw new Error(`no fan-out fixture for ${id}`);
+  const s6 = good('s6') as { areas: Array<{ category_id: string }> };
+  const areas = s6.areas.filter((a) => a.category_id === key);
+  if (areas.length !== 1) throw new Error(`no s6 fixture area for unit ${key}`);
+  return { areas };
+}
+/** `key` is null for an unfanned section, the category id for a fanned one. */
+function mockSections(fn: (id: AiSectionId, key: string | null) => unknown) {
+  mockComposeSection.mockImplementation(
+    async (id: AiSectionId, _f: unknown, _m: unknown, _c?: string | null, unitKey?: string) =>
+      fn(id, unitKey ?? null),
+  );
 }
 function mockAllSectionsGood() {
-  mockSections((id) => good(id));
+  mockSections((id, key) => (key === null ? good(id) : goodUnit(id, key)));
 }
+/** The unit list composeReport itself derives, for call-count expectations. */
+const S6_UNIT_IDS = constraintFacts.categories.slice(3).map((c) => c.id);
+const UNIT_COUNT = AI_SECTION_IDS.length - 1 + S6_UNIT_IDS.length; // 6 + 5 = 11
 function mockSectionsThrow() {
   mockComposeSection.mockRejectedValue(new Error('boom'));
 }
@@ -334,27 +335,31 @@ describe('composeReport', () => {
 
   it('re-attempts only the failed sections, exactly once', async () => {
     const calls: string[] = [];
-    mockSections((id) => {
-      calls.push(id);
-      return id === 's6' && calls.filter((c) => c === 's6').length === 1 ? null : good(id);
+    mockSections((id, key) => {
+      if (id !== 's6') return good(id);
+      calls.push(key!);
+      return calls.filter((c) => c === key).length === 1 && key === S6_UNIT_IDS[0] ? null : goodUnit(id, key!);
     });
     const r = await composeReport({ facts: constraintFacts, methodology, labels: [] });
-    expect(calls.filter((c) => c === 's6')).toHaveLength(2); // one re-attempt
-    expect(calls.filter((c) => c === 's2')).toHaveLength(1); // untouched
+    expect(calls.filter((c) => c === S6_UNIT_IDS[0])).toHaveLength(2); // one re-attempt
+    for (const k of S6_UNIT_IDS) {
+      if (k === S6_UNIT_IDS[0]) continue;
+      expect(calls.filter((c) => c === k), k).toHaveLength(1); // every other unit untouched
+    }
     expect(r.section_sources.s6).toBe('ai');
   });
 
   it('re-attempts a gate failure as well as a call failure', async () => {
     // The model is nondeterministic, so a re-roll is a genuine fix, not a hope (C2).
     let n = 0;
-    mockSections((id) => (id === 's2' ? (++n === 1 ? gateFailingS2() : good('s2')) : good(id)));
+    mockSections((id, key) => (id === 's2' ? (++n === 1 ? gateFailingS2() : good('s2')) : key === null ? good(id) : goodUnit(id, key)));
     const r = await composeReport({ facts: constraintFacts, methodology, labels: [] });
     expect(n).toBe(2);
     expect(r.section_sources.s2).toBe('ai');
   });
 
   it('gives up after the single re-attempt and persists a partial report', async () => {
-    mockSections((id) => (id === 's6' ? null : good(id)));
+    mockSections((id, key) => (id === 's6' ? null : good(id)));
     const r = await composeReport({ facts: constraintFacts, methodology, labels: [] });
     expect(r.section_sources.s6).toBe('fallback');
     expect(r.sections.s6).toBeUndefined();
@@ -372,15 +377,21 @@ describe('composeReport', () => {
   // there, not here.
   it('logs the gate-failure reason for a failed section', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    mockSections((id) => (id === 's6' ? gateFailingSix() : good(id)));
+    mockSections((id, key) => {
+      if (id !== 's6') return good(id);
+      const u = goodUnit(id, key!) as { areas: Array<{ reframe: string }> };
+      return key === S6_UNIT_IDS[0]
+        ? { areas: u.areas.map((a) => ({ ...a, reframe: `${a.reframe} Growth is up 37 percent.` })) }
+        : u;
+    });
     await composeReport({ facts: constraintFacts, methodology, labels: [] });
     const joined = warn.mock.calls.flat().join(' ');
-    // R9: assert the distinguishing <reason> text, not just the shared "[report] section s6:"
-    // prefix — a prior task shipped an untested branch exactly that way, when two different
-    // failure modes shared the same prefix. The invented "37 percent" trips gate 2 (numeric
-    // containment), not gate 1 (field parity) — assert both the reason that DID fire and a
-    // negative assertion for a plausible reason that did NOT, so a fall-through is detectable.
-    expect(joined).toContain('[report] section s6: numeric containment');
+    // R9: assert the distinguishing <reason> text, not just the shared "[report] section s6 unit
+    // <id>:" prefix — a prior task shipped an untested branch exactly that way, when two
+    // different failure modes shared the same prefix. The invented "37 percent" trips gate 2
+    // (numeric containment), not gate 1 (field parity) — assert both the reason that DID fire and
+    // a negative assertion for a plausible reason that did NOT, so a fall-through is detectable.
+    expect(joined).toContain('[report] section s6 unit ' + S6_UNIT_IDS[0] + ': numeric containment');
     expect(joined).not.toContain('field parity');
     warn.mockRestore();
   });
@@ -391,8 +402,8 @@ describe('composeReport', () => {
     const correctives: (string | null)[] = [];
     let s2Calls = 0;
     mockComposeSection.mockImplementation(
-      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null) => {
-        if (id !== 's2') return Promise.resolve(good(id));
+      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null, unitKey?: string) => {
+        if (id !== 's2') return Promise.resolve(unitKey ? goodUnit(id, unitKey) : good(id));
         s2Calls += 1;
         correctives.push(corrective ?? null);
         return Promise.resolve(s2Calls === 1 ? overlongS2() : good('s2'));
@@ -418,7 +429,7 @@ describe('composeReport', () => {
     let s12Calls = 0;
     let s5Calls = 0;
     mockComposeSection.mockImplementation(
-      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null) => {
+      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null, unitKey?: string) => {
         if (id === 's12') {
           s12Calls += 1;
           s12Correctives.push(corrective ?? null);
@@ -429,7 +440,7 @@ describe('composeReport', () => {
           s5Correctives.push(corrective ?? null);
           return Promise.resolve(s5Calls === 1 ? shortS5() : good('s5'));
         }
-        return Promise.resolve(good(id));
+        return Promise.resolve(unitKey ? goodUnit(id, unitKey) : good(id));
       },
     );
     const r = await composeReport({ facts: constraintFacts, methodology, labels: [] });
@@ -463,8 +474,8 @@ describe('composeReport', () => {
     const correctives: (string | null)[] = [];
     let s12Calls = 0;
     mockComposeSection.mockImplementation(
-      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null) => {
-        if (id !== 's12') return Promise.resolve(good(id));
+      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null, unitKey?: string) => {
+        if (id !== 's12') return Promise.resolve(unitKey ? goodUnit(id, unitKey) : good(id));
         s12Calls += 1;
         correctives.push(corrective ?? null);
         return Promise.resolve(s12Calls === 1 ? s12MissingTierName() : good('s12'));
@@ -489,8 +500,8 @@ describe('composeReport', () => {
     const correctives: (string | null)[] = [];
     let n = 0;
     mockComposeSection.mockImplementation(
-      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null) => {
-        if (id !== 's2') return Promise.resolve(good(id));
+      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null, unitKey?: string) => {
+        if (id !== 's2') return Promise.resolve(unitKey ? goodUnit(id, unitKey) : good(id));
         correctives.push(corrective ?? null);
         n += 1;
         // Hung on what_this_is_not, not summary: summary carries s2's required mentions, and
@@ -509,8 +520,10 @@ describe('composeReport', () => {
     const correctives: (string | null)[] = [];
     let n = 0;
     mockComposeSection.mockImplementation(
-      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null) => {
-        if (id !== 's6') return Promise.resolve(good(id));
+      (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null, unitKey?: string) => {
+        if (id !== 's6' || unitKey !== S6_UNIT_IDS[0]) {
+          return Promise.resolve(unitKey ? goodUnit(id, unitKey) : good(id));
+        }
         correctives.push(corrective ?? null);
         n += 1;
         return Promise.resolve(n === 1 ? null : good('s6'));
@@ -523,14 +536,138 @@ describe('composeReport', () => {
   it('sends no corrective on any first attempt', async () => {
     const seen: (string | null)[] = [];
     mockComposeSection.mockImplementation(
-      (id: AiSectionId, _f: unknown, _m: unknown, c?: string | null) => {
+      (id: AiSectionId, _f: unknown, _m: unknown, c?: string | null, unitKey?: string) => {
         seen.push(c ?? null);
-        return Promise.resolve(good(id));
+        return Promise.resolve(unitKey ? goodUnit(id, unitKey) : good(id));
       },
     );
     await composeReport({ facts: constraintFacts, methodology, labels: [] });
-    expect(seen).toHaveLength(AI_SECTION_IDS.length);
+    expect(seen).toHaveLength(UNIT_COUNT);
     expect(seen.every((c) => c === null)).toBe(true);
+  });
+});
+
+// THE load-bearing block (design §6). Without (1)-(4) the entire call-site wiring could be
+// absent and Tasks 1-3's tests stay green.
+describe('composeReport fans s6 out one call per category (design §3.6)', () => {
+  it('has five distinct s6 units to assert against', () => {
+    expect(S6_UNIT_IDS).toHaveLength(5);
+    expect(new Set(S6_UNIT_IDS).size).toBe(5);
+    expect(UNIT_COUNT).toBe(11);
+  });
+
+  it('issues five s6 calls, one per category id, and one call for every other section', async () => {
+    const keys: Array<[AiSectionId, string | null]> = [];
+    mockSections((id, key) => {
+      keys.push([id, key]);
+      return key === null ? good(id) : goodUnit(id, key);
+    });
+    const r = await composeReport({ facts: constraintFacts, methodology, labels: [] });
+    expect(keys.filter(([id]) => id === 's6').map(([, k]) => k)).toEqual(S6_UNIT_IDS);
+    for (const id of AI_SECTION_IDS) {
+      if (id === 's6') continue;
+      expect(keys.filter(([i]) => i === id), id).toEqual([[id, null]]);
+    }
+    expect(r.section_sources.s6).toBe('ai');
+  });
+
+  it('retries a failing unit ALONE — the other four are not re-called', async () => {
+    const target = S6_UNIT_IDS[2]!;
+    const perKey = new Map<string, number>();
+    mockSections((id, key) => {
+      if (id !== 's6') return good(id);
+      const n = (perKey.get(key!) ?? 0) + 1;
+      perKey.set(key!, n);
+      return key === target && n === 1 ? null : goodUnit(id, key!);
+    });
+    const r = await composeReport({ facts: constraintFacts, methodology, labels: [] });
+    expect(perKey.get(target)).toBe(2);
+    for (const k of S6_UNIT_IDS) if (k !== target) expect(perKey.get(k), k).toBe(1);
+    expect(r.section_sources.s6).toBe('ai'); // the retry carried it
+  });
+
+  it('falls back ENTIRELY when one unit fails both rounds (all-or-nothing, design §3.7)', async () => {
+    const target = S6_UNIT_IDS[1]!;
+    mockSections((id, key) => {
+      if (id !== 's6') return good(id);
+      return key === target ? null : goodUnit(id, key!);
+    });
+    const r = await composeReport({ facts: constraintFacts, methodology, labels: [] });
+    expect(r.section_sources.s6).toBe('fallback');
+    expect(r.sections.s6).toBeUndefined();          // no 4-of-5 partial is persisted
+    expect(r.section_sources.s2).toBe('ai');        // the rest of the report still ships
+  });
+
+  it('merges five passing units into one S6Schema section, in slice order', async () => {
+    mockAllSectionsGood();
+    const r = await composeReport({ facts: constraintFacts, methodology, labels: [] });
+    expect(r.section_sources.s6).toBe('ai');
+    const merged = SECTION_REGISTRY.s6.schema.safeParse(r.sections.s6);
+    expect(merged.success).toBe(true);
+    expect((merged.data as { areas: { category_id: string }[] }).areas.map((a) => a.category_id))
+      .toEqual(S6_UNIT_IDS);
+  });
+
+  it("names ONE id in a unit's category-coverage corrective, never all five", async () => {
+    const target = S6_UNIT_IDS[3]!;
+    const correctives: Array<[string | null, string | null]> = [];
+    const perKey = new Map<string, number>();
+    mockComposeSection.mockImplementation(
+      async (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null, unitKey?: string) => {
+        if (id !== 's6') return good(id);
+        const n = (perKey.get(unitKey!) ?? 0) + 1;
+        perKey.set(unitKey!, n);
+        correctives.push([unitKey!, corrective ?? null]);
+        // Round 1 for the target returns a SIBLING's area: known to the section, unknown to this
+        // unit. That is a genuine `category coverage` rejection under the unit gate.
+        return unitKey === target && n === 1
+          ? goodUnit('s6', S6_UNIT_IDS[0]!)
+          : goodUnit('s6', unitKey!);
+      },
+    );
+    const r = await composeReport({ facts: constraintFacts, methodology, labels: [] });
+    const retry = correctives.find(([k, c], i) => k === target && i > 0 && c !== null)![1]!;
+    expect(retry).toContain(target);
+    for (const k of S6_UNIT_IDS) if (k !== target) expect(retry, k).not.toContain(k);
+    expect(r.section_sources.s6).toBe('ai');
+  });
+
+  it('states the UNIT ceiling in a unit length corrective, never the section ceiling', async () => {
+    const target = S6_UNIT_IDS[0]!;
+    const perKey = new Map<string, number>();
+    const correctives: string[] = [];
+    mockComposeSection.mockImplementation(
+      async (id: AiSectionId, _f: unknown, _m: unknown, corrective?: string | null, unitKey?: string) => {
+        if (id !== 's6') return good(id);
+        const n = (perKey.get(unitKey!) ?? 0) + 1;
+        perKey.set(unitKey!, n);
+        if (corrective) correctives.push(corrective);
+        if (unitKey !== target || n > 1) return goodUnit('s6', unitKey!);
+        const u = goodUnit('s6', target) as { areas: Array<{ affirm: string }> };
+        // Digit-free padding, so gate 2 stays clear and gate 6 is the failure that fires.
+        return { areas: u.areas.map((a) => ({ ...a, affirm: `${a.affirm} ${'x '.repeat(1200)}` })) };
+      },
+    );
+    await composeReport({ facts: constraintFacts, methodology, labels: [] });
+    const lengthCorrective = correctives.find((c) => c.toLowerCase().includes('shorter'))!;
+    expect(lengthCorrective).toContain('1200');   // the unit ceiling...
+    expect(lengthCorrective).toContain('171');    // ...and wordBudget(1200)
+    expect(lengthCorrective).not.toContain('6000');
+    expect(lengthCorrective).not.toContain('857');
+  });
+
+  it('falls back rather than persisting an empty section when a fanned slice has no units', async () => {
+    // Fail-closed guard. With zero units, `every unit succeeded` is vacuously true and merge([])
+    // yields `{ areas: [] }` — which S6Schema accepts, so it would persist and render nothing
+    // while reading as 'ai'. Gate 1b's `empty` check never runs, because no call is made.
+    const threeCat = buildFacts({
+      ...baseArgs,
+      diagnosis: makeDiagnosis({ categories: CAT_IDS.slice(0, 3).map((id, i) => makeCategory(id, [72, 68, 66][i]!)) }),
+    });
+    mockAllSectionsGood();
+    const r = await composeReport({ facts: threeCat, methodology, labels: [] });
+    expect(r.section_sources.s6).toBe('fallback');
+    expect(r.sections.s6).toBeUndefined();
   });
 });
 

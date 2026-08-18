@@ -1,5 +1,5 @@
-import { composeSection, SECTION_REGISTRY, AI_SECTION_IDS, type AiSectionId } from '../ai/sections';
-import { gateSection, correctiveInstruction, sliceCategoryIds, resolveRequiredMention, type GateFailure } from '../ai/section-gates';
+import { composeSection, SECTION_REGISTRY, AI_SECTION_IDS, FAN_OUT, unitCeiling, type AiSectionId } from '../ai/sections';
+import { gateSection, correctiveInstruction, sliceCategoryIds, resolveRequiredMention, type GateFailure, type GateUnit } from '../ai/section-gates';
 import { fallbackSections, type FallbackSectionArgs, type SectionBody } from './fallback-sections';
 import type { FactsPack } from './facts';
 import type { Methodology, RequiredMention, SectionId } from '../methodology/schema';
@@ -45,27 +45,61 @@ export async function composeReport(args: {
   const ctx = { facts, methodology, labels };
   const sections: Partial<Record<AiSectionId, unknown>> = {};
 
+  /**
+   * One model call. `key` is null for an unfanned section and the category id for a fanned one
+   * (design §3.6). A fanned section contributes one CallUnit per key, in `keys` order — which is
+   * `f.categories.slice(3)` order — so the merged areas come back in slice order for free.
+   */
+  type CallUnit = { id: AiSectionId; key: string | null };
+
+  const units: CallUnit[] = AI_SECTION_IDS.flatMap((id) => {
+    const fan = FAN_OUT[id];
+    return fan
+      ? fan.keys(facts).map((key) => ({ id, key }))
+      : [{ id, key: null } as CallUnit];
+  });
+
+  /** The unit's narrowed view for the gates, or undefined for an unfanned section. */
+  const gateUnitFor = ({ id, key }: CallUnit): GateUnit | undefined => {
+    const fan = FAN_OUT[id];
+    if (!fan || key === null) return undefined;
+    return {
+      slice: fan.slice(facts, key),
+      lengthCeiling: unitCeiling(methodology.report.sections[id].length_ceiling, fan.keys(facts).length),
+    };
+  };
+
+  /** Indexed by position in `units`; undefined means that unit has not passed. */
+  const results: Array<unknown | undefined> = new Array(units.length);
+
   /** `failure: null` on a call/parse failure — no gate ran, so there is nothing to correct. */
   type AttemptResult = { ok: true } | { ok: false; failure: GateFailure | null };
 
-  const attempt = async (id: AiSectionId, corrective?: string | null): Promise<AttemptResult> => {
-    const parsed = await composeSection(id, facts, methodology, corrective); // never throws → null
+  const attempt = async (index: number, corrective?: string | null): Promise<AttemptResult> => {
+    const unit = units[index]!;
+    const { id, key } = unit;
+    const gateUnit = gateUnitFor(unit);
+    const parsed = await composeSection(id, facts, methodology, corrective, key ?? undefined); // never throws → null
     if (parsed === null) return { ok: false, failure: null };
-    const failure = gateSection(id, parsed, ctx);
+    const failure = gateSection(id, parsed, ctx, gateUnit);
     if (failure !== null) {
-      // detail is omitted when empty so a reasonless family does not log a bare "()".
-      console.warn(`[report] section ${id}: ${failure.family}${failure.detail ? ` (${failure.detail})` : ''}`);
+      // The unit is named so a fanned section's five calls stay distinguishable in the log. A
+      // category id is facts-derived, not model output — gate 1b's `missing:` detail already
+      // carries them — so this does not widen the §4.1 boundary. `detail` is omitted when empty
+      // so a reasonless family does not log a bare "()".
+      const where = key === null ? id : `${id} unit ${key}`;
+      console.warn(`[report] section ${where}: ${failure.family}${failure.detail ? ` (${failure.detail})` : ''}`);
       return { ok: false, failure };
     }
-    sections[id] = parsed;
+    results[index] = parsed;
     return { ok: true };
   };
 
-  // Promise.allSettled, not Promise.all: one rejection must not cancel six good sections. The
-  // per-section functions already never throw, so this is belt and braces at a boundary where
-  // the cost of being wrong is the whole report.
+  // Promise.allSettled, not Promise.all: one rejection must not cancel ten good units. The
+  // per-call functions already never throw, so this is belt and braces at a boundary where the
+  // cost of being wrong is the whole report.
   const first = await Promise.allSettled(
-    AI_SECTION_IDS.map((id) => attempt(id).then((result) => ({ id, result }))),
+    units.map((_, index) => attempt(index).then((result) => ({ index, result }))),
   );
 
   // Carry each failure forward so the re-attempt can correct it instead of re-rolling into the
@@ -73,32 +107,40 @@ export async function composeReport(args: {
   // a call failure, which is what it is.
   const failed = first
     .map((r, i) => {
-      const id = AI_SECTION_IDS[i]!;
-      if (r.status !== 'fulfilled') return { id, failure: null };
-      return r.value.result.ok ? null : { id, failure: r.value.result.failure };
+      if (r.status !== 'fulfilled') return { index: i, failure: null };
+      return r.value.result.ok ? null : { index: i, failure: r.value.result.failure };
     })
-    .filter((x): x is { id: AiSectionId; failure: GateFailure | null } => x !== null);
+    .filter((x): x is { index: number; failure: GateFailure | null } => x !== null);
 
-  // ONE re-attempt of only the failed sections (C2). Gate failures are retried alongside call
-  // failures: the model is nondeterministic, so a re-roll is a genuine fix.
+  // ONE re-attempt of only the failed UNITS (C2). A failing unit retries ALONE; its siblings are
+  // not re-called. Gate failures are retried alongside call failures: the model is
+  // nondeterministic, so a re-roll is a genuine fix.
   //
-  // COST, stated deliberately: these are APP-level rounds, and each one is separately multiplied
-  // by the SDK's own `maxRetries: 1` (sections.ts:192). Worst case is therefore 2 rounds x 2 SDK
-  // attempts = 4 live calls per section, 28 per report — up from 2/14 before this branch. The
-  // SDK retry is insurance with no observed claim: across the measured runs (54/54, then 65/65
-  // bar a single transport abort) every call that was made returned parsed output. It is kept
-  // because the alternative failure — a transient blip pinning a section to fallback with no
-  // regenerate path — is permanent: generateDiagnosis is effectively one-shot per church
-  // (save_diagnosis completes the run and get_run_responses filters in_progress —
-  // actions.ts:135). Any change that adds calls per section (e.g. one call per category) must be
-  // costed against this 4x, not against 1x.
+  // COST, stated deliberately and re-costed for the s6 fan-out (design §4). These are APP-level
+  // rounds, each separately multiplied by the SDK's own `maxRetries: 1` (sections.ts:192), so
+  // worst case is 2 rounds x 2 SDK attempts = 4 live calls per UNIT. With s6 fanned to five
+  // units the report's worst case is 6 x 4 + 5 x 4 = 44, up from 28 — 1.57x, and the reason s6
+  // is the only entry in FAN_OUT. The realistic ceiling is nearer 22: the SDK retry has no
+  // observed claim across the measured runs (54/54, then 65/65 bar a single transport abort).
+  // Latency moves the OTHER way — five small parallel calls replace two large serial ones — at
+  // the cost of round-1 concurrency rising 7 -> 11. The SDK retry is kept because the
+  // alternative failure — a transient blip pinning a section to fallback with no regenerate
+  // path — is permanent: generateDiagnosis is effectively one-shot per church (save_diagnosis
+  // completes the run and get_run_responses filters in_progress — actions.ts:135). Any FURTHER
+  // change that adds calls per section must be costed against this 4x, not against 1x.
   if (failed.length > 0) {
     await Promise.allSettled(
-      failed.map(({ id, failure }) => {
+      failed.map(({ index, failure }) => {
+        const unit = units[index]!;
+        const gateUnit = gateUnitFor(unit);
         const corrective = failure
           ? correctiveInstruction(failure, {
-              lengthCeiling: methodology.report.sections[id].length_ceiling,
-              categoryIds: sliceCategoryIds(id, facts),
+              // The UNIT's ceiling when the call was fanned, or the gate would name 6000 while
+              // measuring against 1200.
+              lengthCeiling: gateUnit
+                ? gateUnit.lengthCeiling
+                : methodology.report.sections[unit.id].length_ceiling,
+              categoryIds: sliceCategoryIds(unit.id, facts, gateUnit),
               // The gate reports the KEY (§4.1 carries reasons, never values), so the value is
               // resolved back here through the same function gate 3 judged against. The cast is
               // sound because every `required mention` failure is raised with a RequiredMention;
@@ -110,9 +152,26 @@ export async function composeReport(args: {
                   : undefined,
             })
           : null;
-        return attempt(id, corrective);
+        return attempt(index, corrective);
       }),
     );
+  }
+
+  // Assembly. A fanned section is stored ONLY if every one of its units passed (design §3.7):
+  // both renderers are `S6Schema.safeParse(ai)` -> all areas or AiFallback, there is no partial
+  // concept anywhere in the render path, and a 3-of-5 s6 would contradict the completeness rule
+  // at section-gates.ts:150-159 this branch deliberately hardened.
+  for (const id of AI_SECTION_IDS) {
+    const indices = units.flatMap((u, i) => (u.id === id ? [i] : []));
+    const fan = FAN_OUT[id];
+    // Fail closed on a fanned section with no units at all: `every unit passed` would be
+    // vacuously true and merge([]) yields an empty array, which S6Schema accepts — an empty
+    // section persisted as 'ai', rendering nothing, with gate 1b's `empty` check never reached
+    // because no call was ever made.
+    if (indices.length === 0) continue;
+    if (indices.some((i) => results[i] === undefined)) continue;
+    const parts = indices.map((i) => results[i]!);
+    sections[id] = fan ? fan.merge(parts) : parts[0];
   }
 
   const section_sources = Object.fromEntries(
