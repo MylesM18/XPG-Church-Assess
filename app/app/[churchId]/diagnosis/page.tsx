@@ -182,6 +182,7 @@ export default async function DiagnosisPage({
   // existing single-return, ternary-JSX shape.
   let sections: AssembledSection[] = []
   let stale = false
+  let needsGeneration = false
   let cover: CoverModel | null = null
   let visuals: WebVisuals | null = null
 
@@ -215,9 +216,18 @@ export default async function DiagnosisPage({
 
     sections = resolved.sections
     stale = resolved.stale
+    needsGeneration = resolved.needsGeneration
     cover = resolved.cover
     visuals = resolved.visuals
   }
+
+  // H7: a completed run with NO usable AI section — no `reports` row at all (diagnosis finished
+  // while PROSE_MODE was unset), or a live-hash row that is 100 % fallback (generation persists
+  // those; the first-generation self-heal cannot re-run) — is not `stale`, so until now the page
+  // offered no way to invoke the model and a later env fix changed nothing. Offer the same
+  // `regenerateReport` action under its own copy. The gate is the action's own PROSE_MODE gate
+  // form, verbatim: when the action would silently return, the button must not render.
+  const proseEnabled = (process.env.PROSE_MODE ?? 'fallback') !== 'fallback'
 
   // The cover's date line: the run's completion month in the PDF cover's exact format
   // (document.tsx: toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })).
@@ -259,6 +269,20 @@ export default async function DiagnosisPage({
                   className="py-1.5 font-body text-sm text-ink underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
                 >
                   Regenerate report
+                </button>
+              </form>
+            </ReportNotice>
+          )}
+          {!stale && needsGeneration && proseEnabled && (
+            <ReportNotice>
+              <p>This report hasn’t been written by the model yet.</p>
+              <form action={regenerateReport}>
+                <input type="hidden" name="churchId" value={churchId} />
+                <button
+                  type="submit"
+                  className="py-1.5 font-body text-sm text-ink underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                >
+                  Generate report
                 </button>
               </form>
             </ReportNotice>

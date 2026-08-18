@@ -210,6 +210,71 @@ describe('resolveReportSections', () => {
     const s8 = r.sections.find((s) => s.id === 's8')
     expect(s8?.fallback.bullets).toEqual(['Belonging: people feel known (4 people).'])
   })
+
+  // H7 (2026-08-18): once a run is complete, the page only offered `regenerateReport` when
+  // `stale` — i.e. when a row exists at a DIFFERENT hash. Two states dead-ended with no
+  // affordance and no model call, no matter what PROSE_MODE/OPENAI_* were later set to:
+  //   H7-A — no row at all (diagnosis completed while PROSE_MODE was unset);
+  //   H7-B — a row at the LIVE hash that is 100 % fallback (generation persists all-fallback
+  //          rows; the I9 self-heal only runs inside first generation, which cannot re-run).
+  // `needsGeneration` collapses both into one signal computed from the ASSEMBLED sections, so it
+  // needs no new column read and the module stays Supabase-free (D-P5-3). `stale` is untouched.
+  describe('needsGeneration — no AI section is usable for the live inputs', () => {
+    const S2_AI = {
+      summary: 'Overall health is steady.',
+      what_this_is_not: 'This is not a verdict on anyone.',
+      context_bullets: [],
+    }
+
+    it('is true when the run has never been generated (H7-A) — and stale stays false', async () => {
+      const r = await resolveReportSections({
+        ...baseArgs(),
+        readPersisted: async (): Promise<PersistedReportLookup> => ({ matched: null, anyExists: false }),
+      })
+      expect(r.needsGeneration).toBe(true)
+      expect(r.stale).toBe(false)
+    })
+
+    it('is true when the live-hash row is 100 % fallback (H7-B) — and stale stays false', async () => {
+      const r = await resolveReportSections({
+        ...baseArgs(),
+        readPersisted: async (hash): Promise<PersistedReportLookup> => ({
+          matched: { inputs_hash: hash, sections: {}, facts: {} },
+          anyExists: true,
+        }),
+      })
+      expect(r.needsGeneration).toBe(true)
+      expect(r.stale).toBe(false)
+      expect(r.sections.every((s) => s.source === 'fallback')).toBe(true)
+    })
+
+    it('is false as soon as one AI section on the live-hash row revalidates', async () => {
+      const r = await resolveReportSections({
+        ...baseArgs(),
+        readPersisted: async (hash): Promise<PersistedReportLookup> => ({
+          matched: { inputs_hash: hash, sections: { s2: S2_AI }, facts: {} },
+          anyExists: true,
+        }),
+      })
+      // Non-vacuous: proves the faked section actually reached the assembled output as 'ai' —
+      // if it had been rejected, needsGeneration would be true for the wrong reason.
+      expect(r.sections.find((s) => s.id === 's2')?.source).toBe('ai')
+      expect(r.needsGeneration).toBe(false)
+      expect(r.stale).toBe(false)
+    })
+
+    it('is true when the only row is at another hash — but `stale` is the signal the page acts on there', async () => {
+      const r = await resolveReportSections({
+        ...baseArgs(),
+        readPersisted: async (): Promise<PersistedReportLookup> => ({
+          matched: null,
+          anyExists: true,
+        }),
+      })
+      expect(r.stale).toBe(true)
+      expect(r.needsGeneration).toBe(true)
+    })
+  })
 })
 
 describe('the seam has exactly two call sites', () => {

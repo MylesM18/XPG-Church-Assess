@@ -284,9 +284,13 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
 
 /**
  * Rebuilds and re-persists the AI report for a church whose persisted row no longer matches its
- * live inputs (D-P5-4). This is the recovery path for exactly one failure: an admin edited the
+ * live inputs (D-P5-4). Originally the recovery path for exactly one failure: an admin edited the
  * church profile after generation, the inputs hash moved, and every AI section silently reverted
- * to fallback with no way back. It is NOT a general "regenerate" button.
+ * to fallback with no way back. Since H7 (2026-08-18) the diagnosis page also offers it as
+ * "Generate report" when NO AI section is usable for the live inputs — no `reports` row at all,
+ * or a live-hash row that is 100 % fallback — because a completed run cannot re-enter first
+ * generation and would otherwise never call the model, whatever PROSE_MODE is later set to.
+ * It is still not a general "regenerate" button: both triggers are "no usable AI prose".
  *
  * Reads through get_completed_run_responses — the STATUS-AGNOSTIC RPC. Generation's
  * get_run_responses filters status='in_progress' and returns nothing once the run is complete,
