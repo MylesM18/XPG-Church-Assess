@@ -76,12 +76,14 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
   // self-limiting, because get_run_responses resolves its own run the same way and returns nothing,
   // which blocks every area at the gate and produces a friendly error before any save.
   //
-  // SINGLE-RUN INVARIANT: this lookup is status-agnostic while get_run_responses resolves
-  // `status = 'in_progress' order by created_at asc limit 1`. They agree only because v1 seeds
-  // exactly one run per church (create_church; multi-run deferred by ADR 0001). Under multi-run
-  // they could resolve DIFFERENT rows and a run's responses would be scored against another run's
-  // edition — and, unlike the prose-cache mismatch this pre-dated, that edition is now baked into
-  // a persisted diagnosis. Any multi-run work must thread one resolved run id through both.
+  // SINGLE-RUN INVARIANT: this lookup and get_run_responses both now resolve through
+  // current_run() — status-agnostic, `order by created_at asc limit 1` — since migration
+  // 20260818000100 (ADR 0003), so they agree by construction. The multi-run warning still
+  // applies: v1 seeds exactly one run per church (create_church; multi-run deferred by ADR
+  // 0001), and under multi-run they could still resolve DIFFERENT rows if that resolution
+  // logic ever diverges between the two call sites — and, unlike the prose-cache mismatch
+  // this pre-dated, that edition is now baked into a persisted diagnosis. Any multi-run work
+  // must thread one resolved run id through both.
   const { data: run, error: runError } = await supabase
     .from('assessment_runs')
     .select('id, methodology_version')
@@ -147,12 +149,12 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
       // coincide while v1 keeps one run per church.) No status filter, so hoisting the read to
       // before save_diagnosis flips the run to 'complete' selects the same row either way.
       //
-      // An unresolvable run degrades to a cache MISS (generate), never a skip: generateDiagnosis
-      // is one-shot per church — save_diagnosis completes the run, so get_run_responses' own
-      // in_progress filter then returns nothing, normalize() sees zero responses, diagnosisGate
-      // blocks every area, and a second attempt never reaches this block. Forfeiting here on a
-      // transient read failure would reproduce the very harm this scoping fixes. save_prose
-      // resolves its own row from church_id + response_hash, so it needs no run id.
+      // An unresolvable run degrades to a cache MISS (generate), never a skip. save_diagnosis
+      // no longer completes the run and get_run_responses is status-agnostic (ADR 0003), so
+      // Generate is repeatable and this rule stands on its own terms: forfeiting on a transient
+      // read failure would silently pin a fallback report, where a MISS just costs one
+      // regeneration. save_prose resolves its own row from church_id + response_hash, so it
+      // needs no run id.
       let alreadyAi = false
       if (run) {
         const { data: rows } = await supabase
@@ -292,9 +294,9 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
  * generation and would otherwise never call the model, whatever PROSE_MODE is later set to.
  * It is still not a general "regenerate" button: both triggers are "no usable AI prose".
  *
- * Reads through get_completed_run_responses — the STATUS-AGNOSTIC RPC. Generation's
- * get_run_responses filters status='in_progress' and returns nothing once the run is complete,
- * so using it here would persist a report built from zero responses.
+ * Reads through get_completed_run_responses, kept for the report path per spec. Since ADR 0003
+ * (migration 20260818000100) get_run_responses no longer filters status either — both RPCs are
+ * status-agnostic via current_run(), so either one would now return the run's rows.
  *
  * save_report has no status filter, resolves the run via current_run(), and is
  * require_church_admin-gated. Since 20260814000100_rpc_save_report_upsert.sql it ends

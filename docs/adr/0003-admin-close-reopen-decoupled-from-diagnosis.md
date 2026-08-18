@@ -57,6 +57,11 @@ refused their writes. Not an RLS problem (`runs_select` covers members); the com
 - **Negative / accepted:** an admin can Reopen after a report exists — the report's `stale`
   flag flips on the first changed answer and Regenerate is offered (no new machinery); reminder
   emails may resume on Reopen (the confirm says so).
+- **Negative / accepted:** because Generate no longer flips status, `completion_reminder_recipients`
+  (which gates on `status = 'in_progress'`) keeps sending daily completion reminders after a
+  diagnosis is generated, until the admin Closes or the member's `assessment_deadline_at` passes —
+  previously reminders stopped at Generate. The predicate itself is unchanged and still correct
+  under the new model ("not closed").
 - **Still out of scope:** multiple runs / historical re-assessment (spec §14), auto-close on
   deadline, changing the Generate coverage gate, unifying the two `get_*_run_responses` RPCs,
   any change to sharing or `/r/[shareToken]`.

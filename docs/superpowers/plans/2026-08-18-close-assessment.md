@@ -2199,7 +2199,7 @@ Expected: working tree shows ONLY the four pre-existing untracked entries (`.cla
 
 Owner-only checklist (paste into the PR description):
 
-1. `supabase db push` — applies `20260818000100_close_reopen_run.sql`. If a `42P13` (return type) conflict is reported for one of the three re-created functions, replace that one `create or replace function` with `drop function if exists public.<name>(<args>); create function …` in the same file and re-push.
+1. `supabase db push` — applies `20260818000100_close_reopen_run.sql` **BEFORE this PR is merged / deployed**, not after: `lib/runs/current-run.ts` now selects `closed_at, closed_by`, and it throws on error, so code-before-migration 500s the member answer/complete/done pages until the migration lands, while migration-before-code is safe. If a `42P13` (return type) conflict is reported for one of the three re-created functions, replace that one `create or replace function` with `drop function if exists public.<name>(<args>); create function …` in the same file and re-push.
 2. `npm run test:db` — pgTAP `11_`, `12_`, `22_`, `24_`, `26_`, `27_` (all authored, none executed by the agent). Report any failing description verbatim.
 3. Vercel: no new env vars.
 4. Post-deploy on Test Church: **Reopen** → the invitee can answer → **Close** (confirm shows N of M) → **Regenerate** → the member's answer page shows *"This assessment was closed by your church admin on <date>, so your answers are read-only."*

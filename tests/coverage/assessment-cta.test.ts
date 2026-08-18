@@ -23,7 +23,7 @@ describe('assessmentCta()', () => {
     expect(assessmentCta(result(['not_started', 'not_started', 'not_started']), cats))
       .toEqual({ state: 'not_started', label: 'Start Assessment', targetCategoryId: 'a' })
   })
-  it('all covered → Review answers at the first category (completion is terminal; review is read-only)', () => {
+  it('all covered → Review answers at the first category (review is read-only; ADR 0003: completion is admin Close, reversible)', () => {
     expect(assessmentCta(result(['covered', 'covered', 'covered']), cats))
       .toEqual({ state: 'complete', label: 'Review answers', targetCategoryId: 'a' })
   })
