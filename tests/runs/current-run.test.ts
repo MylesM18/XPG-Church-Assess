@@ -60,22 +60,31 @@ describe('currentRun()', () => {
     ).rejects.toThrow('boom')
   })
 
-  // Task 29 (owner ruling, 2026-08-08): the answer page needs the run's methodology_version to
-  // compute its effective item list, and currentRun is the one canonical "church's single run"
-  // lookup — extending it (rather than a second bespoke query) is what lets the answer page reuse
-  // a single round trip for both `status` (writability) and `methodology_version` (effective items).
-  it('selects methodology_version alongside id and status', async () => {
-    // Mutation guard: catches the select column list left at the old 'id, status' shape. A silently
-    // missing methodology_version column would make run.methodology_version read `undefined` for
-    // EVERY run (not just unstamped ones) — indistinguishable at call sites from an explicit null via
-    // `?? null`, but for a CURRENT-edition run that wrongly forces the pre-0.3.0 (item-filtered)
-    // branch, hiding the outreach items from members it should be offering them to.
+  // ADR 0003: the answer page reads closed_at for the "closed by your church admin on <date>"
+  // copy, and currentRun is the ONE canonical run lookup — extend it rather than add a second query.
+  it('selects closed_at and closed_by alongside id, status and methodology_version', async () => {
+    // Mutation guard: catches the select column list left at the old shape. A silently missing
+    // closed_at column would make run.closed_at read `undefined` for EVERY run — indistinguishable at
+    // the answer page from an old-path run, so the closed-date copy would never render.
     const selectCols: string[] = []
     await currentRun(
-      fakeClient({ data: { id: 'r1', status: 'in_progress', methodology_version: '0.2.0' }, error: null }, [], selectCols),
+      fakeClient({ data: { id: 'r1', status: 'in_progress', methodology_version: '0.2.0', closed_at: null, closed_by: null }, error: null }, [], selectCols),
       'c1',
     )
-    expect(selectCols).toEqual(['id, status, methodology_version'])
+    expect(selectCols).toEqual(['id, status, methodology_version, closed_at, closed_by'])
+  })
+  it('passes closed_at / closed_by through untouched (null for an open or old-path run)', async () => {
+    const closed = await currentRun(
+      fakeClient({ data: { id: 'r1', status: 'complete', methodology_version: '0.3.0', closed_at: '2026-08-18T14:03:00.000Z', closed_by: 'u1' }, error: null }),
+      'c1',
+    )
+    expect(closed?.closed_at).toBe('2026-08-18T14:03:00.000Z')
+    expect(closed?.closed_by).toBe('u1')
+    const open = await currentRun(
+      fakeClient({ data: { id: 'r1', status: 'in_progress', methodology_version: '0.3.0', closed_at: null, closed_by: null }, error: null }),
+      'c1',
+    )
+    expect(open?.closed_at).toBeNull()
   })
   it('passes methodology_version through untouched, including null for an unstamped run', async () => {
     // Mutation guard: catches a well-intentioned `?? OUTREACH_VERSION` (or any non-null) default
