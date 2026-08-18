@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { loadMethodology } from '../../lib/methodology/load';
 import type { Diagnosis, DiagnosisCategory, Response } from '../../lib/engine/types';
-import { buildFacts, type BuildFactsArgs, type ChurchFacts, type FactsPack } from '../../lib/report/facts';
-import { gateSection } from '../../lib/ai/section-gates';
-import { S6Schema } from '../../lib/ai/sections';
+import { buildFacts, type BuildFactsArgs, type CategoryFact, type ChurchFacts, type FactsPack } from '../../lib/report/facts';
+import { gateSection, sliceCategoryIds } from '../../lib/ai/section-gates';
+import { AI_SECTION_IDS, SECTION_REGISTRY, S6Schema } from '../../lib/ai/sections';
 import { CAPACITY_FACTS } from '../fixtures/facts';
 
 // No importable constraintFacts/shared FactsPack fixture exists anywhere in tests/ or lib/
@@ -643,5 +643,59 @@ describe('gate 2 — s12 roadmap horizons (spec §4.4)', () => {
     expect(gateSection('s2', withThirty, ctx)).toMatchObject({ family: 'numeric containment', detail: '30' });
     const withNinety = { ...goodS2, summary: `${goodS2.summary} Ninety is written 90 here.` };
     expect(gateSection('s2', withNinety, ctx)).toMatchObject({ family: 'numeric containment', detail: '90' });
+  });
+});
+
+// D3. `sliceCategoryIds` had ZERO tests: `return []` unconditionally left the whole suite green,
+// and it is the sole producer of s5/s6's category-coverage corrective. It reads the registry
+// slice through an optional cast (`as { categories?: CategoryFact[] }`) with `?? []`, so a
+// registry reshape degrades it SILENTLY to an empty list rather than failing loudly — and the
+// one-call-per-category change reshapes exactly that slice. These tests are the tripwire.
+describe('sliceCategoryIds (D3)', () => {
+  // Non-vacuity FIRST, and asserted on the fixture rather than on the function: without this,
+  // every `toEqual` below is satisfiable by `return []` paired with empty expectations.
+  it('has a non-empty, disjoint, exhaustive pair of slices to assert against', () => {
+    expect(s5Ids.length).toBe(3);
+    expect(s6Ids.length).toBe(5);
+    expect(s5Ids.filter((id) => s6Ids.includes(id))).toEqual([]);
+    expect([...s5Ids, ...s6Ids].sort()).toEqual([...CAT_IDS].sort());
+  });
+
+  it('returns s5 own slice ids, in slice order', () => {
+    expect(sliceCategoryIds('s5', constraintFacts)).toEqual(s5Ids);
+  });
+
+  it('returns s6 own slice ids, in slice order', () => {
+    expect(sliceCategoryIds('s6', constraintFacts)).toEqual(s6Ids);
+  });
+
+  // Cross-slice guard: the two must not be interchangeable. A body that returned the other
+  // section's ids, or the whole category list, satisfies "non-empty" and "known ids" but not
+  // this — and shipping it would send s5 a corrective naming s6's categories.
+  it('does not hand a section the other section slice', () => {
+    expect(sliceCategoryIds('s5', constraintFacts)).not.toEqual(s6Ids);
+    expect(sliceCategoryIds('s6', constraintFacts)).not.toEqual(s5Ids);
+    expect(sliceCategoryIds('s5', constraintFacts)).not.toEqual(constraintFacts.categories.map((c) => c.id));
+  });
+
+  it('returns an empty list for every section with no category array', () => {
+    for (const id of AI_SECTION_IDS) {
+      if (id === 's5' || id === 's6') continue;
+      expect(sliceCategoryIds(id, constraintFacts), id).toEqual([]);
+    }
+  });
+
+  // THE registry-coupling assertion. Occurrence-for-occurrence equality against the registry's
+  // own slice, computed here independently of the function under test. If a registry reshape
+  // moves or renames `categories`, the optional cast's `?? []` returns [] while this expectation
+  // still reads the real ids — so the silent degradation becomes a red test instead of a
+  // corrective that names no categories at all.
+  it('reads the ids off the same registry slice the coverage gate uses', () => {
+    for (const id of ['s5', 's6'] as const) {
+      const registrySlice = SECTION_REGISTRY[id].slice(constraintFacts) as { categories: CategoryFact[] };
+      const fromRegistry = registrySlice.categories.map((c) => c.id);
+      expect(fromRegistry.length, id).toBeGreaterThan(0);
+      expect(sliceCategoryIds(id, constraintFacts), id).toEqual(fromRegistry);
+    }
   });
 });

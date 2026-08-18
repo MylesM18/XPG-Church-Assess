@@ -274,3 +274,73 @@ describe('composeSection', () => {
     expect(mockParse.mock.calls[0]![1]).toEqual({ timeout: 45_000, maxRetries: 1 });
   });
 });
+
+// D1. Nothing in the suite proved the corrective ever reached the model: deleting the
+// `...(corrective ? [...] : [])` spread at sections.ts:183 left EVERY test green. All ten other
+// `composeSection(` calls in this file are 3-arity, and tests/report/compose.test.ts mocks
+// composeSection wholesale, so it observes only the ARGUMENT that was passed, never the payload
+// that went over the wire. This block is the branch's headline claim.
+//
+// Asserted by POSITION, not presence. `expect(payload).toContain(SENTINEL)` also passes when the
+// correction is concatenated onto the style-spine system message, or appended after the facts —
+// both change what the model is being asked, and neither is what spec §4.3 specifies. The
+// contract is exactly three messages, in order: spine, correction, facts.
+describe('composeSection — the corrective on the wire (spec §4.3, D1)', () => {
+  const SENTINEL = 'CORRECTIVE SENTINEL';
+  const inputOf = () =>
+    mockParse.mock.calls[0]![0].input as Array<{ role: string; content: string }>;
+
+  beforeEach(() => {
+    mockParse.mockReset();
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+  });
+
+  it('inserts the corrective as its own system message between the spine and the facts', async () => {
+    await composeSection('s2', capacityFacts, methodology, SENTINEL);
+    const input = inputOf();
+    expect(input).toHaveLength(3);
+    expect(input[1]!.role).toBe('system');
+    expect(input[1]!.content).toBe(SENTINEL);
+    // The bookends, so "three messages, one of which is the sentinel" cannot be satisfied by a
+    // duplicated spine, nor by the correction displacing the facts the gate constrains against.
+    expect(input[0]!.role).toBe('system');
+    expect(input[0]!.content).toContain(methodology.report.style_spine);
+    expect(input[2]!.role).toBe('user');
+    expect(input[2]!.content).toContain(`"capacity": ${capacityFacts.overall.capacity}`);
+  });
+
+  it('sends two messages, and no corrective, when none is given', async () => {
+    await composeSection('s2', capacityFacts, methodology);
+    const input = inputOf();
+    expect(input).toHaveLength(2);
+    expect(input[0]!.role).toBe('system');
+    expect(input[1]!.role).toBe('user');
+    expect(JSON.stringify(input)).not.toContain(SENTINEL);
+  });
+
+  // correctiveInstruction returns null for anonymity, field parity and pattern claim, and
+  // compose.ts passes null straight through when the call itself failed. A blind re-roll must
+  // produce the SAME two-message payload as a first attempt — never a third message holding
+  // "null" or an empty string, which would read to the model as a blank instruction.
+  it('sends two messages for a null or empty corrective — the blind re-roll', async () => {
+    for (const corrective of [null, ''] as const) {
+      mockParse.mockReset();
+      mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+      await composeSection('s2', capacityFacts, methodology, corrective);
+      const input = inputOf();
+      expect(input, JSON.stringify(corrective)).toHaveLength(2);
+      expect(input[1]!.role, JSON.stringify(corrective)).toBe('user');
+    }
+  });
+
+  it('carries the corrective for every AI section, not just the one measured', async () => {
+    for (const id of AI_SECTION_IDS) {
+      mockParse.mockReset();
+      mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+      await composeSection(id, capacityFacts, methodology, SENTINEL);
+      const input = inputOf();
+      expect(input, id).toHaveLength(3);
+      expect(input[1]!.content, id).toBe(SENTINEL);
+    }
+  });
+});
