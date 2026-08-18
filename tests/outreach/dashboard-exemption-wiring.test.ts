@@ -37,7 +37,7 @@ describe('dashboard exemption wiring', () => {
 
   it('fetches the run version exactly once', () => {
     expect(src.split('methodology_version').length - 1).toBeGreaterThan(0);
-    expect(src.split("select('id, methodology_version')").length - 1).toBe(1);
+    expect(src.split("select('id, methodology_version, status, closed_at')").length - 1).toBe(1);
   });
 
   it('per-card totals come from the exempt-aware list, not a hardcoded length', () => {
