@@ -415,3 +415,99 @@ after the build:
 
 Exactly the two intended segments; `/r/[shareToken]` correctly absent. Gates: `tsc --noEmit`
 clean, **1547 tests / 208 files pass**, build compiled in 4.6 s with no warning.
+
+## Final (post-2a) — Task 6, three consecutive runs (2026-08-17)
+
+Three consecutive Appendix-A probe runs at `a43702d`, same synthetic church, on the new
+`{ timeout: 45_000, maxRetries: 1 }`. Every `[report]` line verbatim, in emission order.
+
+**Run 1 — AI 5/7 · wall 41,504 ms · 10 calls, 10/10 parsed · slowest 28,808 ms**
+
+```
+[report] section s2: length ceiling (1536/1400)
+[report] section s9: numeric containment (60)
+[report] section s6: category coverage (missing: vol, gov, disc, sys)
+[report] section s9: length ceiling (3040/2000)
+[report] section s6: length ceiling (8885/6000)
+[report] section_sources: ai 5/12 · fallback: s1, s3, s6, s8, s9, s10, s11
+```
+Sources: `s2 ai · s4 ai · s5 ai · s6 fallback · s7 ai · s9 fallback · s12 ai`
+Latency ms: `s7=6809 s2=7132 s4=7165 s5=8998 s12=9743 s9=9903 s6=12689 | s2=11194 s9=12333 s6=28808`
+
+**Run 2 — AI 5/7 · wall 50,042 ms · 11 calls, 11/11 parsed · slowest 26,644 ms**
+
+```
+[report] section s2: length ceiling (1562/1400)
+[report] section s12: required mention (overall_percent)
+[report] section s5: length ceiling (2348/2200)
+[report] section s6: category coverage (missing: vol, gov)
+[report] section s2: length ceiling (1550/1400)
+[report] section s6: length ceiling (6195/6000)
+[report] section_sources: ai 5/12 · fallback: s1, s2, s3, s6, s8, s10, s11
+```
+Sources: `s2 fallback · s4 ai · s5 ai · s6 fallback · s7 ai · s9 ai · s12 ai`
+Latency ms: `s7=4036 s4=4062 s2=6123 s12=6129 s9=6138 s5=6851 s6=26644 | s12=5520 s2=7861 s5=9361 s6=23390`
+
+**Run 3 — AI 4/7 · wall 74,157 ms · 11 calls, 10/11 parsed · slowest 50,281 ms**
+
+```
+[report] section s12: required mention (overall_percent)
+[report] section s2: length ceiling (1522/1400)
+[report] section s9: length ceiling (2235/2000)
+[report] section s6: category coverage (duplicate: conn)
+[report] section s9: request failed: Request timed out.
+[report] section s12: required mention (overall_percent)
+[report] section s6: length ceiling (6984/6000)
+[report] section_sources: ai 4/12 · fallback: s1, s3, s6, s8, s9, s10, s11, s12
+```
+Sources: `s2 ai · s4 ai · s5 ai · s6 fallback · s7 ai · s9 fallback · s12 fallback`
+Latency ms: `s4=6812 s7=6830 s12=6839 s2=7221 s9=8739 s5=10452 s6=23869 | s9=21030! s2=25129 s12=50274 s6=50281`
+
+### Judgement against the §2 metric: NOT MET
+
+The metric is **>= 6 of 7 across 3 consecutive runs**. Measured: **5, 5, 4**. 2a is **not** done.
+The metric did move a long way — baseline was 0/7 in all three runs — but it did not arrive.
+
+Per-section, across the three runs:
+
+| section | ai | fallback | verdict |
+|---|---|---|---|
+| s4, s5, s7 | 3 | 0 | solid |
+| s2 | 2 | 1 | length ceiling, always 1500-1570 against 1400 — chronically ~10% over |
+| s12 | 2 | 1 | `required mention (overall_percent)` twice in run 3, incl. the re-attempt |
+| s9 | 1 | 2 | numeric containment / length / one transport failure |
+| **s6** | **0** | **3** | **fails every run, every attempt** |
+
+### The approach-C trigger has FIRED
+
+Spec §3: "if s6 lands in fewer than 2 of the 3 runs, do approach C before declaring 2a done."
+**s6 landed in 0 of 3.** It failed twice per run, on both the first attempt and the re-attempt, in
+all three runs — and the failure moves around (`missing: vol, gov, disc, sys`, then
+`missing: vol, gov`, then `duplicate: conn`, with a length overrun on the re-attempt each time).
+That is the signature of one call being asked for too much at once, which is exactly what approach
+C addresses: 5 categories x 6 beats = 30 required strings in a single call. **Stopping here.
+Approach C is a registry-shape change and is to be planned separately, not improvised.**
+
+### Two findings that need recording before anyone sizes a timeout again
+
+1. **`timeout` bounds time-to-headers, not the whole response — the Step 3 arithmetic is
+   incomplete.** `client.mjs:530-555`: `clearTimeout(timeout)` sits in the `finally` of
+   `await this.fetch(...)`, and `fetch()` resolves when response **headers** arrive, before the
+   body is read. Body-download time is therefore unbounded by our `timeout`. This is visible in
+   run 3: `s12=50274` and `s6=50281` both exceeded the 45,000 ms timeout without aborting, and
+   finished 7 ms apart. So the worst case is **not** `(1 + maxRetries) x timeout + backoff`; that
+   expression bounds only the header wait. `maxDuration = 300` is the real backstop, and run 3's
+   74 s wall is the number to watch against it. Nothing here argues the change was wrong — 45 s
+   is strictly better than 30 s for TTFB and the retry is still insurance — but the stated bound
+   is weaker than the earlier entry in this file implies.
+2. **Unresolved: s9 aborted at 21,030 ms with "Request timed out." against a 45,000 ms timeout.**
+   The first transport failure in 65 live calls across baseline and all post-2a runs (every other
+   call parsed). 21 s is well under the 45 s `setTimeout(abort, ms)`, so that timer cannot be what
+   fired, and no external `signal` is passed. Undici's default `headersTimeout`/`bodyTimeout` are
+   300 s, so they are not it either. **No mechanism is claimed here** — it is recorded as an open
+   anomaly, seen once, to be reproduced with per-attempt instrumentation before anyone acts on it.
+
+### `report.yaml`
+
+`git diff master -- methodology/report.yaml` is empty — no `length_ceiling` moved, so
+`version` stays `"0.3.0"`. No bump.
