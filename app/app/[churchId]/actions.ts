@@ -35,6 +35,10 @@ interface RunResponseRow {
 // enough to cover two admins / two tabs auto-firing on the same view, short enough that a
 // deliberate later regenerate at the same hash still goes through.
 const REGENERATE_DEDUP_WINDOW_MS = 10 * 60_000
+// How far AHEAD of this function's clock a `reports.generated_at` (Postgres now()) may be and still
+// count as "just written". Ordinary NTP skew is tens of ms; a minute is generous without letting a
+// genuinely mis-set clock pin regenerate shut.
+const REGENERATE_DEDUP_SKEW_TOLERANCE_MS = 60_000
 
 export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
@@ -314,18 +318,19 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
  * leaves the latch set, so the admin's next resort is the button, not a loop). Auto or manual,
  * the same admin gate below applies; an invitee viewing the page renders neither.
  *
- * That latch is per BROWSER, so two admins — or one admin in two tabs — viewing at once each pass
+ * That latch is per TAB, so two admins — or one admin in two tabs — viewing at once each pass
  * their own latch and each invoke this action for the same inputs (Greptile P1, PR #79). The
  * server therefore closes the post-write window itself: after the inputs hash is computed and
- * BEFORE any model call, it re-reads the `reports` row scoped to (run_id, inputs_hash) and, when
- * that row is USABLE (isUsableCachedReport — at least one AI section) and was written within
- * REGENERATE_DEDUP_WINDOW_MS, logs a skip and returns without spending. No migration, no lock:
- * truly simultaneous in-flight calls can still both run — accepted; save_report's UPSERT makes
- * that safe and the only cost is duplicate spend. Nothing is revalidated on a skip (nothing
- * changed); the auto-generate component's router.refresh() re-renders the fresh row anyway. The
- * manual forms are unaffected in practice: the page only renders them when NO usable row exists at
- * the live hash, so a click there never meets a fresh usable row unless another admin just wrote
- * one — which is exactly the case to skip.
+ * BEFORE any model call, it re-reads the `reports` row scoped to (run_id, inputs_hash) and skips
+ * (logs, revalidates the page, returns without spending) when that row was written within
+ * REGENERATE_DEDUP_WINDOW_MS and is USABLE (isUsableCachedReport — at least one AI section), or
+ * — for an AUTO-triggered call, `auto=1` — was written within the window at all, usable or not
+ * (a fresh all-fallback row means the model just failed for these inputs; auto-runs back off, the
+ * button is the retry). See the inline block for the full rule set. No migration, no lock: truly
+ * simultaneous in-flight calls can still both run — accepted; save_report's UPSERT makes that safe
+ * and the only cost is duplicate spend. The skip DOES revalidate the page: a manual click from a
+ * tab that rendered before another tab's write must see the fresh row, and Next does not
+ * re-render a form action that neither revalidates nor redirects.
  *
  * Gate: `proseEnabled()` (lib/ai/prose-mode.ts) — OPENAI_API_KEY present ⇒ on, PROSE_MODE=ai
  * forces on, PROSE_MODE=fallback forces off. The page's affordances read the same function.
@@ -422,32 +427,54 @@ export async function regenerateReport(formData: FormData): Promise<void> {
     // No cache check on CONTENT staleness. Regenerating is the point; save_report's on-conflict
     // UPSERT (migration 20260814000100) makes it both safe and effective — an unchanged inputs
     // hash overwrites the stored row rather than being discarded. The ONLY guard is the short
-    // recency window below: the auto-generate component's sessionStorage latch is per browser, so
-    // two admins / two tabs viewing at once each pass their own latch and would each spend the
-    // model on identical inputs. Same scoped read as generation's cache check (run_id AND
-    // inputs_hash — unscoped, a sibling church's row could suppress this one; unique
-    // (run_id, inputs_hash) ⇒ .maybeSingle() is safe). A row that is 100 % fallback is NOT usable
-    // and never suppresses regenerate — that is the H7 point. No migration and no lock: truly
-    // simultaneous in-flight calls can still both run (accepted — the UPSERT keeps that safe, the
-    // only cost is duplicate spend); this closes the post-write window. Manual Generate /
-    // Regenerate is unaffected in practice: the page only renders those forms when no usable row
-    // exists at the live hash. Skip ⇒ no revalidatePath (nothing changed); the auto-generate
-    // component's router.refresh() re-renders the fresh row anyway.
-    const { data: cached } = await supabase
+    // recency window below: the auto-generate component's sessionStorage latch is per TAB (and the
+    // dashboard opens this page in a new tab), so two admins / two tabs viewing at once each pass
+    // their own latch and would each spend the model on identical inputs. Same scoped read as
+    // generation's cache check (run_id AND inputs_hash — unscoped, a sibling church's row could
+    // suppress this one; unique (run_id, inputs_hash) ⇒ .maybeSingle() is safe).
+    //
+    // Two rules, by caller:
+    //   - MANUAL (the button): only a USABLE fresh row skips. A row that is 100 % fallback never
+    //     suppresses a manual regenerate — that is the H7 point, the button is the retry.
+    //   - AUTO (`auto=1`, sent only by the diagnosis page's mount effect): ANY fresh row skips,
+    //     usable or not. A fresh all-fallback row means the model just failed for these inputs;
+    //     re-running it from every new tab / every dashboard click is unbounded spend with no
+    //     signal, so auto-runs back off for the window and the button stays as the retry.
+    // No migration and no lock: truly simultaneous in-flight calls can still both run (accepted —
+    // the UPSERT keeps that safe, the only cost is duplicate spend); this closes the post-write
+    // window. A skip STILL revalidates the page: the caller may have rendered before the other
+    // tab's write, and Next does not re-render a form action that neither revalidates nor
+    // redirects — without it a manual click in the window shows nothing at all.
+    //
+    // generated_at is Postgres now() and Date.now() is this function's clock: a row stamped a few
+    // seconds AHEAD is "just written", not "not yet written", so the window tolerates a small
+    // negative age; a far-future stamp is still ignored (fail closed against a bad clock — never
+    // suppress regenerate until the wall clock catches up).
+    const { data: cached, error: cachedErr } = await supabase
       .from('reports')
       .select('section_sources, generated_at')
       .eq('run_id', run.id)
       .eq('inputs_hash', inputsHash)
       .maybeSingle()
-    if (cached && isUsableCachedReport(cached.section_sources)) {
+    if (cachedErr) {
+      // Fails OPEN — one duplicate spend beats a silently pinned report — but say so. Reason only.
+      console.warn('[report] reports read failed; regenerating anyway:', cachedErr.message)
+    }
+    const auto = formData.get('auto') === '1'
+    if (cached && (auto || isUsableCachedReport(cached.section_sources))) {
       const writtenAt = cached.generated_at ? Date.parse(cached.generated_at) : NaN
       const ageMs = Date.now() - writtenAt
-      if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < REGENERATE_DEDUP_WINDOW_MS) {
+      if (
+        Number.isFinite(ageMs) &&
+        ageMs > -REGENERATE_DEDUP_SKEW_TOLERANCE_MS &&
+        ageMs < REGENERATE_DEDUP_WINDOW_MS
+      ) {
         // Seconds only — never the row, the sections, or any church / respondent data.
         console.warn(
-          '[report] regenerate skipped: a usable report for these inputs was written ' +
-            `${Math.round(ageMs / 1000)}s ago`,
+          '[report] regenerate skipped: a report for these inputs was written ' +
+            `${Math.max(0, Math.round(ageMs / 1000))}s ago${auto ? ' (auto-run backoff)' : ''}`,
         )
+        revalidatePath(`/app/${churchId}/diagnosis`)
         return
       }
     }

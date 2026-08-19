@@ -249,6 +249,32 @@ describe('proseEnabled() gate: AI off vs AI on is a tested invariant (R5)', () =
     }
   });
 
+  it('AI on by KEY ALONE (PROSE_MODE unset, OPENAI_API_KEY set): the report block runs — clusterThemes, composeReport, save_report', async () => {
+    // The production configuration PR #79 exists for: a Vercel Production with the key set and no
+    // PROSE_MODE. Before that PR this exact case made no model call and logged nothing; the rule
+    // "key-present ⇒ on" was pinned only at unit level (tests/ai/prose-mode.test.ts) — this is the
+    // end-to-end proof through generateDiagnosis. Regression pin (post-merge review, finding 11).
+    const hadMode = 'PROSE_MODE' in process.env;
+    const prevMode = process.env.PROSE_MODE;
+    delete process.env.PROSE_MODE;
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test-not-a-real-key');
+    expect(process.env.PROSE_MODE).toBeUndefined();
+    mockClusterThemes.mockResolvedValue([]);
+    mockComposeReport.mockResolvedValue({ sections: {}, section_sources: {} });
+    try {
+      const { rpcCalls } = setupSupabase({ runRow: RUN_A_ROW });
+
+      await generateDiagnosis(CHURCH_A);
+
+      expect(mockClusterThemes).toHaveBeenCalledTimes(1);
+      expect(mockComposeReport).toHaveBeenCalledTimes(1);
+      expect(rpcCalls.filter((c) => c.name === 'save_report')).toHaveLength(1);
+    } finally {
+      if (hadMode) process.env.PROSE_MODE = prevMode;
+      else delete process.env.PROSE_MODE;
+    }
+  });
+
   it('AI on: the call-site gate does not suppress a section-level [report] log line', async () => {
     vi.stubEnv('PROSE_MODE', 'ai');
     mockClusterThemes.mockResolvedValue([]);
