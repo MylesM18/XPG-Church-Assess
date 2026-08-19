@@ -58,4 +58,29 @@ describe('composeSection warns once when the API key is absent', () => {
 
     if (prev !== undefined) process.env.OPENAI_API_KEY = prev;
   });
+
+  it('treats a whitespace-only key as absent — the openai SDK trims it to nothing, so the constructor throws', async () => {
+    // fix/auto-generate-hardening (finding 9): a blanked-out dashboard value used to pass the
+    // truthiness check here, so every section failed with a generic "Missing credentials" and this
+    // diagnostic — the one line that names the cause — never fired.
+    vi.resetModules();
+    const prev = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = '   ';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { composeSection } = await import('@/lib/ai/sections');
+    const { loadMethodology } = await import('@/lib/methodology/load');
+    const { CAPACITY_FACTS } = await import('../fixtures/facts');
+
+    await composeSection('s2', CAPACITY_FACTS, loadMethodology());
+
+    const keyWarnings = warn.mock.calls
+      .map((c) => String(c[0]))
+      .filter((m) => m.includes('OPENAI_API_KEY absent'));
+    expect(keyWarnings).toHaveLength(1);
+
+    warn.mockRestore();
+    if (prev !== undefined) process.env.OPENAI_API_KEY = prev;
+    else delete process.env.OPENAI_API_KEY;
+  });
 });

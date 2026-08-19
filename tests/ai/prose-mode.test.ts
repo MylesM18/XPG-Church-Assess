@@ -85,17 +85,53 @@ describe('proseEnabled()', () => {
     expect(proseEnabled()).toBe(true)
   })
 
-  it('unrecognised PROSE_MODE + key ⇒ true (treated like unset)', async () => {
+  it('unrecognised PROSE_MODE + key ⇒ true (treated like unset) AND exactly one "not recognised" warning that never echoes the value', async () => {
+    // fix/auto-generate-hardening (finding 9): an operator who types `off` / `false` / `0` to
+    // disable spend used to get AI ON with no log at all. Still key-decides (a typo must not
+    // silently switch the product off either), but it now says so — without echoing the value,
+    // in case what was pasted into PROSE_MODE was something secret.
     const proseEnabled = await load({ PROSE_MODE: 'banana', OPENAI_API_KEY: 'test-key' })
     expect(proseEnabled()).toBe(true)
+    expect(proseModeWarnings()).toEqual([
+      '[prose-mode] PROSE_MODE is set to an unrecognised value (expected "ai" or "fallback"); treating it as unset — the key decides',
+    ])
+    for (const call of warn.mock.calls) expect(call.map(String).join(' ')).not.toContain('banana')
+  })
+
+  it('unrecognised PROSE_MODE, no key ⇒ false, with BOTH the unrecognised and the key-absent warnings (per-message latch)', async () => {
+    const proseEnabled = await load({ PROSE_MODE: 'banana' })
+    expect(proseEnabled()).toBe(false)
+    expect(proseModeWarnings()).toEqual([
+      '[prose-mode] PROSE_MODE is set to an unrecognised value (expected "ai" or "fallback"); treating it as unset — the key decides',
+      '[prose-mode] AI prose disabled: OPENAI_API_KEY absent',
+    ])
+  })
+
+  it('PROSE_MODE is compared case-insensitively and trimmed: "Fallback" and " fallback " both opt OUT', async () => {
+    // A dashboard paste with a trailing space or a capital letter must not turn an opt-out into
+    // silent spend — the wrong direction to fail for a kill switch.
+    const upper = await load({ PROSE_MODE: 'Fallback', OPENAI_API_KEY: 'test-key' })
+    expect(upper()).toBe(false)
+    const padded = await load({ PROSE_MODE: ' fallback ', OPENAI_API_KEY: 'test-key' })
+    expect(padded()).toBe(false)
+    const shouting = await load({ PROSE_MODE: 'AI' })
+    expect(shouting()).toBe(true)
+  })
+
+  it('a whitespace-only OPENAI_API_KEY counts as absent (the SDK trims it to nothing too)', async () => {
+    // Otherwise the gate says ON, every affordance renders, `new OpenAI()` throws
+    // "Missing credentials" in every section, and the key-absent diagnostic never fires.
+    const proseEnabled = await load({ OPENAI_API_KEY: '   ' })
+    expect(proseEnabled()).toBe(false)
+    expect(proseModeWarnings()).toEqual(['[prose-mode] AI prose disabled: OPENAI_API_KEY absent'])
   })
 
   it('PROSE_MODE unset, no key ⇒ false + exactly one key-absent warning', async () => {
     const proseEnabled = await load({})
     expect(proseEnabled()).toBe(false)
-    expect(proseModeWarnings()).toEqual([
-      '[prose-mode] AI prose disabled: OPENAI_API_KEY absent (set it, or PROSE_MODE=ai)',
-    ])
+    // No "(or PROSE_MODE=ai)" hint: forcing AI on without a key does not enable AI, it produces
+    // 100 %-fallback rows plus a `[report] OPENAI_API_KEY absent` warn per process.
+    expect(proseModeWarnings()).toEqual(['[prose-mode] AI prose disabled: OPENAI_API_KEY absent'])
   })
 
   it('PROSE_MODE=fallback + key ⇒ false + exactly one fallback warning (explicit opt-out wins)', async () => {
@@ -145,7 +181,15 @@ describe('lib/ai/prose-mode.ts source hygiene', () => {
     }
   })
 
-  it('carries a warn-once latch', () => {
-    expect(SOURCE).toMatch(/let warned = false/)
+  it('carries a per-message warn-once latch', () => {
+    // A Set keyed by message, not one boolean: "PROSE_MODE not recognised" and "key absent" are
+    // two different facts that can both hold in one process, and each should be said once.
+    expect(SOURCE).toMatch(/const warned = new Set<string>\(\)/)
+    expect(SOURCE).not.toMatch(/let warned = false/)
+  })
+
+  it('normalises PROSE_MODE (trim + lowercase) and tests the key by trimmed non-emptiness, mirroring the openai SDK', () => {
+    expect(SOURCE).toMatch(/\(process\.env\.PROSE_MODE \?\? ''\)\.trim\(\)\.toLowerCase\(\)/)
+    expect(SOURCE).toMatch(/\(process\.env\.OPENAI_API_KEY \?\? ''\)\.trim\(\) !== ''/)
   })
 })
