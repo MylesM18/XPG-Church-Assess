@@ -1,6 +1,7 @@
 // Source-reading tripwire (node env, no DOM): the public /r/[shareToken] report is an async RSC
 // that cannot be unit-rendered. Since the web re-skin (Part B) the booking CTA is rendered by
-// <ReportSections> itself, once, immediately after s12 — the same place the PDF puts it
+// <ReportSections> itself, once, immediately after s11, the report's final section since
+// the 2026-08-19 reorder — the same place the PDF puts it
 // (lib/report/pdf/document.tsx). The share page therefore must NOT render its own trailing
 // <BookingCta /> (it would duplicate), and the CTA still reaches a forwarded reader because it
 // rides inside <ReportSections>. The in-report placement itself is pinned by rendering in
@@ -20,11 +21,11 @@ const sections = stripComments(
 );
 
 describe('shared report booking CTA', () => {
-  it('renders <ReportSections>, which carries the booking CTA after s12', () => {
+  it('renders <ReportSections>, which carries the booking CTA after s11', () => {
     expect(page, 'the shared page must render <ReportSections>').toContain('<ReportSections');
     expect(sections, 'ReportSections must render the shared CTA constant').toContain("from '@/lib/report/cta'");
     expect(sections).toContain('bookingCta.url');
-    expect(sections).toContain("section.id === 's12'");
+    expect(sections).toContain("section.id === 's11'");
   });
 
   it('does not render a second, page-chrome BookingCta after the report', () => {

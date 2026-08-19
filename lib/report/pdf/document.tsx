@@ -312,7 +312,9 @@ export const PAGE_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
   ['s6'],
   ['s7', 's8'],
   ['s9', 's10'],
-  ['s11', 's12'],
+  // s12 before s11 since the 2026-08-19 reorder: the partner section closes the report,
+  // directly above the booking CTA on this final page.
+  ['s12', 's11'],
 ];
 
 type PageGroup = { key: string; sections: Array<{ section: AssembledSection; number: string; title: string }> };
@@ -402,7 +404,9 @@ export function ReportDocument({
             </View>
           ))}
 
-          {group.sections.some(({ section }) => section.id === 's12') ? (
+          {/* s11 ("Where XPG can partner") closes the report since the 2026-08-19 reorder;
+              the CTA renders at the end of its page, directly under the partner brief. */}
+          {group.sections.some(({ section }) => section.id === 's11') ? (
             <View style={s.section}>
               <Text style={s.ctaHeading}>{bookingCta.heading}</Text>
               <Text style={s.body}>{bookingCta.body}</Text>

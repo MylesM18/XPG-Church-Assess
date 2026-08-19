@@ -98,20 +98,21 @@ describe('ReportSections openers (web mirror of the PDF openers)', () => {
     }
   })
 
-  // The old terminal anchor was the appendix heading ("after s12 and before the appendix").
-  // The appendix was removed on 2026-08-16, so the CTA is now the LAST thing in the report and
-  // the anchor becomes exactly that: after s12, and after every other section title too. The
-  // second half is what keeps this honest — "after s12" alone would still pass if the CTA were
-  // rendered once at the very top of a re-ordered document.
-  it('renders the booking CTA exactly once, after s12 and last in the report', () => {
+  // Since the 2026-08-19 reorder, "Where XPG can partner" (s11) is the report's final section
+  // — report.yaml's key order puts s12 before it — and the CTA renders directly under the
+  // partner brief. The terminal-anchor half is what keeps this honest: "after s11" alone would
+  // still pass if the CTA were rendered once at the very top of a re-ordered document.
+  it('renders the booking CTA exactly once, after the partner section and last in the report', () => {
     const html = render(sections, 'holding')
     // Anchor on the CTA's own sub-head element, not the bare phrase (fallback prose could echo it).
     const ctaHead = `<p class="${SUBHEAD}">${escapeHtml(bookingCta.heading)}</p>`
     expect((html.match(new RegExp(escapeRe(ctaHead), 'g')) ?? []).length).toBe(1)
-    const s12Title = escapeHtml(sections.find((s) => s.id === 's12')!.fallback.title)
+    // The reorder itself: the last two sections are the final assessment, then the partner brief.
+    expect(sections.slice(-2).map((s) => s.id)).toEqual(['s12', 's11'])
+    const s11Title = escapeHtml(sections.find((s) => s.id === 's11')!.fallback.title)
     const cta = html.indexOf(ctaHead)
-    expect(html.indexOf(`>${s12Title}</h2>`)).toBeGreaterThan(-1)
-    expect(cta).toBeGreaterThan(html.indexOf(`>${s12Title}</h2>`))
+    expect(html.indexOf(`>${s11Title}</h2>`)).toBeGreaterThan(-1)
+    expect(cta).toBeGreaterThan(html.indexOf(`>${s11Title}</h2>`))
     // Terminal anchor: past the LAST section heading in the document, whichever that is.
     // Independent of which ids render an <h2> (s1's title is the report's own <h1>), and it
     // still fails if a section is ever appended after the CTA.
@@ -125,8 +126,8 @@ describe('ReportSections openers (web mirror of the PDF openers)', () => {
     expect(html).toContain(escapeHtml(bookingCta.buttonLabel))
   })
 
-  it('renders no CTA when there is no s12 section', () => {
-    const html = render(sections.filter((s) => s.id !== 's12'), 'holding')
+  it('renders no CTA when there is no s11 section', () => {
+    const html = render(sections.filter((s) => s.id !== 's11'), 'holding')
     expect(html).not.toContain(`<p class="${SUBHEAD}">${escapeHtml(bookingCta.heading)}</p>`)
     expect(html).not.toContain(`href="${bookingCta.url}"`)
   })

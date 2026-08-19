@@ -129,15 +129,6 @@ sections:
     length_ceiling: 2400
     required_mentions: []
 
-  s11:
-    title: "Where XPG can partner"
-    templates:
-      capacity: "Each phase above has a matching engagement."
-      constraint: "Each phase above has a matching engagement."
-      foundation: "Each phase above has a matching engagement."
-    length_ceiling: 1200
-    required_mentions: []
-
   s12:
     title: "Final executive assessment"
     templates:
@@ -155,6 +146,18 @@ sections:
         on.
     length_ceiling: 900
     required_mentions: [tier_name, overall_percent]
+
+  s11:
+    title: "Where XPG can partner"
+    templates:
+      capacity: >-
+        XPG partners with churches end to end, bringing the resources most teams cannot staff on their own, from technology and working systems to leadership development and coaching. Each phase of the roadmap above has a matching engagement.
+      constraint: >-
+        XPG partners with churches end to end, bringing the resources most teams cannot staff on their own, from technology and working systems to leadership development and coaching. Each phase of the roadmap above has a matching engagement.
+      foundation: >-
+        XPG partners with churches end to end, bringing the resources most teams cannot staff on their own, from technology and working systems to leadership development and coaching. Each phase of the roadmap above has a matching engagement.
+    length_ceiling: 1200
+    required_mentions: []
 
 # Gate family 3. Each list captures the OTHER archetypes' thesis FRAMINGS — multi-word phrases,
 # never single generic words and never stage names, which are shared vocabulary and would

@@ -468,7 +468,10 @@ export function ReportSections({ sections, band, visuals }: { sections: Assemble
               <WebBlock key={block.kind} model={block} />
             ))}
           </section>
-          {section.id === 's12' && (
+          {/* Anchored to s11 since the 2026-08-19 reorder: "Where XPG can partner" is the
+              report's final section (report.yaml key order puts s12 before it), so the CTA sits
+              directly under the partner brief it belongs to. */}
+          {section.id === 's11' && (
             <div className="flex flex-col items-start gap-2">
               <p className={SUBHEAD}>{bookingCta.heading}</p>
               <p className={BODY}>{bookingCta.body}</p>
