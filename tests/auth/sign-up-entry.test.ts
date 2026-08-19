@@ -71,13 +71,24 @@ describe('/get-started unauthenticated redirect', () => {
 })
 
 describe('/accept/[token] signed-out state — invitees are first-time users', () => {
+  // Scoped per branch, not over the whole file: since 2026-08-19 the wrong_email branch ALSO
+  // carries `next=`, so a file-wide `not.toContain('/sign-in?next=')` would now fail for a
+  // change that is correct. What matters is that the SIGNED-OUT branch uses /sign-up.
+  const signedOutBranch = ACCEPT_PAGE.slice(
+    ACCEPT_PAGE.indexOf("state === 'sign_in'"),
+    ACCEPT_PAGE.indexOf("state === 'wrong_email'"),
+  )
+  const wrongEmailBranch = ACCEPT_PAGE.slice(ACCEPT_PAGE.indexOf("state === 'wrong_email'"))
+
   it('"Sign in to accept" links to /sign-up with the next= and email= hints, never /sign-in', () => {
     expect(count(ACCEPT_PAGE, 'href={`/sign-up?next=${next}&email=${email}`}')).toBe(1)
-    expect(ACCEPT_PAGE).not.toContain('/sign-in?next=')
+    expect(signedOutBranch.length, 'branch not found — the slices above are stale').toBeGreaterThan(200)
+    expect(signedOutBranch, 'a first-time invitee must not be greeted as a returning one').not.toContain('/sign-in')
   })
 
   it('the wrong-account recovery link still points at /sign-in (they ARE signed in)', () => {
-    expect(count(ACCEPT_PAGE, 'href="/sign-in"')).toBe(1)
+    expect(wrongEmailBranch).toContain('/sign-in?next=')
+    expect(wrongEmailBranch, 'and carries them back to THIS invitation').toContain('/accept/${token}')
   })
 })
 

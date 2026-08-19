@@ -124,6 +124,8 @@ describe('confirm-signup template — invited leader vs. first-time admin', () =
 
   it('never asks an invited leader to do the admin-only steps', () => {
     const invited = invitedArmOf(CONFIRM_SIGNUP)
+    // Non-vacuity: three .not assertions over an empty string all pass, so prove there IS copy.
+    expect(invited.length).toBeGreaterThan(400)
     expect(invited, 'the invitee has no church to add').not.toMatch(/Add your church/i)
     expect(invited, 'the invitee invites nobody').not.toMatch(/invite the leader/i)
     expect(invited, 'the diagnosis goes to the church admin').not.toMatch(/Receive your diagnosis/i)
@@ -133,7 +135,21 @@ describe('confirm-signup template — invited leader vs. first-time admin', () =
     const invited = invitedArmOf(CONFIRM_SIGNUP)
     expect(invited).toMatch(/invited/i)
     expect(invited, 'answering is the whole of their task').toMatch(/answer/i)
-    expect(invited, 'the one promise the code actually guarantees').toMatch(/without names|no names|never names/i)
+    expect(invited, 'the one promise the code actually guarantees').toMatch(/without your name/i)
+  })
+
+  /**
+   * A consent statement, read at the moment someone decides how candidly to write. Since
+   * `79a9adb` the private report prints every written reflection VERBATIM at any respondent
+   * count (lib/report/fallback-sections.ts s8Bullets) — so the invited arm may promise that no
+   * NAME is attached, which the code enforces, and must not promise that answers are summarised
+   * into a pattern, which they are not.
+   */
+  it('never tells an invited leader their words are aggregated away', () => {
+    const invited = invitedArmOf(CONFIRM_SIGNUP)
+    expect(invited).not.toMatch(/pattern across/i)
+    expect(invited).not.toMatch(/not who said what/i)
+    expect(invited, 'say plainly that what they write is shared as written').toMatch(/as you wrote it/i)
   })
 
   it('keeps the admin arm exactly as Natalie approved it', () => {
@@ -141,8 +157,12 @@ describe('confirm-signup template — invited leader vs. first-time admin', () =
     expect(admin).toContain('Add your church')
     expect(admin).toContain('Receive your diagnosis')
     // The stray-invitee catch line belongs ONLY here: an invitee who ignores the accept link and
-    // hits BEGIN instead lands in this arm, and this sentence is what redirects them.
+    // hits BEGIN instead lands in this arm. It must NOT claim the link carries them to the
+    // invitation — a bare /sign-up sets emailRedirectTo to /get-started, which renders "Add your
+    // church". It tells them to reopen the invitation email instead, which does work.
     expect(admin).toMatch(/Invited by a leader/i)
+    expect(admin).not.toMatch(/takes you straight to their invitation/i)
+    expect(admin).toMatch(/reopen their invitation email/i)
   })
 
   it('shares one CTA and one fallback anchor across both arms', () => {
@@ -151,6 +171,7 @@ describe('confirm-signup template — invited leader vs. first-time admin', () =
     const anchors = CONFIRM_SIGNUP.match(/<a href=/g) ?? []
     expect(anchors.length).toBe(2)
     for (const arm of [invitedArmOf(CONFIRM_SIGNUP), adminArmOf(CONFIRM_SIGNUP)]) {
+      expect(arm.length, 'an empty arm satisfies the check below vacuously').toBeGreaterThan(400)
       expect(arm, 'the shared CTA lives outside both arms').not.toContain('<a href=')
     }
   })
@@ -196,7 +217,9 @@ describe('owner setup doc — the invited/admin split is actionable', () => {
   })
 
   it('says how to verify BOTH arms, not just that it was pasted', () => {
-    expect(SECTION, 'the invited arm needs a real invite to prove').toMatch(/invit/i)
+    // Anchored on the ACTION, not the word "invited" — that appears in the mechanism code fence
+    // above and would satisfy a section containing no verification prose at all.
+    expect(SECTION, 'the invited arm needs a real invitation to prove').toContain('Sign in to accept')
     expect(SECTION, 'and the admin arm a fresh address of your own').toMatch(/new address|fresh address|your own address/i)
   })
 })

@@ -29,11 +29,19 @@ export function resolveNext(search: string, fallback = '/get-started'): string {
  * It carries NO privilege: the invitation itself is still gated server-side by the accept RPC on
  * the exact signed-in address. The worst a forged `next` achieves is the other email's copy.
  */
-export function isInviteSignup(search: string, fallback = '/get-started'): boolean {
-  const next = resolveNext(search, fallback)
+export function isInvitePath(next: string): boolean {
   // Anchored on the route with a token after it: `/accept/<token>`. A bare `/accept`, or an
   // unrelated path that merely starts with the word (`/acceptable-use`), is not an invitation.
   return next.startsWith('/accept/') && next.length > '/accept/'.length
+}
+
+/**
+ * The same question asked of a raw query string. NO `fallback` parameter, deliberately: a caller
+ * passing `/accept/x` as the fallback would make a bare homepage visit read as an invitation and
+ * flip every admin onto the invitee email.
+ */
+export function isInviteSignup(search: string): boolean {
+  return isInvitePath(resolveNext(search))
 }
 
 /**

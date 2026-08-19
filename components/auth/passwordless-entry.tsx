@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { LiveStatus } from '@/components/live-status'
 import { createClient } from '@/lib/supabase/client'
-import { isInviteSignup, resolveNext } from '@/lib/auth/resolve-next'
+import { isInvitePath, resolveNext } from '@/lib/auth/resolve-next'
 import { parseAuthError } from '@/lib/auth/parse-auth-error'
 
 // The one thing that varies between /sign-in (returning) and /sign-up (first-time). Everything
@@ -92,15 +92,23 @@ export function PasswordlessEntry({ copy }: { copy: PasswordlessEntryCopy }) {
     // (Natalie, 2026-08-19). The template now branches on this flag.
     //
     // Sent UNCONDITIONALLY, true or false, never spread in only on the invite path: Confirm-signup
-    // renders once, at account creation, and every account is created through this call — so an
-    // always-present key means the template's `{{ if .Data.invited }}` is never evaluated against
-    // metadata that has no such key. Cosmetic only; the invitation itself is still gated
-    // server-side by the accept RPC on the exact signed-in address.
+    // renders once, at account creation, and every account created THROUGH AN EMAILED LINK is
+    // created here — so an always-present key means the template's `{{ if .Data.invited }}` is
+    // never evaluated against metadata that has no such key. (Google OAuth below also creates
+    // accounts and carries no flag; it needs none, because Google asserts email_verified and
+    // GoTrue then sends no confirmation email at all. A missing key would read false regardless.)
+    //
+    // Cosmetic only; the invitation itself is still gated server-side by the accept RPC on the
+    // exact signed-in address.
+    //
+    // Reads nextPath(), not window.location.search: that value is already window-guarded and
+    // already through the open-redirect guard, and it is the SAME value emailRedirectTo is built
+    // from — so the flag can never disagree with where the email actually lands.
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo: magicLinkRedirectTo(),
-        data: { invited: typeof window !== 'undefined' && isInviteSignup(window.location.search) },
+        data: { invited: isInvitePath(nextPath()) },
       },
     })
     if (error) setError(error.message)

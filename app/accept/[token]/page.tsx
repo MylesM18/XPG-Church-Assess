@@ -61,11 +61,15 @@ export default async function AcceptPage({ params }: { params: Promise<{ token: 
   }
 
   if (state === 'wrong_email') {
+    // Carries next= for the same reason the signed-out branch above does: it brings them back to
+    // THIS invitation after signing in, and — if the correct address is new here — it is what
+    // earns them the invited confirm email instead of the admin's onboarding one
+    // (lib/auth/resolve-next.ts isInvitePath).
     return (
       <main id="main-content" tabIndex={-1} className={shell}>
         <h1 className="font-display text-2xl text-ink">Wrong account</h1>
         <p className="font-body text-berry">You’re signed in as {user!.email}, but this invitation is for {p.invited_email}. Sign out and sign back in as {p.invited_email}.</p>
-        <Link href="/sign-in" className="font-body text-sm text-ink underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">Go to sign in</Link>
+        <Link href={`/sign-in?next=${encodeURIComponent(`/accept/${token}`)}&email=${encodeURIComponent(p.invited_email)}`} className="font-body text-sm text-ink underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">Go to sign in</Link>
       </main>
     )
   }

@@ -198,6 +198,15 @@ conditional breaks the whole email, not one line. The button and the "Button not
 If the invited arm shows the admin copy, the paste did not take. If **both** arms render at once,
 the conditional was flattened — re-paste the file unedited.
 
+**One known limit, by design of Supabase's own flow.** The flag is fixed by the **first** sign-in
+request ever made for an address and cannot be corrected afterwards: GoTrue treats an
+existing-but-unconfirmed address as a signup and re-sends "Confirm signup", but explicitly refuses
+to update its metadata. So a leader who clicks **BEGIN THE ASSESSMENT** on the homepage first,
+never confirms, and only then opens their invitation will keep receiving the admin copy. Their
+invitation still works — the accept page and the RPC behind it are unaffected — and the admin arm
+now tells them exactly what to do (confirm, then reopen the invitation email). Nothing to
+configure; it is here so the behaviour is recognised rather than re-investigated.
+
 ### B2. Set the sender NAME to "XP Gathering"
 
 - With the **default Supabase email service:** Authentication → Emails settings → set the
@@ -228,7 +237,7 @@ shapes:
 
 - **Magic link / Confirm signup** — the app sends the member's **real destination**: usually
   `https://www.360churchhealthassessment.com/get-started`, or a deep link such as
-  `…/accept-invitation/<token>`. Supabase renders it into the emailed link as `{{ .RedirectTo }}`,
+  `…/accept/<token>`. Supabase renders it into the emailed link as `{{ .RedirectTo }}`,
   and `/auth/confirm` forwards the member there once the token verifies.
 - **Google OAuth** — unchanged: `…/auth/callback?next=…`.
 
@@ -239,7 +248,7 @@ shapes:
     - `https://www.360churchhealthassessment.com/auth/callback`
 
   (The `/**` wildcard is the entry that actually matters. The app emits both **query-bearing** and
-  **deep** URLs — `…/auth/callback?next=…` for Google, `…/accept-invitation/<token>` for an invited
+  **deep** URLs — `…/auth/callback?next=…` for Google, `…/accept/<token>` for an invited
   member — and a bare `…/auth/callback` entry with no wildcard matches neither.
   If `redirect_to` fails to match the allow-list, **Supabase silently ignores it and sends the user
   to the Site URL instead, raising no error** — which lands an invited member on the marketing home
