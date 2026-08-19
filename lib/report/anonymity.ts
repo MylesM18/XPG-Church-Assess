@@ -32,13 +32,26 @@
  * Takes the minimal structural shape rather than Response so callers holding a narrower
  * row type (or a test fixture) need no cast.
  */
+/**
+ * The submit RPCs' nameless fallback (submit_self_response coalesces a profile with no
+ * full_name and no email to the literal 'Member' —
+ * supabase/migrations/20260716000900_submit_rpcs_bounds_guard.sql:96). Excluded below for the
+ * SAME reason blanks are, not a relaxation of the guard: this placeholder is the system's own
+ * word, it identifies nobody, and as a substring needle it matches the report's own vocabulary
+ * ("staff member", "whoever remembers" — methodology/questions.yaml item text), so one nameless
+ * respondent made every label guard fire at once — the PDF export refused to render its own
+ * chart strings, and the reflection screen dropped "as a member of the youth group". A real
+ * name is NEVER excluded here; only the exact placeholder, trimmed and case-insensitive.
+ */
+const PLACEHOLDER_LABELS = new Set(['member']);
+
 export function respondentLabels(
   responses: ReadonlyArray<{ respondent_label: string }>,
 ): string[] {
   const out = new Set<string>();
   for (const r of responses) {
     const label = r.respondent_label?.trim();
-    if (label) out.add(label);
+    if (label && !PLACEHOLDER_LABELS.has(label.toLowerCase())) out.add(label);
   }
   return [...out];
 }

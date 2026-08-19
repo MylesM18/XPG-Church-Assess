@@ -182,19 +182,50 @@ describe('resolveReportSections', () => {
   ])('drops persisted themes on %s', async (_label, facts) => {
     const r = await resolveReportSections({ ...baseArgs(), readPersisted: lookupWith(facts) })
     const s8 = r.sections.find((s) => s.id === 's8')
-    // Non-vacuous: with reflections: [] in baseArgs, s8Bullets (fallback-sections.ts) produces
-    // bullets from facts.themes ONLY when facts.themes.length > 0 — the reflections fallback
-    // path yields the neutral copy.s8_below_threshold line (Task 10's k>=3 anonymity guard,
-    // fallback-sections.ts) rather than [], both because baseArgs' responses: [] puts
-    // facts.cover.respondent_count at 0 (below MIN_SUPPORT) and because an empty reflections
-    // array produces no voices lines regardless (buildOutreachVoices drops every item with no
-    // matching entries). A bullets array other than that single neutral line here is only
-    // possible if the malformed themes above were wrongly accepted by isThemeClusterFact and
-    // reached buildFacts — this is the discriminator a bare `.fallback).toBeDefined()` could
-    // never provide, since fallbackSections always returns a defined SectionBody regardless of
-    // which branch ran.
-    expect(s8?.fallback.bullets).toEqual([methodology.copy.s8_below_threshold])
+    // Non-vacuous: with reflections: [] in baseArgs and audience 'screen', s8Bullets
+    // (fallback-sections.ts) renders themes plus voices lines — and baseArgs carries neither,
+    // so the private no-reflections branch yields the single copy.s8_no_reflections line
+    // (buildOutreachVoices drops every item with no matching entries). A bullets array other
+    // than that single neutral line here is only possible if the malformed themes above were
+    // wrongly accepted by isThemeClusterFact and reached buildFacts — this is the discriminator
+    // a bare `.fallback).toBeDefined()` could never provide, since fallbackSections always
+    // returns a defined SectionBody regardless of which branch ran.
+    expect(s8?.fallback.bullets).toEqual([methodology.copy.s8_no_reflections])
     expect(r.stale).toBe(false)
+  })
+
+  /**
+   * The label screen (2026-08-19 follow-up): with verbatims now rendering on every private
+   * report, a reflection NAMING a respondent used to survive all the way to the PDF's
+   * fail-closed guard, which then refused the WHOLE export (a generic 500) rather than the one
+   * line — and the web surface has no render guard at all. Screening here, at the one pipeline
+   * both surfaces share, loses the line and keeps the report. Same precedent as buildFacts'
+   * profile free-text screen.
+   */
+  it('drops a reflection naming a respondent before it can reach a renderer', async () => {
+    const r = await resolveReportSections({
+      ...baseArgs(),
+      readPersisted: async () => ({ matched: null, anyExists: false }),
+      labelSource: { kind: 'known' as const, labels: ['Sarah Okafor'] },
+      reflections: [
+        { item_id: 'G6', reflection: 'Sarah Okafor follows up with every guest.' },
+        { item_id: 'G6', reflection: 'Nobody followed up with the family who visited in June.' },
+      ],
+    })
+    const joined = r.sections.find((s) => s.id === 's8')!.fallback.bullets.join(' ')
+    expect(joined).not.toContain('Sarah Okafor')
+    expect(joined).toContain('Nobody followed up with the family who visited in June.')
+  })
+
+  it('drops every reflection when the labels are unknowable — fail closed', async () => {
+    const r = await resolveReportSections({
+      ...baseArgs(),
+      readPersisted: async () => ({ matched: null, anyExists: false }),
+      labelSource: { kind: 'redacted' as const },
+      reflections: [{ item_id: 'G6', reflection: 'A perfectly clean reflection.' }],
+    })
+    const s8 = r.sections.find((s) => s.id === 's8')!
+    expect(s8.fallback.bullets.join(' ')).not.toContain('A perfectly clean reflection.')
   })
 
   it('accepts themes that revalidate on a fresh row', async () => {

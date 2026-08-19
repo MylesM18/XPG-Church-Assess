@@ -1,4 +1,3 @@
-import { MIN_SUPPORT } from '../ai/theme-gates';
 import type { CategoryState } from '../engine/types';
 import type { Methodology, Offer, SectionId, Theme } from '../methodology/schema';
 import type { CategoryFact, FactsPack } from './facts';
@@ -188,21 +187,21 @@ function s7Bullets(facts: FactsPack): string[] {
 }
 
 /**
- * S8's bullets, with the SAME k>=3 philosophy on both paths.
+ * S8's bullets: what leaders wrote, shown in full on the PRIVATE report; themes-only in public.
  *
- * The theme path already enforces it: clusterThemes -> theme-gates drops any cluster under
- * MIN_SUPPORT distinct supporting respondents, so facts.themes is k-safe by construction.
+ * The k>=3 philosophy now lives where each risk actually is. THEMES keep it structurally:
+ * clusterThemes -> theme-gates drops any cluster under MIN_SUPPORT distinct supporting
+ * respondents, so facts.themes is k-safe by construction, and themes are all the PUBLIC SHARE
+ * PAGE ever renders — on a link anyone can forward, a verbatim at low n is one person's answers,
+ * fully attributable. The VERBATIMS are gated by AUDIENCE alone: Natalie ruled on 2026-08-19
+ * (reversing her 2026-08-18 respondent-count withhold, on a live 2-respondent report) that the
+ * private report shows the responses whatever the count — "just not show the names". Names were
+ * never in reach: `reflections` is the KEYLESS array (item_id + text, no respondent id —
+ * resolve.ts), and the PDF's fail-closed label guard still refuses to render a respondent label.
  *
- * The fallback path did NOT. It printed every reflection verbatim with its prompt and no
- * threshold at all — and this is the path the PUBLIC SHARE PAGE always renders
- * (assembleFallbackOnly). At one respondent that is one person's answers, fully attributable, on
- * a link anyone can forward.
- *
- * ⚠️ KNOWN LIMITATION, deliberate: `reflections` here is the KEYLESS array (item_id + text, no
- * respondent id — resolve.ts:24-28), so this cannot count distinct WRITERS the way theme-gates
- * does. It uses the run's distinct respondent count instead. That is a weaker k, but threading
- * respondent identity into a renderer to strengthen it is exactly what the keyless array exists
- * to prevent. Strictly better than no threshold; not as strong as the theme path's.
+ * ⚠️ Residual, accepted: on a low-n private report the respondents themselves may recognise one
+ * another's words. That is the owner's explicit trade for a leadership team reading its own
+ * team's reflections; it does not extend to the share page.
  */
 function s8Bullets(
   facts: FactsPack,
@@ -210,17 +209,17 @@ function s8Bullets(
   reflections: ReadonlyArray<{ item_id: string; reflection: string | null }>,
   audience: ReportAudience | undefined,
 ): string[] {
-  if (facts.themes.length > 0) {
-    return facts.themes.map((t) => `${t.label}: ${t.gloss} (${t.support_count} people).`);
+  const themeLines = facts.themes.map((t) => `${t.label}: ${t.gloss} (${t.support_count} people).`);
+  // ⚠️ THE AUDIENCE GATE IS THE ONLY GATE ON THE VERBATIMS (Natalie, 2026-08-19, reversing her
+  // 2026-08-18 ruling on a live 2-respondent report: "this section still does not show the
+  // responses from the questions and it should. Just not show the names"). The private report
+  // shows what leaders wrote whatever the respondent count — names were never printed (this
+  // array is keyless by construction, and the PDF's fail-closed label guard still stands). The
+  // SHARE page and any call site that forgets to declare itself keep the k-gated themes only:
+  // the allow-list below fails closed, exactly as step E built it.
+  if (audience !== 'screen' && audience !== 'pdf') {
+    return themeLines.length > 0 ? themeLines : [methodology.copy.s8_below_threshold];
   }
-  // ⚠️ ORDER IS LOAD-BEARING. The audience gate sits BELOW the themes branch, never above it.
-  // Themes are k-gated AGGREGATES that already ship on the share page today; Natalie asked that
-  // the VERBATIM reflections become private, not the themes. A gate at the top of this function
-  // would strip themes from the share page — a silent content regression.
-  if (audience !== 'screen' && audience !== 'pdf') return [methodology.copy.s8_below_threshold];
-  // Orthogonal to audience, and kept on BOTH paths: dropping names is not dropping the
-  // k-threshold.
-  if (facts.cover.respondent_count < MIN_SUPPORT) return [methodology.copy.s8_below_threshold];
   // buildOutreachVoices groups per category_id (Map<string, OutreachVoicesGroup[]>) — flatten
   // across the Map's values before producing lines (ruling 10). Verbatims never enter a
   // bullet: only group.entries (respondent free text), never facts.themes[].verbatims.
@@ -228,9 +227,11 @@ function s8Bullets(
   const lines = [...voices.values()]
     .flat()
     .flatMap((group) => group.entries.map((entry) => `${group.reflectionPrompt}: ${entry}`));
-  // An empty section under a "What Leaders Are Saying" heading reads as a rendering bug. Say why
-  // it is empty instead.
-  return lines.length > 0 ? lines : [methodology.copy.s8_below_threshold];
+  // Themes first when they exist — the summary layer above the substance — then every response.
+  // An empty section under a "What Leaders Are Saying" heading reads as a rendering bug, and
+  // "withheld to protect anonymity" would be untrue here: nothing was written to protect.
+  if (themeLines.length + lines.length === 0) return [methodology.copy.s8_no_reflections];
+  return [...themeLines, ...lines];
 }
 
 /** Read sentences go through dependencyReadLines (lib/report/view.ts), which collapses the

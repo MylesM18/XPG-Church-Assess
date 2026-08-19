@@ -99,9 +99,9 @@ sections:
   s8:
     title: "What leaders are saying"
     templates:
-      capacity: "Themes that recurred across the written reflections."
-      constraint: "Themes that recurred across the written reflections."
-      foundation: "Themes that recurred across the written reflections."
+      capacity: "What leaders shared in the written reflections, in their own words."
+      constraint: "What leaders shared in the written reflections, in their own words."
+      foundation: "What leaders shared in the written reflections, in their own words."
     length_ceiling: 400
     required_mentions: []
 
