@@ -139,18 +139,22 @@ describe('pending controls', () => {
   // closeAssessment/reopenAssessment. Note this census counts SOURCE bindings, not simultaneously
   // rendered controls: that component renders exactly one of the two buttons per run state, so the
   // number of controls a user can actually reach grew by one, not two.
-  it('covers all fifteen known pending controls', () => {
+  // Bumped from 15 to 16 when the ADR 0003 follow-up added the admin "Regenerate diagnosis" control
+  // in app/app/[churchId]/regenerate-diagnosis-button.tsx — aria-disabled={pending || !ready} with
+  // TWO matching `if (<word>) return` guards (pending, readiness), driven by useTransition +
+  // generateDiagnosis. Rendered only for a reopened run that already has a diagnosis.
+  it('covers all sixteen known pending controls', () => {
     const count = FILES.reduce(
       (n, f) => n + (f.source.match(new RegExp(ARIA_DISABLED, 'g'))?.length ?? 0),
       0,
     )
     expect(
       count,
-      'expected exactly 15 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
+      'expected exactly 16 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
         'control in the spec’s scope table. A LOWER count means a site was missed or reverted. A ' +
         'HIGHER count is not a defect: a new pending control was added, which is fine — add it to ' +
         '§2 of the design doc and bump this number. The answer-form wizard contributes two: the ' +
         'Submit/Next control and the Back navigation boundary (aria-disabled={step === 0}).',
-    ).toBe(15)
+    ).toBe(16)
   })
 })

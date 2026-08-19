@@ -18,6 +18,7 @@ import { diagnosisGateFromMatrix } from '@/lib/coverage/diagnosis-gate'
 import { isExemptMember } from '@/lib/coverage/exemption'
 import { ChainGlyph } from './chain-glyph'
 import { GenerateButton } from './generate-button'
+import { RegenerateDiagnosisButton } from './regenerate-diagnosis-button'
 import { CloseReopenControls } from './close-reopen-controls'
 import { RefreshOnFocus } from './refresh-on-focus'
 import { InviteMemberForm } from './access/invite-member-form'
@@ -56,6 +57,14 @@ const STATUS_DOT: Record<CoverageStatus, string> = {
   partial: 'bg-status-amber',
   covered: 'bg-status-green',
 }
+
+// "View diagnosis" is the PRIMARY (filled) control while the run is closed; once the admin has
+// REOPENED it (ADR 0003) the primary slot belongs to Regenerate diagnosis and the link demotes to a
+// secondary outline so the existing report stays one click away without competing for the action.
+const PRIMARY_LINK =
+  'rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink'
+const SECONDARY_LINK =
+  'rounded-md border border-line px-3 py-1.5 font-body text-sm text-ink transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink'
 
 export default async function DashboardPage({
   params,
@@ -210,6 +219,12 @@ export default async function DashboardPage({
     hasDiagnosis = (diagRows?.length ?? 0) > 0
   }
 
+  // ADR 0003 follow-up: a diagnosis exists but the admin has REOPENED the run, so members may be
+  // changing the answers it was scored from. The primary affordance becomes Regenerate diagnosis
+  // (same generateDiagnosis action; enabled only when finishedMembers says everyone has finished),
+  // and View diagnosis demotes to a secondary link. Closed + diagnosis → today's View link, unchanged.
+  const runReopened = hasDiagnosis && run?.status === 'in_progress'
+
   return (
     <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 px-6 py-10">
       <RefreshOnFocus />
@@ -284,18 +299,28 @@ export default async function DashboardPage({
       </section>
 
       <section className="flex flex-wrap items-start gap-2">
-        {isAdmin && (
-          hasDiagnosis ? (
-            <Link
-              href={`/app/${churchId}/diagnosis`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-md border border-line bg-ink px-3 py-1.5 font-body text-sm text-paper transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-            >
-              View diagnosis <span aria-hidden="true">↗</span>
-              <span className="sr-only"> (opens in a new tab)</span>
-            </Link>
-          ) : dashboardGate.ok ? (
+        {isAdmin && runReopened && (
+          <RegenerateDiagnosisButton
+            churchId={churchId}
+            finished={finishedMembers.finished}
+            total={finishedMembers.total}
+          />
+        )}
+
+        {isAdmin && hasDiagnosis && (
+          <Link
+            href={`/app/${churchId}/diagnosis`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={runReopened ? SECONDARY_LINK : PRIMARY_LINK}
+          >
+            View diagnosis <span aria-hidden="true">↗</span>
+            <span className="sr-only"> (opens in a new tab)</span>
+          </Link>
+        )}
+
+        {isAdmin && !hasDiagnosis && (
+          dashboardGate.ok ? (
             <GenerateButton churchId={churchId} />
           ) : (
             <button

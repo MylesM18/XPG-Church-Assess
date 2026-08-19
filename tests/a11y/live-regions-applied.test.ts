@@ -38,7 +38,7 @@ const FILES = SCAN_DIRS.flatMap(tsxFilesUnder).map((file) => ({
   source: stripComments(fs.readFileSync(file, 'utf8')),
 }))
 
-// The ten files that render a status message. All five success announcements land in files already
+// The eleven files that render a status message. All five success announcements land in files already
 // on this list, so it is also the complete set of LiveStatus consumers.
 const EXPECTED_CONSUMERS = [
   path.join('components', 'answer-form.tsx'),
@@ -46,6 +46,7 @@ const EXPECTED_CONSUMERS = [
   path.join('app', 'get-started', 'form.tsx'),
   path.join('app', 'app', '[churchId]', 'generate-button.tsx'),
   path.join('app', 'app', '[churchId]', 'close-reopen-controls.tsx'),
+  path.join('app', 'app', '[churchId]', 'regenerate-diagnosis-button.tsx'),
   path.join('app', 'app', '[churchId]', 'access', 'invite-member-form.tsx'),
   path.join('app', 'app', '[churchId]', 'access', 'remove-member-button.tsx'),
   path.join('app', 'app', '[churchId]', 'access', 'revoke-invite-button.tsx'),
