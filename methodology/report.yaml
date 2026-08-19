@@ -109,8 +109,8 @@ sections:
     title: "Strategic direction"
     templates:
       capacity: >-
-        Nothing is capping you. The working model below shows which areas compound into which,
-        so growth investment lands where it multiplies.
+        No single area is holding the others back. The map below shows which areas feed which,
+        so you can point new investment where it will carry the furthest.
       constraint: >-
         {primary_name} is where the data points. The working model below shows what it caps, and
         why investment further along the path rarely holds.

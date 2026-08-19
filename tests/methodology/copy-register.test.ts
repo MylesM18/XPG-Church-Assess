@@ -25,6 +25,38 @@ function stringLeaves(v: unknown, path: string, out: Array<[string, string]> = [
   return out;
 }
 
+describe('copy layer plain language (Natalie, 2026-08-19)', () => {
+  /**
+   * "Just say the meaning plainly with no phrases like 'given way' and stuff like that" — on a
+   * rendered Test Church report, about the cover headline. The ban is on the figurative idioms
+   * she rejected, checked across every rendered string so a rewrite cannot reintroduce one in a
+   * different section. Engineering comments in the YAML are out of scope, as above.
+   */
+  it('uses none of the rejected figurative idioms in any rendered string', async () => {
+    const m = await loadMethodology();
+    const idioms = [/given way/i, /borrowed time/i];
+    const offenders = [
+      ...stringLeaves(m.copy, 'copy'),
+      ...stringLeaves(m.report, 'report'),
+      ...stringLeaves(m.offers, 'offers'),
+    ].filter(([, s]) => idioms.some((re) => re.test(s)));
+    expect(offenders.map(([path]) => path)).toEqual([]);
+  });
+
+  /**
+   * "Both are strong. Nothing to flag here." was inaccurate on its own terms: the dependency
+   * reads band by rules.yaml's break threshold, so "strong" there meant "above 45" — printed
+   * under a chain whose scores sat in the 50s and 60s, none of them green. The sentence may not
+   * claim strength; it should say what the data supports (the connection is not the problem) and
+   * point at what is.
+   */
+  it('never claims "strong" for the both_strong dependency read', async () => {
+    const m = await loadMethodology();
+    expect(m.copy.dependency_reads.both_strong.toLowerCase()).not.toContain('strong');
+    expect(m.copy.dependency_reads.both_strong.toLowerCase()).not.toContain('nothing to flag');
+  });
+});
+
 describe('copy layer register', () => {
   it('uses no em-dash or en-dash in any rendered string', async () => {
     const m = await loadMethodology();
