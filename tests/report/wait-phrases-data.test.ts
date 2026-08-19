@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { loadWaitPhrases } from '@/lib/data/wait-phrases'
+import { loadWaitPhrases, WAIT_PHRASES_TIMEOUT_MS } from '@/lib/data/wait-phrases'
 import { WAIT_PHRASE_DEFAULTS } from '@/lib/report/wait-phrases'
 
 /**
@@ -14,8 +14,16 @@ import { WAIT_PHRASE_DEFAULTS } from '@/lib/report/wait-phrases'
 type Row = Record<string, unknown>
 
 /** Minimal PostgREST-shaped fake: select().eq().order() resolving via then(). */
-function fakeClient(result: { data: Row[] | null; error: { message: string } | null }) {
-  const calls: { table?: string; filters: Array<[string, unknown]>; order?: string } = { filters: [] }
+function fakeClient(
+  result: { data: Row[] | null; error: { message: string } | null },
+  opts: { neverSettles?: boolean } = {},
+) {
+  const calls: {
+    table?: string
+    filters: Array<[string, unknown]>
+    order: string[]
+    signal?: AbortSignal
+  } = { filters: [], order: [] }
   const api = {
     select: () => api,
     eq: (col: string, val: unknown) => {
@@ -23,10 +31,22 @@ function fakeClient(result: { data: Row[] | null; error: { message: string } | n
       return api
     },
     order: (col: string) => {
-      calls.order = col
+      calls.order.push(col)
       return api
     },
-    then: (resolve: (v: typeof result) => unknown) => resolve(result),
+    abortSignal: (signal: AbortSignal) => {
+      calls.signal = signal
+      return api
+    },
+    // A hung PostgREST: never resolves on its own, and rejects when the signal aborts —
+    // exactly what fetch does with an AbortSignal.
+    then: (resolve: (v: typeof result) => unknown, reject?: (e: unknown) => unknown) => {
+      if (!opts.neverSettles) return resolve(result)
+      calls.signal?.addEventListener('abort', () =>
+        reject?.(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' })),
+      )
+      return undefined
+    },
   }
   const client = {
     from: (table: string) => {
@@ -58,9 +78,12 @@ describe('loadWaitPhrases', () => {
 
     await expect(loadWaitPhrases(client)).resolves.toEqual(['First line.', 'Second line.'])
     expect(calls.table).toBe('report_wait_phrases')
-    // Only the active rows, ordered deliberately rather than by insertion accident.
+    // Only the active rows, ordered deliberately rather than by insertion accident. `sort_order`
+    // is deliberately NOT unique (reordering by hand should not have to dodge a constraint) and
+    // Postgres gives no order among equal keys, so `phrase` — which IS unique — is the tie-breaker.
+    // created_at would not work: the seed inserts every row in one statement, so they share it.
     expect(calls.filters).toContainEqual(['active', true])
-    expect(calls.order).toBe('sort_order')
+    expect(calls.order).toEqual(['sort_order', 'phrase'])
   })
 
   it('falls back to the shipped defaults when the table is MISSING — the migration may not be applied yet', async () => {
@@ -114,6 +137,33 @@ describe('loadWaitPhrases', () => {
     } as never
 
     await expect(loadWaitPhrases(exploding)).resolves.toEqual([...WAIT_PHRASE_DEFAULTS])
+    expect(reportLines()).toHaveLength(1)
+  })
+})
+
+describe('the read is bounded — decorative copy may not hold up the page render', () => {
+  // Greptile P2 on PR #83: the fallback only fired once the request RESOLVED with an error. A
+  // PostgREST that answers slowly, or never, would block this serial await and with it the whole
+  // diagnosis Server Component — for content that already has local defaults. Every other await on
+  // that page is load-bearing; this one is not, so it is the only one that must be capped.
+  it('passes an AbortSignal with a short, sane cap', async () => {
+    const { client, calls } = fakeClient({ data: [{ phrase: 'Stored.' }], error: null })
+
+    await loadWaitPhrases(client)
+
+    expect(calls.signal).toBeInstanceOf(AbortSignal)
+    expect(WAIT_PHRASES_TIMEOUT_MS).toBeGreaterThan(0)
+    expect(WAIT_PHRASES_TIMEOUT_MS).toBeLessThanOrEqual(1000)
+  })
+
+  it('a query that NEVER settles still resolves to the shipped defaults once the signal fires', async () => {
+    const { client } = fakeClient({ data: null, error: null }, { neverSettles: true })
+
+    const started = Date.now()
+    await expect(loadWaitPhrases(client)).resolves.toEqual([...WAIT_PHRASE_DEFAULTS])
+    // Bounded by the cap, not by luck: without the signal this test would hang until vitest's
+    // own timeout killed it.
+    expect(Date.now() - started).toBeLessThan(WAIT_PHRASES_TIMEOUT_MS + 2000)
     expect(reportLines()).toHaveLength(1)
   })
 })
