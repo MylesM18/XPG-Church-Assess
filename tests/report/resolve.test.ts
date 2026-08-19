@@ -194,6 +194,40 @@ describe('resolveReportSections', () => {
     expect(r.stale).toBe(false)
   })
 
+  /**
+   * The label screen (2026-08-19 follow-up): with verbatims now rendering on every private
+   * report, a reflection NAMING a respondent used to survive all the way to the PDF's
+   * fail-closed guard, which then refused the WHOLE export (a generic 500) rather than the one
+   * line — and the web surface has no render guard at all. Screening here, at the one pipeline
+   * both surfaces share, loses the line and keeps the report. Same precedent as buildFacts'
+   * profile free-text screen.
+   */
+  it('drops a reflection naming a respondent before it can reach a renderer', async () => {
+    const r = await resolveReportSections({
+      ...baseArgs(),
+      readPersisted: async () => ({ matched: null, anyExists: false }),
+      labelSource: { kind: 'known' as const, labels: ['Sarah Okafor'] },
+      reflections: [
+        { item_id: 'G6', reflection: 'Sarah Okafor follows up with every guest.' },
+        { item_id: 'G6', reflection: 'Nobody followed up with the family who visited in June.' },
+      ],
+    })
+    const joined = r.sections.find((s) => s.id === 's8')!.fallback.bullets.join(' ')
+    expect(joined).not.toContain('Sarah Okafor')
+    expect(joined).toContain('Nobody followed up with the family who visited in June.')
+  })
+
+  it('drops every reflection when the labels are unknowable — fail closed', async () => {
+    const r = await resolveReportSections({
+      ...baseArgs(),
+      readPersisted: async () => ({ matched: null, anyExists: false }),
+      labelSource: { kind: 'redacted' as const },
+      reflections: [{ item_id: 'G6', reflection: 'A perfectly clean reflection.' }],
+    })
+    const s8 = r.sections.find((s) => s.id === 's8')!
+    expect(s8.fallback.bullets.join(' ')).not.toContain('A perfectly clean reflection.')
+  })
+
   it('accepts themes that revalidate on a fresh row', async () => {
     const r = await resolveReportSections({
       ...baseArgs(),

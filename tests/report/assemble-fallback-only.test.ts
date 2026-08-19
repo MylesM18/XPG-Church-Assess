@@ -166,10 +166,12 @@ const ONE_RESPONDENT_FACTS: FactsPack = buildFacts({
 });
 
 describe('assembleFallbackOnly', () => {
-  // Task 10: the s8 fallback anonymity gap. G6 is a real reflection-prompted item (category
-  // guest, methodology/questions.yaml) — the same one tests/report/fallback-sections.test.ts's
-  // reflectionItemId already established, so buildOutreachVoices would surface these entries if
-  // the k-threshold guard were not in place, proving the guard is what suppresses them here.
+  // Task 10, re-grounded 2026-08-19: G6 is a real reflection-prompted item (category guest,
+  // methodology/questions.yaml), so buildOutreachVoices WOULD surface these entries on a
+  // private surface — what suppresses them here is the ABSENT audience: assembleFallbackOnly is
+  // the share page's assembler, its callers declare no private audience, and the s8 allow-list
+  // fails closed. The old k-threshold count gate is gone (owner ruling); this pin matters more
+  // now, not less.
   it('suppresses verbatim reflections in s8 at one respondent — the surface the public share page always renders', () => {
     const reflections = [
       { item_id: 'G6', reflection: 'I greeted the guest and walked them to the coffee table.' },

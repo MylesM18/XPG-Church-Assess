@@ -89,8 +89,9 @@ beats:
     plateaued: "Against a flat trajectory, this is one of the places holding the plateau in place."
     growing_steadily: "Against steady growth, this is the area growth will find first."
     growing_rapidly: "Against rapid growth, this is the area most likely to be overrun before it is ready."
-# S8's below-threshold line. Shown instead of verbatim reflections when too few people responded
-# for a quote to be unattributable — including on the public share page, which renders the
-# fallback path permanently.
+# S8's withheld line: shown instead of verbatim reflections on the PUBLIC share page (and any
+# surface that fails to declare an audience) when no k-gated themes exist. Since 2026-08-19 the
+# private report shows the reflections at any respondent count; this line is about audience,
+# not count. s8_no_reflections below is the private report's own empty case.
 s8_below_threshold: "Individual reflections are not shown in this report to protect respondent anonymity."
 s8_no_reflections: "No written reflections were submitted with this assessment."

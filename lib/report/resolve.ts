@@ -1,4 +1,5 @@
 import { buildFacts } from '@/lib/report/facts'
+import { containsRespondentLabel } from '@/lib/report/anonymity'
 import type { ThemeClusterFact } from '@/lib/report/facts'
 import { reportInputs } from '@/lib/report/inputs-hash'
 import { assembleReport } from '@/lib/report/compose'
@@ -89,10 +90,27 @@ export async function resolveReportSections(
         themes,
       })
 
+  // Reflections a renderer may see: the keyless array, additionally screened against the
+  // respondent labels — the same precedent buildFacts applies to profile free text. A reflection
+  // NAMING a respondent used to survive to the PDF's fail-closed label guard, which then refused
+  // the WHOLE export (a generic 500) rather than the one line — and the web report has no render
+  // guard at all. Screening here, in the one pipeline both surfaces share, loses the line and
+  // keeps the report; the PDF guard stays as the backstop it was built to be. Labels unknowable
+  // (kind 'redacted') drops every reflection — fail closed, exactly like the profile fields.
+  // hashReflections is deliberately NOT screened: the inputs hash must not move when a label
+  // list changes.
+  const labelSource = inputs.labelSource
+  const safeReflections =
+    labelSource.kind === 'known'
+      ? reflections.filter(
+          (r) => r.reflection === null || !containsRespondentLabel(r.reflection, labelSource.labels),
+        )
+      : []
+
   const sections = assembleReport({
     facts,
     methodology: inputs.methodology,
-    reflections, // the KEYLESS array — never hashReflections
+    reflections: safeReflections, // the KEYLESS array, label-screened — never hashReflections
     persisted,
     liveInputsHash: inputsHash,
     audience,
