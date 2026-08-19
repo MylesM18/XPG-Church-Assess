@@ -30,6 +30,32 @@ describe('respondentLabels', () => {
   it('returns an empty array for no responses', () => {
     expect(respondentLabels([])).toEqual([]);
   });
+
+  /**
+   * Greptile P1 on PR #86, verified real: submit_self_response coalesces a profile with no
+   * full_name and no email to the literal label 'Member'
+   * (supabase/migrations/20260716000900_submit_rpcs_bounds_guard.sql:96). 'Member' is the
+   * SYSTEM'S OWN PLACEHOLDER, not a person's name — it identifies nobody — yet as a substring
+   * needle it matches the report's own vocabulary ("staff member", "whoever remembers" in
+   * questions.yaml item text), which made every guard fire at once: the PDF export threw on its
+   * own chart strings, and the reflection screen dropped "as a member of the youth group".
+   * The same class as the blank-label trap above: fail-closed degenerating into fail-everything.
+   */
+  it("drops the 'Member' placeholder label, in any casing", () => {
+    const rows = [
+      { respondent_label: 'Member' },
+      { respondent_label: 'member' },
+      { respondent_label: ' MEMBER ' },
+      { respondent_label: 'Dana Okafor' },
+    ];
+    expect(respondentLabels(rows)).toEqual(['Dana Okafor']);
+  });
+
+  it('keeps real names that merely contain the placeholder', () => {
+    // Only the exact placeholder is excluded — a name is still a needle.
+    const rows = [{ respondent_label: 'Membertus Okafor' }];
+    expect(respondentLabels(rows)).toEqual(['Membertus Okafor']);
+  });
 });
 
 describe('containsRespondentLabel', () => {
