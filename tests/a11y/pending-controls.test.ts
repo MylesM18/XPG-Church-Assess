@@ -143,18 +143,23 @@ describe('pending controls', () => {
   // in app/app/[churchId]/regenerate-diagnosis-button.tsx — aria-disabled={pending || !ready} with
   // TWO matching `if (<word>) return` guards (pending, readiness), driven by useTransition +
   // generateDiagnosis. Rendered only for a reopened run that already has a diagnosis.
-  it('covers all sixteen known pending controls', () => {
+  // Bumped from 16 to 17 when fix/auto-generate-hardening moved the diagnosis page's Generate /
+  // Regenerate report button into app/app/[churchId]/diagnosis/auto-generate-report.tsx —
+  // aria-disabled={pending} with a matching `if (pending) return` guard, driven by useTransition +
+  // regenerateReport — so the button the page renders BESIDE an in-flight auto-run can no longer
+  // start a second, concurrent model run (post-merge review of PR #79, finding 4).
+  it('covers all seventeen known pending controls', () => {
     const count = FILES.reduce(
       (n, f) => n + (f.source.match(new RegExp(ARIA_DISABLED, 'g'))?.length ?? 0),
       0,
     )
     expect(
       count,
-      'expected exactly 16 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
+      'expected exactly 17 `aria-disabled={…}` bindings across app/ and components/ — one per ' +
         'control in the spec’s scope table. A LOWER count means a site was missed or reverted. A ' +
         'HIGHER count is not a defect: a new pending control was added, which is fine — add it to ' +
         '§2 of the design doc and bump this number. The answer-form wizard contributes two: the ' +
         'Submit/Next control and the Back navigation boundary (aria-disabled={step === 0}).',
-    ).toBe(16)
+    ).toBe(17)
   })
 })

@@ -56,29 +56,33 @@ describe('the report generation block', () => {
     expect(saveIdx).toBeLessThan(composeIdx);
   });
 
-  it('is gated by proseEnabled(), the same gate as the prose block', () => {
+  it('is gated by proseEnabled() — the ONE model gate left in generateDiagnosis now that the M5b prose block is retired', () => {
     // R2: count EQUALITY on the gate `if` line itself, not a loose >= presence check on the bare
     // identifier — the import line and comments carry `proseEnabled` too. Counting the full gate
-    // line is non-vacuous in both directions: deleting either gate fails, and a third ungated
+    // line is non-vacuous in both directions: deleting the gate fails, and a second ungated
     // block fails too. Since fix/prose-auto-generate-on-view the gate is `proseEnabled()`
     // (lib/ai/prose-mode.ts: key-present ⇒ on, PROSE_MODE optional override), never an inline
-    // `process.env.PROSE_MODE` read.
+    // `process.env.PROSE_MODE` read. Since fix/auto-generate-hardening the M5b diagnosis-prose
+    // block (generateProse + save_prose, whose output nothing rendered) is gone: 2 → 1.
     const gates = src.match(/if \(proseEnabled\(\)\) \{/g);
-    expect(gates?.length).toBe(2); // the M5b prose block, and this task's report block
+    expect(gates?.length).toBe(1); // the report block only
     expect(src.match(/process\.env\.PROSE_MODE/g) ?? []).toHaveLength(0);
+    expect(src).not.toContain('generateProse(');
+    expect(src).not.toContain("rpc('save_prose'");
+    expect(src).not.toContain("'[m5b]");
   });
 
-  it('is wrapped in its own try/catch, separate from the prose block', () => {
-    // Neither best-effort block may break the other, the committed diagnosis, or the redirect.
+  it('is wrapped in its own try/catch', () => {
+    // The best-effort block may not break the committed diagnosis or the redirect.
     //
-    // FINAL REVIEW: EQUALITY, not a >= threshold. actions.ts holds three `catch (err)` in total
-    // (generation's prose block, generation's report block, regenerateReport's) — so a whole-file
-    // `>= 2` stayed green with generation's ENTIRE report try/catch deleted, the exact regression
-    // this test exists to catch. Scoped to generateDiagnosis the true count is 2, and equality is
-    // non-vacuous in both directions: deleting either block fails, and a THIRD bare try/catch
-    // added inside generation — a new unguarded swallow of an error nobody chose to swallow —
-    // fails too, which a threshold would wave through.
-    expect(src.match(/catch \(err\)/g)?.length).toBe(2);
+    // FINAL REVIEW: EQUALITY, not a >= threshold. actions.ts holds `catch (err)` in generation's
+    // report block and in regenerateReport — so a whole-file `>= 1` would stay green with
+    // generation's ENTIRE report try/catch deleted, the exact regression this test exists to
+    // catch. Scoped to generateDiagnosis the true count is 1 (it was 2 while the M5b prose block
+    // had its own), and equality is non-vacuous in both directions: deleting the block fails, and
+    // a SECOND bare try/catch added inside generation — a new unguarded swallow of an error nobody
+    // chose to swallow — fails too, which a threshold would wave through.
+    expect(src.match(/catch \(err\)/g)?.length).toBe(1);
   });
 
   it('computes the inputs hash before the cache check', () => {

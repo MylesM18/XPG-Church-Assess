@@ -21,7 +21,7 @@ const ITEMS = [
   {
     num: 'Q.04',
     q: 'What does the AI actually do?',
-    a: 'Less than you\'d think — and by default, nothing at all. Every score, the primary finding, and your next step are calculated the same way every time, straight from your answers. The assessment ships with AI phrasing switched off, and the report reads fine without it. Turn it on and its only job is wording — and even then, it is checked against the real numbers five separate ways before it reaches you. Any sentence that drifts from the data is thrown out and the plain version is used instead. The AI never decides what is true about your church.',
+    a: 'Less than you\'d think. Every score, the primary finding, and your next step are calculated the same way every time, straight from your answers — the AI never touches them. Its only job is wording: once the numbers are in, it writes them up in plain prose, and every sentence is checked against the real numbers five separate ways before it reaches you. Any sentence that drifts from the data is thrown out and the plain version is used instead — so if the AI is ever unavailable, the report is still complete and reads fine without it. The AI never decides what is true about your church.',
   },
   {
     num: 'Q.05',

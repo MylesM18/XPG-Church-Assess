@@ -71,32 +71,39 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
       expect(count(page, /process\.env\.PROSE_MODE/g)).toBe(0)
     })
 
-    it('renders the regenerateReport form exactly twice — the stale block AND the generate block, each with the hidden churchId', () => {
-      // Occurrence-count equality, not presence (feedback_nonvacuity_two_classes): the stale
-      // block already carried one form, so a bare `toContain` here proves nothing.
-      expect(count(page, /<form action=\{regenerateReport\}>/g)).toBe(2)
-      expect(count(page, /<input type="hidden" name="churchId" value=\{churchId\} \/>/g)).toBe(2)
+    it('renders the PLAIN regenerateReport form exactly once — the stale block when prose is off; every AI-on path goes through AutoGenerateReport', () => {
+      // Occurrence-count equality, not presence (feedback_nonvacuity_two_classes). Since
+      // fix/auto-generate-hardening the client component owns the Generate / Regenerate button on
+      // the AI-on paths (so it can be aria-disabled while the auto-run it just started is in
+      // flight); the Server-Component form survives only for the prose-off stale notice, whose
+      // behaviour is deliberately unchanged.
+      expect(count(page, /<form action=\{regenerateReport\}>/g)).toBe(1)
+      expect(count(page, /<input type="hidden" name="churchId" value=\{churchId\} \/>/g)).toBe(1)
     })
 
-    it('gates the generate block on !stale && needsGeneration && aiOn, wrapped in ReportNotice, with its own copy', () => {
+    it('gates the generate block on !stale && needsGeneration && aiOn, wrapped in ReportNotice, with its own copy and label', () => {
       const m = page.match(/\{!stale\s*&&\s*needsGeneration\s*&&\s*aiOn\s*&&\s*\(\s*<ReportNotice>([\s\S]*?)<\/ReportNotice>/)
       expect(m).not.toBeNull()
       const block = m![1]!
-      expect(block).toContain('<form action={regenerateReport}>')
-      expect(block).toContain('<input type="hidden" name="churchId" value={churchId} />')
+      expect(block).toContain('<AutoGenerateReport')
+      expect(block).not.toContain('<form')
       // Distinct copy: this is not a settings-change situation, so it must not reuse the D-P5-8
       // stale sentence, and the button says Generate, not Regenerate.
       expect(block).not.toContain('predates your latest settings change')
       expect(block).toContain('This report hasn’t been written by the model yet.')
-      expect(block).toMatch(/>\s*Generate report\s*</)
-      expect(block).not.toMatch(/>\s*Regenerate report\s*</)
+      expect(block).toContain('label="Generate report"')
+      expect(block).not.toContain('label="Regenerate report"')
     })
 
-    it('keeps the stale copy exactly once and the generate copy exactly once', () => {
+    it('keeps the stale copy exactly once, the generate copy exactly once, and each button label exactly once per path', () => {
       expect(count(page, /This report predates your latest settings change\./g)).toBe(1)
       expect(count(page, /This report hasn’t been written by the model yet\./g)).toBe(1)
+      // The plain (prose-off) form's own button text, once; the two client-owned buttons carry
+      // their text as the `label` prop, once each.
       expect(count(page, />\s*Regenerate report\s*</g)).toBe(1)
-      expect(count(page, />\s*Generate report\s*</g)).toBe(1)
+      expect(count(page, />\s*Generate report\s*</g)).toBe(0)
+      expect(count(page, /label="Regenerate report"/g)).toBe(1)
+      expect(count(page, /label="Generate report"/g)).toBe(1)
     })
 
     it('places the generate block after the stale block and before the cover', () => {
@@ -111,15 +118,26 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
   // fix/prose-auto-generate-on-view (2026-08-19): the owner wants the model to run WHEN AN ADMIN
   // VIEWS the diagnosis, not only when they find and click the Generate / Regenerate button. The
   // page therefore mounts a small client component in BOTH notice blocks that fires the same
-  // `regenerateReport` server action once per browser session per (church, INPUTS HASH) and then
-  // router.refresh()es. The forms stay exactly as they were: they are the retry path.
+  // `regenerateReport` server action once per browser session per (church, INPUTS HASH).
   //
   // Greptile P1 (PR #79, "Stale latch blocks later generations"): the latch used to be keyed on
   // the TRIGGER ('stale' | 'generate'), so once an auto-run had fired for `stale`, a LATER settings
   // change in the same tab session — a new inputs hash, a genuinely new stale state — was
   // suppressed for the rest of the session. Keyed on the resolver's `inputsHash` instead: a new
-  // hash is a new latch (auto-fires again), the same hash never re-fires (the manual form is the
+  // hash is a new latch (auto-fires again), the same hash never re-fires (the button is the
   // retry), and the trigger prop is gone — a hash is stale-or-generate, the distinction is moot.
+  //
+  // fix/auto-generate-hardening (post-merge review of #79, findings 1/3/4): the component now
+  // OWNS the Generate / Regenerate button — the Server-Component form beside it stayed live while
+  // the auto-run it had just started was in flight, so a click doubled the model spend with no
+  // dedup able to see in-flight work. `await action(fd)` is guarded: a transport-level rejection
+  // of an auto-fired POST (dropped connection, 504 at the duration cap) used to reach the root
+  // error boundary — the app has no error.tsx — and replace the whole page on a mere view. And
+  // the mount effect is gated on `auto`, which the page sets to `!runIsOpen`: on an OPEN /
+  // reopened run every member submission is a new inputs hash, so view-time auto-generation
+  // regenerated the whole report per submission, bypassing the dashboard's "everyone has
+  // finished" gate. router.refresh() is gone: the action revalidates the page itself on every
+  // path that changes it, including a dedup skip.
   describe('auto-generate on admin view (AutoGenerateReport)', () => {
     const component = read('app', 'app', '[churchId]', 'diagnosis', 'auto-generate-report.tsx')
     const rawComponent = fs.readFileSync(
@@ -127,7 +145,7 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
       'utf8',
     )
 
-    it('is a client component that receives the server action + inputsHash as props (no trigger) and never imports ../actions itself', () => {
+    it('is a client component that receives the server action, inputsHash, label and auto as props (no trigger) and never imports ../actions itself', () => {
       // The action is passed DOWN from the Server Component so page.tsx keeps its single import of
       // regenerateReport (pinned below); the client file must not grow its own import path to it.
       expect(rawComponent.trimStart().startsWith("'use client'")).toBe(true)
@@ -135,30 +153,62 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
       expect(component).not.toContain("from './actions'")
       expect(component).toMatch(/action: \(formData: FormData\) => Promise<void>/)
       expect(component).toMatch(/inputsHash: string/)
+      expect(component).toMatch(/label: 'Generate report' \| 'Regenerate report'/)
+      expect(component).toMatch(/auto: boolean/)
       expect(component).not.toMatch(/trigger: 'generate' \| 'stale'/)
       expect(count(component, /\btrigger\b/g)).toBe(0)
     })
 
-    it('fires inside a transition, refreshes the router afterwards, and latches on a sessionStorage key namespaced by (church, inputsHash)', () => {
+    it('auto-fires only when `auto`, inside a transition, latched on a sessionStorage key namespaced by (church, inputsHash) — and never refreshes the router itself', () => {
       expect(component).toContain("import { useEffect, useTransition } from 'react'")
-      expect(component).toContain("import { useRouter } from 'next/navigation'")
-      expect(count(component, /startTransition\(/g)).toBe(1)
-      expect(count(component, /router\.refresh\(\)/g)).toBe(1)
-      // The latch is SET before the action is awaited (survives strict-mode double effects and
-      // any later refresh), and read first so a second mount with the key present does nothing.
-      // Keyed on the INPUTS HASH, never the trigger: a later settings change ⇒ new hash ⇒ new key.
+      expect(component).not.toContain("from 'next/navigation'")
+      expect(count(component, /router\.refresh\(\)/g)).toBe(0)
+      // The effect bails FIRST on !auto (an open / reopened run must not auto-spend), then reads
+      // the latch, then SETS it before anything is awaited (survives strict-mode double effects
+      // and any later refresh). Keyed on the INPUTS HASH, never the trigger.
+      const effectStart = component.indexOf('useEffect(')
+      const effectEnd = component.indexOf('}, [auto, churchId, inputsHash, action])')
+      // Guard both anchors: indexOf(-1) would silently widen the slice to the whole file.
+      expect(effectStart).toBeGreaterThan(-1)
+      expect(effectEnd).toBeGreaterThan(effectStart)
+      const effect = component.slice(effectStart, effectEnd)
+      expect(effect.indexOf('if (!auto) return')).toBeGreaterThan(-1)
+      expect(effect.indexOf('if (!auto) return')).toBeLessThan(effect.indexOf('sessionStorage.getItem('))
       expect(component).toContain('`xpg:autogen:${churchId}:${inputsHash}`')
-      expect(component).not.toContain('`xpg:autogen:${churchId}:${trigger}`')
       expect(count(component, /xpg:autogen:/g)).toBe(1)
-      // The effect re-runs when the hash changes: inputsHash is in its dependency list.
-      expect(component).toMatch(/\}, \[churchId, inputsHash, action, router\]\)/)
       expect(count(component, /sessionStorage\.getItem\(/g)).toBe(1)
       expect(count(component, /sessionStorage\.setItem\(/g)).toBe(1)
-      expect(component.indexOf('sessionStorage.getItem(')).toBeLessThan(component.indexOf('sessionStorage.setItem('))
-      expect(component.indexOf('sessionStorage.setItem(')).toBeLessThan(component.indexOf('startTransition('))
-      expect(component.indexOf('await action(fd)')).toBeLessThan(component.indexOf('router.refresh()'))
-      // The FormData carries churchId under the exact name the action reads.
+      expect(effect.indexOf('sessionStorage.getItem(')).toBeLessThan(effect.indexOf('sessionStorage.setItem('))
+      expect(effect.indexOf('sessionStorage.setItem(')).toBeLessThan(effect.indexOf('startTransition('))
+      // Two transition sites — the mount effect and the click — sharing ONE invoke path.
+      expect(count(component, /startTransition\(/g)).toBe(2)
+    })
+
+    it('guards the awaited action: transport failures are swallowed (the button is the retry), and the FormData names churchId + auto exactly as the action reads them', () => {
+      expect(count(component, /await action\(fd\)/g)).toBe(1)
+      const tryIdx = component.indexOf('try {')
+      const awaitIdx = component.indexOf('await action(fd)')
+      const catchIdx = component.indexOf('} catch')
+      for (const idx of [tryIdx, awaitIdx, catchIdx]) expect(idx).toBeGreaterThan(-1)
+      expect(tryIdx).toBeLessThan(awaitIdx)
+      expect(awaitIdx).toBeLessThan(catchIdx)
       expect(component).toContain("fd.set('churchId', churchId)")
+      // `auto=1` is what the server's back-off rule keys on (actions.ts); a manual click must NOT
+      // send it — the button is the retry that bypasses the back-off.
+      expect(count(component, /fd\.set\('auto', '1'\)/g)).toBe(1)
+      expect(component).toMatch(/if \(auto\) fd\.set\('auto', '1'\)/)
+    })
+
+    it('owns the button: type="button", aria-disabled while pending with an `if (pending) return` guard, text from `label`, no <form>', () => {
+      // a11y pending-controls contract (tests/a11y/pending-controls.test.ts): aria-disabled, never
+      // native disabled; the guard is what stops a second activation.
+      expect(count(component, /<button/g)).toBe(1)
+      expect(component).toContain('type="button"')
+      expect(component).toContain('aria-disabled={pending}')
+      expect(component).toMatch(/if \(pending\) return/)
+      expect(component).toMatch(/>\s*\{label\}\s*<\/button>/)
+      expect(component).not.toContain('<form')
+      expect(component).not.toMatch(/(?<!aria-)disabled=\{/)
     })
 
     it('announces the pending state through LiveStatus (always mounted, tone="status" ⇒ aria-live polite), with the agreed copy', () => {
@@ -183,27 +233,32 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
       expect(page).toContain('inputsHash = resolved.inputsHash')
     })
 
-    it('page.tsx imports it once and renders it exactly twice — each with inputsHash={inputsHash!} and action={regenerateReport}, no trigger prop', () => {
+    it('page.tsx imports it once and renders it exactly twice — each with inputsHash={inputsHash!}, action={regenerateReport}, auto={!runIsOpen}, and a distinct label', () => {
       expect(count(page, /import \{ AutoGenerateReport \} from '\.\/auto-generate-report'/g)).toBe(1)
       expect(count(page, /import \{ regenerateReport \} from '\.\.\/actions'/g)).toBe(1)
       expect(count(page, /<AutoGenerateReport\b/g)).toBe(2)
-      // Occurrence-count equality: both mounts carry the hash and the action; the trigger prop is
-      // gone everywhere (a bare `not.toContain('trigger="stale"')` would survive a renamed leftover).
-      expect(count(page, /<AutoGenerateReport churchId=\{churchId\} inputsHash=\{inputsHash!\} action=\{regenerateReport\} \/>/g)).toBe(2)
+      // Occurrence-count equality: both mounts carry the hash, the action, and the run-status
+      // gate; the labels differ; the trigger prop is gone everywhere.
+      expect(count(page, /<AutoGenerateReport churchId=\{churchId\} inputsHash=\{inputsHash!\} action=\{regenerateReport\} label="Regenerate report" auto=\{!runIsOpen\} \/>/g)).toBe(1)
+      expect(count(page, /<AutoGenerateReport churchId=\{churchId\} inputsHash=\{inputsHash!\} action=\{regenerateReport\} label="Generate report" auto=\{!runIsOpen\} \/>/g)).toBe(1)
+      expect(count(page, /auto=\{!runIsOpen\}/g)).toBe(2)
       expect(count(page, /trigger=/g)).toBe(0)
+      // `runIsOpen` is the page's existing run-status derivation (ADR 0003), computed once.
+      expect(count(page, /const runIsOpen = run!\.status === 'in_progress'/g)).toBe(1)
     })
 
-    it('places one auto-trigger inside the stale notice (gated on aiOn, above its form) and one inside the generate notice', () => {
+    it('the stale notice renders AutoGenerateReport when prose is on and the plain form otherwise; the generate notice renders only AutoGenerateReport', () => {
       const staleBlock = page.match(/\{stale\s*&&\s*\(\s*<ReportNotice>([\s\S]*?)<\/ReportNotice>/)![1]!
-      // The stale notice + form still render when prose is off (regenerate would silently no-op),
-      // exactly as before — only the auto-trigger is additionally gated on aiOn.
       expect(staleBlock).toContain('This report predates your latest settings change.')
-      expect(staleBlock).toMatch(/\{aiOn && <AutoGenerateReport churchId=\{churchId\} inputsHash=\{inputsHash!\} action=\{regenerateReport\} \/>\}/)
-      expect(staleBlock.indexOf('<AutoGenerateReport')).toBeLessThan(staleBlock.indexOf('<form action={regenerateReport}>'))
+      // Ternary on aiOn: the client-owned button (which can go aria-disabled while its own
+      // auto-run is in flight) when the model can run; the pre-existing plain form when it cannot
+      // (regenerate would silently no-op — deliberately unchanged, see finding 15).
+      expect(staleBlock).toMatch(/\{aiOn \? \(\s*<AutoGenerateReport churchId=\{churchId\} inputsHash=\{inputsHash!\} action=\{regenerateReport\} label="Regenerate report" auto=\{!runIsOpen\} \/>\s*\) : \(\s*<form action=\{regenerateReport\}>/)
+      expect(count(staleBlock, /<form action=\{regenerateReport\}>/g)).toBe(1)
 
       const genBlock = page.match(/\{!stale\s*&&\s*needsGeneration\s*&&\s*aiOn\s*&&\s*\(\s*<ReportNotice>([\s\S]*?)<\/ReportNotice>/)![1]!
-      expect(genBlock).toContain('<AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} />')
-      expect(genBlock.indexOf('<AutoGenerateReport')).toBeLessThan(genBlock.indexOf('<form action={regenerateReport}>'))
+      expect(genBlock).toContain('<AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} label="Generate report" auto={!runIsOpen} />')
+      expect(genBlock).not.toContain('<form')
     })
   })
 

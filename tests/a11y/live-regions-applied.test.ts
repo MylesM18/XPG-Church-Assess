@@ -40,8 +40,10 @@ const FILES = SCAN_DIRS.flatMap(tsxFilesUnder).map((file) => ({
 
 // The twelve files that render a status message. All five success announcements land in files already
 // on this list, so it is also the complete set of LiveStatus consumers. The twelfth
-// (diagnosis/auto-generate-report.tsx, fix/prose-auto-generate-on-view) has no control at all: it
-// announces only its own pending "Writing your report with the model…" state.
+// (diagnosis/auto-generate-report.tsx, fix/prose-auto-generate-on-view) announces its own pending
+// "Writing your report with the model…" state; since fix/auto-generate-hardening it also owns the
+// Generate / Regenerate report button that shares that pending state (see
+// tests/a11y/pending-controls.test.ts, control 17).
 const EXPECTED_CONSUMERS = [
   path.join('components', 'answer-form.tsx'),
   path.join('components', 'auth', 'passwordless-entry.tsx'),

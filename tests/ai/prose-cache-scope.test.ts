@@ -1,16 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { loadMethodology } from '@/lib/methodology/load';
-import { diagnose } from '@/lib/engine';
-import { responseHash } from '@/lib/report/response-hash';
 import type { Response } from '@/lib/engine/types';
 
 // vi.hoisted so the mocks exist before the hoisted vi.mock factories run.
-const { mockCreateClient, mockGenerateProse } = vi.hoisted(() => ({
+const { mockCreateClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
-  mockGenerateProse: vi.fn(),
 }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: mockCreateClient }));
-vi.mock('@/lib/ai/prose', () => ({ generateProse: mockGenerateProse }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
 
@@ -19,14 +15,15 @@ import { generateDiagnosis } from '@/app/app/[churchId]/actions';
 
 const m = loadMethodology();
 const CHURCH_A = '11111111-1111-1111-1111-111111111111';
-const CHURCH_B = '22222222-2222-2222-2222-222222222222';
 
-// Identical answer sets for both churches → identical responseHash. responseHash contains no
-// church identifier (lib/report/response-hash.ts), which is what makes the collision possible.
+// The M5b diagnosis-prose cache-check this file was written for (a sibling church's 'ai' row at
+// the same responseHash must not suppress this church's prose) was retired with the M5b block in
+// fix/auto-generate-hardening — nothing rendered `diagnoses.prose` any more. The report path's
+// equivalent scoping (run_id AND inputs_hash) is pinned in tests/report/generate-report-wiring.test.ts
+// and tests/report/regenerate.test.ts. What remains here is the run-lookup bail below.
 const responses: Response[] = m.questions.categories.flatMap((c) =>
   c.items.map((it) => ({ category_id: c.id, item_id: it.id, value: 7, respondent_label: 'Pastor', respondent_id: 'Pastor' })),
 );
-const HASH = responseHash(responses, diagnose(responses, m, { attendance_band: '500_999' }).methodology_version);
 
 type Row = Record<string, unknown>;
 
@@ -60,60 +57,6 @@ function fakeDb(tables: Record<string, Row[]>) {
   }
   return builder;
 }
-
-describe('generateDiagnosis AI prose cache-check', () => {
-  const saveProseCalls: Array<Record<string, unknown>> = [];
-
-  beforeEach(() => {
-    vi.stubEnv('PROSE_MODE', 'ai');
-    mockGenerateProse.mockReset();
-    mockGenerateProse.mockResolvedValue({ verdict: 'v', next_step: 'n' });
-    saveProseCalls.length = 0;
-
-    const from = fakeDb({
-      churches: [
-        { id: CHURCH_A, attendance_band: '500_999' },
-        { id: CHURCH_B, attendance_band: '500_999' },
-      ],
-      // methodology_version is load-bearing, not decoration: generateDiagnosis now reads it to
-      // pick the scoring edition, so a row without it is treated as PREDATING the outreach
-      // questions, the diagnosis is stamped '0.2.0', and its responseHash no longer collides with
-      // HASH above — which silently defuses this whole test (the cache lookup would match nothing
-      // regardless of scoping). Stamped with the current version, as create_church really does.
-      assessment_runs: [
-        { id: 'run-a', church_id: CHURCH_A, status: 'complete', created_at: '2026-01-01', methodology_version: m.questions.version },
-        { id: 'run-b', church_id: CHURCH_B, status: 'complete', created_at: '2026-01-02', methodology_version: m.questions.version },
-      ],
-      // Church A generated AI prose earlier off the same answers. Church B's row was just
-      // inserted by save_diagnosis and has no prose yet.
-      diagnoses: [
-        { run_id: 'run-a', response_hash: HASH, prose_source: 'ai' },
-        { run_id: 'run-b', response_hash: HASH, prose_source: null },
-      ],
-    });
-
-    mockCreateClient.mockResolvedValue({
-      auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) },
-      from,
-      rpc: async (name: string, args: Record<string, unknown>) => {
-        if (name === 'get_run_responses') return { data: responses, error: null };
-        if (name === 'save_diagnosis') return { data: null, error: null };
-        if (name === 'save_prose') { saveProseCalls.push(args); return { data: null, error: null }; }
-        return { data: null, error: null };
-      },
-    });
-  });
-
-  afterEach(() => { vi.unstubAllEnvs(); });
-
-  it('generates prose for this church even when another church has an AI row for the same hash', async () => {
-    await generateDiagnosis(CHURCH_B);
-
-    expect(mockGenerateProse).toHaveBeenCalledTimes(1);
-    expect(saveProseCalls).toHaveLength(1);
-    expect(saveProseCalls[0]?.p_church_id).toBe(CHURCH_B);
-  });
-});
 
 /**
  * The run lookup moved ABOVE the derive (it now selects the scoring edition), which changed what a

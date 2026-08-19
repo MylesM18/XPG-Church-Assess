@@ -23,17 +23,17 @@ describe('regenerateReport wiring', () => {
 
   it('is gated by proseEnabled(), exactly like generation — never by an inline PROSE_MODE read', () => {
     // Occurrence-count equality on the `proseEnabled()` CALL (not the bare identifier, which the
-    // import line also carries). Three call sites: the M5b prose block, the report block, and
-    // regenerateReport's early return. A bare-word count would stay green if the regenerate gate
-    // were deleted; equality on the call catches both a dropped gate and a fourth ungated model
-    // path. Zero inline `process.env.PROSE_MODE` reads: the ONLY reader is lib/ai/prose-mode.ts,
-    // so the four surfaces can never disagree about whether the model is on.
-    // Comments are stripped first: the docblocks name `proseEnabled()` in prose too, and a raw
-    // count would drift every time a comment is edited.
+    // import line also carries). Two call sites since fix/auto-generate-hardening retired the M5b
+    // prose block: the report block, and regenerateReport's early return. A bare-word count would
+    // stay green if the regenerate gate were deleted; equality on the call catches both a dropped
+    // gate and a third ungated model path. Zero inline `process.env.PROSE_MODE` reads: the ONLY
+    // reader is lib/ai/prose-mode.ts, so the surfaces can never disagree about whether the model
+    // is on. Comments are stripped first: the docblocks name `proseEnabled()` in prose too, and a
+    // raw count would drift every time a comment is edited.
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
     expect(code).toContain("import { proseEnabled } from '@/lib/ai/prose-mode'")
-    expect(code.match(/proseEnabled\(\)/g)?.length).toBe(3)
-    expect(code.match(/if \(proseEnabled\(\)\) \{/g)?.length).toBe(2)
+    expect(code.match(/proseEnabled\(\)/g)?.length).toBe(2)
+    expect(code.match(/if \(proseEnabled\(\)\) \{/g)?.length).toBe(1)
     expect(code.match(/process\.env\.PROSE_MODE/g) ?? []).toHaveLength(0)
     expect(code).toContain('if (!proseEnabled()) return')
   })
@@ -88,15 +88,35 @@ describe('regenerateReport wiring', () => {
       expect(regenerateCode).toContain('generated_at')
     })
 
-    it('logs the skip with seconds only — no payload — and returns without persisting or revalidating', () => {
-      expect(regenerateSrc).toContain("'[report] regenerate skipped: a usable report for these inputs was written '")
+    it('logs the skip with seconds only — no payload — revalidates the page, and returns without persisting', () => {
+      expect(regenerateSrc).toContain("'[report] regenerate skipped: a report for these inputs was written '")
       // The skip returns BEFORE any model call; the log carries an age in seconds, nothing else.
+      // fix/auto-generate-hardening: the skip REVALIDATES first — the clicking tab may have
+      // rendered before the other tab's write, and Next does not re-render a form action that
+      // neither revalidates nor redirects (behavior pinned in tests/report/regenerate-behavior.test.ts).
       const skipIdx = regenerateSrc.indexOf('[report] regenerate skipped:')
-      const skipTail = regenerateSrc.slice(skipIdx, skipIdx + 260)
+      const skipTail = regenerateSrc.slice(skipIdx, skipIdx + 320)
       expect(skipTail).toMatch(/s ago/)
+      expect(skipTail).toContain('revalidatePath(`/app/${churchId}/diagnosis`)')
       expect(skipTail).toMatch(/return/)
+      expect(skipTail.indexOf('revalidatePath(')).toBeLessThan(skipTail.indexOf('return'))
       expect(skipTail).not.toContain('section_sources')
       expect(skipTail).not.toContain('facts')
+    })
+
+    it('reads the auto flag off the FormData under the exact name the client sends, and only auto-runs back off from a non-usable row', () => {
+      // fix/auto-generate-hardening: `auto=1` widens the skip to ANY fresh row (a fresh
+      // all-fallback row = the model just failed; do not re-run it from every new tab). Manual
+      // calls keep the usable-only rule — the H7 point.
+      const regenerateCode = code.slice(code.indexOf('export async function regenerateReport'))
+      expect(regenerateCode).toContain("const auto = formData.get('auto') === '1'")
+      expect(regenerateCode).toMatch(/if \(cached && \(auto \|\| isUsableCachedReport\(cached\.section_sources\)\)\)/)
+      // The DB clock may run a little ahead of the function's: a small negative age is "just
+      // written"; the tolerance is named, declared once, and used once.
+      expect(code).toMatch(/const REGENERATE_DEDUP_SKEW_TOLERANCE_MS = 60_000/)
+      expect(code.match(/REGENERATE_DEDUP_SKEW_TOLERANCE_MS/g)?.length).toBe(2)
+      expect(regenerateCode).toContain('ageMs > -REGENERATE_DEDUP_SKEW_TOLERANCE_MS')
+      expect(regenerateCode).not.toContain('ageMs >= 0')
     })
 
     it('places the dedup read AFTER reportInputs({ and BEFORE clusterThemes( — the hash exists, the model has not been called', () => {

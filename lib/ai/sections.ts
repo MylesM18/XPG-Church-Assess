@@ -178,7 +178,10 @@ let missingKeyWarned = false;
  * sample report read as composed prose for weeks (spec §0/§7.2). Name the actual cause once.
  */
 function warnIfKeyAbsent(): void {
-  if (missingKeyWarned || process.env.OPENAI_API_KEY) return;
+  // Trimmed non-emptiness, exactly as the openai SDK reads the key (`.trim() || undefined`): a
+  // whitespace-only value makes `new OpenAI()` throw "Missing credentials", and this is the one
+  // line that names the cause (lib/ai/prose-mode.ts tests the key the same way).
+  if (missingKeyWarned || (process.env.OPENAI_API_KEY ?? '').trim() !== '') return;
   missingKeyWarned = true;
   console.warn('[report] OPENAI_API_KEY absent — every AI section will fall back to the deterministic spine');
 }

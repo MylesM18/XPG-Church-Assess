@@ -61,12 +61,14 @@ describe('reflections and verbatims reach only the clustering task and its gate'
 });
 
 // The scan above only proves lib/ai/ itself never mentions reflections. That is not the whole
-// story: lib/ai/prose.ts's generateProse takes a plain Diagnosis object and JSON.stringifies it
-// whole into the model prompt, so it would carry reflections through with zero bytes changed
-// under lib/ai/ if they ever reached that Diagnosis object. The actual protection is upstream,
-// in app/app/[churchId]/actions.ts: an explicit field-by-field allowlist between the raw DB row
-// (which DOES legitimately carry `.reflection` — RunResponseRow declares it) and the Response[]
-// that becomes the Diagnosis passed to generateProse. Nothing else in the repo pins that seam.
+// story: the Response[] built in app/app/[churchId]/actions.ts becomes the Diagnosis whose facts
+// (lib/report/facts.ts) are serialised into every section prompt (lib/ai/sections.ts), so it
+// would carry reflections through with zero bytes changed under lib/ai/ if they ever reached
+// that Response[]. The actual protection is upstream, in actions.ts: an explicit field-by-field
+// allowlist between the raw DB row (which DOES legitimately carry `.reflection` — RunResponseRow
+// declares it) and the Response[]. Nothing else in the repo pins that seam. (The M5b
+// generateProse call site this block used to name was retired in fix/auto-generate-hardening;
+// the seam matters exactly as much for the report path.)
 // (Bracket path — a git command naming this file needs GIT_LITERAL_PATHSPECS=1; irrelevant to
 // reading it here via node:fs.)
 const actionsSource = stripTs(readFileSync('app/app/[churchId]/actions.ts', 'utf8'));
@@ -122,12 +124,13 @@ describe('the raw-row to Response[] mapping stays an explicit allowlist that dro
   });
 });
 
-describe('the generateProse call site passes the clean diagnosis, not an enriched one', () => {
-  it('generateProse is called with exactly (diagnosis, derived.effectiveMethodology)', () => {
-    // A positive structural pin, not a substring check: any change to this call site — a
-    // spread, an extra argument, a different variable — breaks the match. Strict-equal on the
-    // two argument expressions, whitespace-tolerant so a pure reformat doesn't false-fail.
-    expect(actionsSource).toMatch(/generateProse\(\s*diagnosis\s*,\s*derived\.effectiveMethodology\s*,?\s*\)/);
+describe('the M5b generateProse call site is gone', () => {
+  it('actions.ts neither imports nor calls generateProse (retired in fix/auto-generate-hardening)', () => {
+    // A positive pin used to sit here — `generateProse(diagnosis, derived.effectiveMethodology)`
+    // exactly — so any enrichment of that call broke the test. With the block retired the pin
+    // inverts: a re-introduced call is a new model payload that must be reviewed on its own terms.
+    expect(actionsSource).not.toContain('generateProse');
+    expect(actionsSource).not.toContain("'@/lib/ai/prose'");
   });
 });
 

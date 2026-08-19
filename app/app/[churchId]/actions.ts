@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/server'
 import { deriveDiagnosisForRun } from '@/lib/report/derive'
 import type { Response } from '@/lib/engine/types'
 import { responseHash } from '@/lib/report/response-hash'
-import { generateProse } from '@/lib/ai/prose'
 import { buildFacts } from '@/lib/report/facts'
 import { knownLabels } from '@/lib/report/anonymity'
 import { clusterThemes } from '@/lib/ai/themes'
@@ -35,6 +34,10 @@ interface RunResponseRow {
 // enough to cover two admins / two tabs auto-firing on the same view, short enough that a
 // deliberate later regenerate at the same hash still goes through.
 const REGENERATE_DEDUP_WINDOW_MS = 10 * 60_000
+// How far AHEAD of this function's clock a `reports.generated_at` (Postgres now()) may be and still
+// count as "just written". Ordinary NTP skew is tens of ms; a minute is generous without letting a
+// genuinely mis-set clock pin regenerate shut.
+const REGENERATE_DEDUP_SKEW_TOLERANCE_MS = 60_000
 
 export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
@@ -136,71 +139,17 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
   })
   if (saveError) return { ok: false, error: saveError.message }
 
-  // M5b: best-effort AI prose. Gated by the shared proseEnabled() helper (lib/ai/prose-mode.ts:
-  // OPENAI_API_KEY present ⇒ on; PROSE_MODE=ai|fallback overrides), the same function the report
-  // page reads (diagnosis/page.tsx), so the two can never disagree; when it is off no API call is
-  // made and the helper itself logs the single reason line. The diagnosis is already committed
-  // above, so this whole block is wrapped: no SDK/network/RPC failure may break the saved
-  // diagnosis or the redirect below.
-  if (proseEnabled()) {
-    try {
-      // Cache-check: array-tolerant SELECT (RLS permits member SELECT on diagnoses).
-      // Regenerate only when no 'ai' row exists for this hash; the hash changes iff the
-      // answer set changes, so resubmitting identical answers is a no-op.
-      //
-      // Scoped to THIS church's run — `run`, resolved above the derive because its
-      // methodology_version selects the scoring edition. responseHash carries no church
-      // identifier (lib/report/response-hash.ts) and `diagnoses` has no church_id column — the
-      // church link is run_id → assessment_runs.church_id. Unscoped, an identically-answered
-      // sibling church's 'ai' row is visible under RLS to a shared admin and would suppress
-      // generation here permanently. The lookup resolves the same run the report actually
-      // renders. (save_prose narrows server-side too, by church_id + response_hash; the two
-      // coincide while v1 keeps one run per church.) No status filter, so hoisting the read to
-      // before save_diagnosis flips the run to 'complete' selects the same row either way.
-      //
-      // An unresolvable run degrades to a cache MISS (generate), never a skip. save_diagnosis
-      // no longer completes the run and get_run_responses is status-agnostic (ADR 0003), so
-      // Generate is repeatable and this rule stands on its own terms: forfeiting on a transient
-      // read failure would silently pin a fallback report, where a MISS just costs one
-      // regeneration. save_prose resolves its own row from church_id + response_hash, so it
-      // needs no run id.
-      let alreadyAi = false
-      if (run) {
-        const { data: rows } = await supabase
-          .from('diagnoses')
-          .select('prose_source')
-          .eq('run_id', run.id)
-          .eq('response_hash', hash)
-        alreadyAi = (rows ?? []).some((r) => r.prose_source === 'ai')
-      }
-      if (!alreadyAi) {
-        // The run's OWN edition, not the current one: `diagnosis` is stamped with it, so prose
-        // written against the current question set would describe items this run never asked.
-        const blocks = await generateProse(diagnosis, derived.effectiveMethodology) // never throws → ReportBlocks | null
-        if (blocks) {
-          await supabase.rpc('save_prose', {
-            p_church_id: churchId,
-            p_response_hash: hash,
-            p_prose: blocks,
-            p_prose_source: 'ai',
-          })
-        }
-      }
-    } catch (err) {
-      // Backstop for the Supabase calls around generateProse (cache-check SELECT,
-      // save_prose RPC) — NOT for generateProse itself, which never throws: its
-      // SDK/network/parse/fact-check failures are already caught and logged inside
-      // lib/ai/prose.ts. Swallow everything here too so the committed diagnosis and the
-      // redirect below are never affected. No secrets, no church/respondent data — reason only.
-      console.warn('[m5b] AI prose persistence failed, falling back to deterministic prose:', err instanceof Error ? err.message : 'unknown error')
-    }
-  }
-
-  // Plan 3: best-effort executive report. A SECOND block, deliberately separate from the M5b
-  // prose block above — the 10-block diagnosis page is still live until plan 4, so both run.
-  // Same proseEnabled() gate, so when prose is off no API call is made and nothing is logged
-  // under [report]. The diagnosis is already committed, so nothing in here may break it or the
-  // redirect.
+  // Plan 3: best-effort executive report. Gated by the shared proseEnabled() helper
+  // (lib/ai/prose-mode.ts: OPENAI_API_KEY present ⇒ on; PROSE_MODE=ai|fallback overrides), the
+  // same function the diagnosis page reads, so the two can never disagree; when prose is off no
+  // API call is made and nothing is logged under [report] (the helper logs its own single
+  // `[prose-mode]` reason line). The diagnosis is already committed above, so this whole block is
+  // wrapped: no SDK/network/RPC failure may break the saved diagnosis or the redirect below.
+  //
+  // (The M5b diagnosis-prose block that used to sit here — generateProse + save_prose, writing
+  // `diagnoses.prose` — was retired in fix/auto-generate-hardening: nothing has rendered that
+  // column since the report redesign, and once key-present meant on it was one paid serial model
+  // call per Generate for dead data.)
   if (proseEnabled()) {
     try {
       // Reflection rows come from `raw`, NOT from `responses`: Response[] deliberately drops
@@ -309,23 +258,27 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
  * passes `regenerateReport` as the `action` prop of the client component
  * app/app/[churchId]/diagnosis/auto-generate-report.tsx, which fires it once per browser session
  * per (church, inputs hash) — a sessionStorage latch keyed on the resolver's `inputsHash`, so a
- * later settings change is a new latch — and then router.refresh()es to show the model's output.
- * The manual Generate / Regenerate forms remain as the fallback and retry path (a failed auto-run
- * leaves the latch set, so the admin's next resort is the button, not a loop). Auto or manual,
- * the same admin gate below applies; an invitee viewing the page renders neither.
+ * later settings change is a new latch — with `auto=1` in the FormData, and only for a COMPLETED
+ * run (the page passes `auto={!runIsOpen}`; on an open / reopened run every member submission is
+ * a new hash). That component also owns the Generate / Regenerate button, which is the fallback
+ * and retry path (a failed auto-run leaves the latch set, so the admin's next resort is the button,
+ * not a loop) and sends no `auto` flag. This action revalidates the diagnosis path itself on every
+ * path that changes what the page shows — the client does not refresh. Auto or manual, the same
+ * admin gate below applies; an invitee viewing the page renders neither.
  *
- * That latch is per BROWSER, so two admins — or one admin in two tabs — viewing at once each pass
+ * That latch is per TAB, so two admins — or one admin in two tabs — viewing at once each pass
  * their own latch and each invoke this action for the same inputs (Greptile P1, PR #79). The
  * server therefore closes the post-write window itself: after the inputs hash is computed and
- * BEFORE any model call, it re-reads the `reports` row scoped to (run_id, inputs_hash) and, when
- * that row is USABLE (isUsableCachedReport — at least one AI section) and was written within
- * REGENERATE_DEDUP_WINDOW_MS, logs a skip and returns without spending. No migration, no lock:
- * truly simultaneous in-flight calls can still both run — accepted; save_report's UPSERT makes
- * that safe and the only cost is duplicate spend. Nothing is revalidated on a skip (nothing
- * changed); the auto-generate component's router.refresh() re-renders the fresh row anyway. The
- * manual forms are unaffected in practice: the page only renders them when NO usable row exists at
- * the live hash, so a click there never meets a fresh usable row unless another admin just wrote
- * one — which is exactly the case to skip.
+ * BEFORE any model call, it re-reads the `reports` row scoped to (run_id, inputs_hash) and skips
+ * (logs, revalidates the page, returns without spending) when that row was written within
+ * REGENERATE_DEDUP_WINDOW_MS and is USABLE (isUsableCachedReport — at least one AI section), or
+ * — for an AUTO-triggered call, `auto=1` — was written within the window at all, usable or not
+ * (a fresh all-fallback row means the model just failed for these inputs; auto-runs back off, the
+ * button is the retry). See the inline block for the full rule set. No migration, no lock: truly
+ * simultaneous in-flight calls can still both run — accepted; save_report's UPSERT makes that safe
+ * and the only cost is duplicate spend. The skip DOES revalidate the page: a manual click from a
+ * tab that rendered before another tab's write must see the fresh row, and Next does not
+ * re-render a form action that neither revalidates nor redirects.
  *
  * Gate: `proseEnabled()` (lib/ai/prose-mode.ts) — OPENAI_API_KEY present ⇒ on, PROSE_MODE=ai
  * forces on, PROSE_MODE=fallback forces off. The page's affordances read the same function.
@@ -422,32 +375,54 @@ export async function regenerateReport(formData: FormData): Promise<void> {
     // No cache check on CONTENT staleness. Regenerating is the point; save_report's on-conflict
     // UPSERT (migration 20260814000100) makes it both safe and effective — an unchanged inputs
     // hash overwrites the stored row rather than being discarded. The ONLY guard is the short
-    // recency window below: the auto-generate component's sessionStorage latch is per browser, so
-    // two admins / two tabs viewing at once each pass their own latch and would each spend the
-    // model on identical inputs. Same scoped read as generation's cache check (run_id AND
-    // inputs_hash — unscoped, a sibling church's row could suppress this one; unique
-    // (run_id, inputs_hash) ⇒ .maybeSingle() is safe). A row that is 100 % fallback is NOT usable
-    // and never suppresses regenerate — that is the H7 point. No migration and no lock: truly
-    // simultaneous in-flight calls can still both run (accepted — the UPSERT keeps that safe, the
-    // only cost is duplicate spend); this closes the post-write window. Manual Generate /
-    // Regenerate is unaffected in practice: the page only renders those forms when no usable row
-    // exists at the live hash. Skip ⇒ no revalidatePath (nothing changed); the auto-generate
-    // component's router.refresh() re-renders the fresh row anyway.
-    const { data: cached } = await supabase
+    // recency window below: the auto-generate component's sessionStorage latch is per TAB (and the
+    // dashboard opens this page in a new tab), so two admins / two tabs viewing at once each pass
+    // their own latch and would each spend the model on identical inputs. Same scoped read as
+    // generation's cache check (run_id AND inputs_hash — unscoped, a sibling church's row could
+    // suppress this one; unique (run_id, inputs_hash) ⇒ .maybeSingle() is safe).
+    //
+    // Two rules, by caller:
+    //   - MANUAL (the button): only a USABLE fresh row skips. A row that is 100 % fallback never
+    //     suppresses a manual regenerate — that is the H7 point, the button is the retry.
+    //   - AUTO (`auto=1`, sent only by the diagnosis page's mount effect): ANY fresh row skips,
+    //     usable or not. A fresh all-fallback row means the model just failed for these inputs;
+    //     re-running it from every new tab / every dashboard click is unbounded spend with no
+    //     signal, so auto-runs back off for the window and the button stays as the retry.
+    // No migration and no lock: truly simultaneous in-flight calls can still both run (accepted —
+    // the UPSERT keeps that safe, the only cost is duplicate spend); this closes the post-write
+    // window. A skip STILL revalidates the page: the caller may have rendered before the other
+    // tab's write, and Next does not re-render a form action that neither revalidates nor
+    // redirects — without it a manual click in the window shows nothing at all.
+    //
+    // generated_at is Postgres now() and Date.now() is this function's clock: a row stamped a few
+    // seconds AHEAD is "just written", not "not yet written", so the window tolerates a small
+    // negative age; a far-future stamp is still ignored (fail closed against a bad clock — never
+    // suppress regenerate until the wall clock catches up).
+    const { data: cached, error: cachedErr } = await supabase
       .from('reports')
       .select('section_sources, generated_at')
       .eq('run_id', run.id)
       .eq('inputs_hash', inputsHash)
       .maybeSingle()
-    if (cached && isUsableCachedReport(cached.section_sources)) {
+    if (cachedErr) {
+      // Fails OPEN — one duplicate spend beats a silently pinned report — but say so. Reason only.
+      console.warn('[report] reports read failed; regenerating anyway:', cachedErr.message)
+    }
+    const auto = formData.get('auto') === '1'
+    if (cached && (auto || isUsableCachedReport(cached.section_sources))) {
       const writtenAt = cached.generated_at ? Date.parse(cached.generated_at) : NaN
       const ageMs = Date.now() - writtenAt
-      if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < REGENERATE_DEDUP_WINDOW_MS) {
+      if (
+        Number.isFinite(ageMs) &&
+        ageMs > -REGENERATE_DEDUP_SKEW_TOLERANCE_MS &&
+        ageMs < REGENERATE_DEDUP_WINDOW_MS
+      ) {
         // Seconds only — never the row, the sections, or any church / respondent data.
         console.warn(
-          '[report] regenerate skipped: a usable report for these inputs was written ' +
-            `${Math.round(ageMs / 1000)}s ago`,
+          '[report] regenerate skipped: a report for these inputs was written ' +
+            `${Math.max(0, Math.round(ageMs / 1000))}s ago${auto ? ' (auto-run backoff)' : ''}`,
         )
+        revalidatePath(`/app/${churchId}/diagnosis`)
         return
       }
     }
