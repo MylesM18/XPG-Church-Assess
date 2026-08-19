@@ -13,6 +13,30 @@ export function resolveNext(search: string, fallback = '/get-started'): string {
 }
 
 /**
+ * True when this entry-page visit is a leader accepting an invitation rather than a leader
+ * beginning their own assessment.
+ *
+ * WHY IT LIVES HERE: it reads the same `next` param through the same `guardPath`, so "a path we
+ * honour" has one definition. A `next` the guard rejects is not an invitation.
+ *
+ * WHAT IT DECIDES: which of the two first-time emails Supabase renders. Supabase has exactly ONE
+ * "Confirm signup" template for every new account, and it was written as the admin's onboarding
+ * welcome — add your church, invite your leaders, receive your diagnosis. An invited leader does
+ * none of those, so they were handed a checklist that was never theirs. The caller forwards this
+ * as `signInWithOtp`'s `options.data`, which becomes `auth.users.raw_user_meta_data`, which the
+ * template reads as `{{ .Data.invited }}` (docs/owner/confirm-signup-template.html).
+ *
+ * It carries NO privilege: the invitation itself is still gated server-side by the accept RPC on
+ * the exact signed-in address. The worst a forged `next` achieves is the other email's copy.
+ */
+export function isInviteSignup(search: string, fallback = '/get-started'): boolean {
+  const next = resolveNext(search, fallback)
+  // Anchored on the route with a token after it: `/accept/<token>`. A bare `/accept`, or an
+  // unrelated path that merely starts with the word (`/acceptable-use`), is not an invitation.
+  return next.startsWith('/accept/') && next.length > '/accept/'.length
+}
+
+/**
  * The one open-redirect guard. Both resolvers delegate here so there is a single
  * definition of "a path we are willing to append to our own origin".
  */

@@ -28,6 +28,18 @@ const CONFIRM_SIGNUP = read('docs', 'owner', 'confirm-signup-template.html')
 const OWNER_DOC = read('docs', 'owner', 'email-auth-owner-setup-2026-08-06.md')
 const INLINED = OWNER_DOC.match(/```html\n([\s\S]*?)\n```/)?.[1] ?? ''
 
+/**
+ * The two arms of the invited/admin conditionals, so an assertion about invitee copy can never be
+ * satisfied by admin copy sitting elsewhere in the same file. Collects EVERY block — the template
+ * branches in more than one place (preview text, heading, body) and a first-block-only slice
+ * would silently assert against the preview line alone.
+ */
+const ARMS = /\{\{ if \.Data\.invited \}\}([\s\S]*?)\{\{ else \}\}([\s\S]*?)\{\{ end \}\}/g
+const armsOf = (html: string, group: 1 | 2) =>
+  [...html.matchAll(ARMS)].map((m) => m[group]).join('\n')
+const invitedArmOf = (html: string) => armsOf(html, 1)
+const adminArmOf = (html: string) => armsOf(html, 2)
+
 const CONFIRM_LINK =
   '{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next={{ .RedirectTo }}'
 
@@ -82,6 +94,68 @@ describe('auth email templates — the three copies stay in sync', () => {
   })
 })
 
+/**
+ * Natalie, 2026-08-19, on the live invite flow: an invited member or co-admin confirming their
+ * account received the ADMIN's onboarding email — "add your church", "invite the leader who knows
+ * each area best", "receive your diagnosis" — steps an invitee never performs.
+ *
+ * Supabase renders exactly one "Confirm signup" template per new account, so the split has to
+ * live INSIDE it, as a Go conditional on `{{ .Data.invited }}` (auth.users.raw_user_meta_data,
+ * set by PasswordlessEntry's signInWithOtp options.data). Both Supabase's own docs and its
+ * customizing-emails-by-language guide sanction this pattern.
+ */
+describe('confirm-signup template — invited leader vs. first-time admin', () => {
+  const INVITED_OPEN = '{{ if .Data.invited }}'
+
+  it('branches on the invited flag, with an else arm for the admin', () => {
+    expect(CONFIRM_SIGNUP).toContain(INVITED_OPEN)
+    expect(CONFIRM_SIGNUP).toContain('{{ else }}')
+    expect(CONFIRM_SIGNUP).toContain('{{ end }}')
+    // Every conditional is a complete if/else/end triple — a stray `{{ if }}` with no `{{ else }}`
+    // would slice into the wrong arm above and quietly weaken every assertion in this block.
+    expect([...CONFIRM_SIGNUP.matchAll(ARMS)].length).toBe(
+      (CONFIRM_SIGNUP.match(/\{\{ if /g) ?? []).length,
+    )
+    // Balanced: every opener closed, so a half-edited template fails here, not in an inbox.
+    expect((CONFIRM_SIGNUP.match(/\{\{ if /g) ?? []).length).toBe(
+      (CONFIRM_SIGNUP.match(/\{\{ end \}\}/g) ?? []).length,
+    )
+  })
+
+  it('never asks an invited leader to do the admin-only steps', () => {
+    const invited = invitedArmOf(CONFIRM_SIGNUP)
+    expect(invited, 'the invitee has no church to add').not.toMatch(/Add your church/i)
+    expect(invited, 'the invitee invites nobody').not.toMatch(/invite the leader/i)
+    expect(invited, 'the diagnosis goes to the church admin').not.toMatch(/Receive your diagnosis/i)
+  })
+
+  it('tells an invited leader what they will actually do', () => {
+    const invited = invitedArmOf(CONFIRM_SIGNUP)
+    expect(invited).toMatch(/invited/i)
+    expect(invited, 'answering is the whole of their task').toMatch(/answer/i)
+    expect(invited, 'the one promise the code actually guarantees').toMatch(/without names|no names|never names/i)
+  })
+
+  it('keeps the admin arm exactly as Natalie approved it', () => {
+    const admin = adminArmOf(CONFIRM_SIGNUP)
+    expect(admin).toContain('Add your church')
+    expect(admin).toContain('Receive your diagnosis')
+    // The stray-invitee catch line belongs ONLY here: an invitee who ignores the accept link and
+    // hits BEGIN instead lands in this arm, and this sentence is what redirects them.
+    expect(admin).toMatch(/Invited by a leader/i)
+  })
+
+  it('shares one CTA and one fallback anchor across both arms', () => {
+    // The link invariants above count exactly two anchors per template. Branching the PROSE and
+    // sharing the buttons is what keeps that true — and keeps one link to get right, not two.
+    const anchors = CONFIRM_SIGNUP.match(/<a href=/g) ?? []
+    expect(anchors.length).toBe(2)
+    for (const arm of [invitedArmOf(CONFIRM_SIGNUP), adminArmOf(CONFIRM_SIGNUP)]) {
+      expect(arm, 'the shared CTA lives outside both arms').not.toContain('<a href=')
+    }
+  })
+})
+
 describe('auth email templates — first-time vs. returning copy', () => {
   // Confirm signup fires for a NEW address (a leader beginning the assessment, or a first-time
   // invitee), so it is the onboarding welcome: overview + "What happens next" steps. Magic Link
@@ -96,6 +170,34 @@ describe('auth email templates — first-time vs. returning copy', () => {
   it('magic-link stays the returning sign-in email', () => {
     expect(MAGIC_LINK).toContain('Your sign-in link')
     expect(MAGIC_LINK).toContain('Sign in to your assessment')
+  })
+})
+
+describe('owner setup doc — the invited/admin split is actionable', () => {
+  // Nothing in this repo can make the change live: the template is a dashboard setting. The doc
+  // is the only instrument, so it has to say what changed, that a re-paste is required, and how
+  // to prove both arms before trusting it.
+  // Scoped to the section this change adds, so a pre-existing "re-paste" note elsewhere in the
+  // doc cannot satisfy these — the 2026-08-18 update already carried one.
+  const SECTION = OWNER_DOC.slice(OWNER_DOC.indexOf('#### B1a.'), OWNER_DOC.indexOf('### B2.'))
+
+  it('carries a section of its own, so the change is not a footnote', () => {
+    expect(OWNER_DOC, 'no B1a section found').toContain('#### B1a.')
+    expect(SECTION.length).toBeGreaterThan(400)
+  })
+
+  it('names the mechanism, so the next reader does not "tidy" the conditional away', () => {
+    expect(SECTION).toContain('{{ if .Data.invited }}')
+    expect(SECTION).toMatch(/user_metadata|raw_user_meta_data/)
+  })
+
+  it('states that the template must be re-pasted for any of this to reach an inbox', () => {
+    expect(SECTION).toMatch(/re-paste/i)
+  })
+
+  it('says how to verify BOTH arms, not just that it was pasted', () => {
+    expect(SECTION, 'the invited arm needs a real invite to prove').toMatch(/invit/i)
+    expect(SECTION, 'and the admin arm a fresh address of your own').toMatch(/new address|fresh address|your own address/i)
   })
 })
 

@@ -163,6 +163,41 @@ Two template files live beside this doc, same visual design, different copy for 
 
 </details>
 
+#### B1a. The Confirm-signup template now holds TWO emails (added 2026-08-19)
+
+> **Action required: re-paste `docs/owner/confirm-signup-template.html`.** Everything below is
+> already live in the code; none of it reaches an inbox until the template is re-pasted.
+
+**The problem it fixes.** An invited member or co-admin who confirmed their account received the
+*admin's* onboarding email — "Add your church", "invite the leader who knows each area best",
+"Receive your diagnosis". An invitee performs none of those steps. Supabase renders exactly one
+**Confirm signup** template for every new account, so the two emails have to live in one file.
+
+**How it decides.** The entry form sends a flag with the sign-in request, which Supabase stores on
+the new account as `user_metadata` and exposes to the template as `{{ .Data.invited }}`:
+
+```
+{{ if .Data.invited }}   …the invited leader's copy…
+{{ else }}               …the first-time admin's copy…
+{{ end }}
+```
+
+Three of these blocks exist in the file — preview text, heading, body. **Do not "tidy" them away**,
+and do not reformat the `{{ … }}` tokens; Supabase substitutes them at send time and a broken
+conditional breaks the whole email, not one line. The button and the "Button not working?" link sit
+*outside* both arms on purpose, so there is still exactly one sign-in link to get right.
+
+**Verify both arms after pasting** (the two halves fail independently):
+
+1. **Admin arm** — sign up from the homepage with a **new address** of your own that has never been
+   used here. Expect "Welcome — let's begin." and the four steps ending in *Receive your diagnosis*.
+2. **Invited arm** — send yourself an invitation from Access, open it in a private window, click
+   **Sign in to accept**, and enter a **different** new address. Expect "You're invited — let's
+   begin." and three steps ending in *Your answers join the whole*.
+
+If the invited arm shows the admin copy, the paste did not take. If **both** arms render at once,
+the conditional was flattened — re-paste the file unedited.
+
 ### B2. Set the sender NAME to "XP Gathering"
 
 - With the **default Supabase email service:** Authentication → Emails settings → set the
@@ -315,6 +350,7 @@ the marketing home page (see B3).
 - [ ] **A** — `INVITE_FROM` + `REMINDER_FROM` (or single `EMAIL_FROM`) set in Vercel **Production**; `RESEND_API_KEY` present; **redeployed**.
 - [ ] **A** — Sent myself a real invitation; it arrived branded.
 - [ ] **B** — **"Confirm signup"** template pasted (the `/auth/confirm` link intact, all four `{{ … }}` tokens, `type=email`); subject set.
+- [ ] **B1a** — **"Confirm signup"** RE-pasted since 2026-08-19, so invited leaders stop receiving the admin's onboarding steps; both arms verified per B1a.
       ← *this is the one first-time invitees actually receive*
 - [ ] **B** — **"Magic Link"** template pasted (same `/auth/confirm` link, also `type=email`); subject set.
       ← *returning users*

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { LiveStatus } from '@/components/live-status'
 import { createClient } from '@/lib/supabase/client'
-import { resolveNext } from '@/lib/auth/resolve-next'
+import { isInviteSignup, resolveNext } from '@/lib/auth/resolve-next'
 import { parseAuthError } from '@/lib/auth/parse-auth-error'
 
 // The one thing that varies between /sign-in (returning) and /sign-up (first-time). Everything
@@ -85,9 +85,23 @@ export function PasswordlessEntry({ copy }: { copy: PasswordlessEntryCopy }) {
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    // `data` lands in auth.users.raw_user_meta_data, which Supabase's email templates read as
+    // `{{ .Data }}`. There is exactly ONE "Confirm signup" template for every new account, and it
+    // is the admin's onboarding welcome — add your church, invite your leaders, receive your
+    // diagnosis — so an invited leader was being handed a checklist that was never theirs
+    // (Natalie, 2026-08-19). The template now branches on this flag.
+    //
+    // Sent UNCONDITIONALLY, true or false, never spread in only on the invite path: Confirm-signup
+    // renders once, at account creation, and every account is created through this call — so an
+    // always-present key means the template's `{{ if .Data.invited }}` is never evaluated against
+    // metadata that has no such key. Cosmetic only; the invitation itself is still gated
+    // server-side by the accept RPC on the exact signed-in address.
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: magicLinkRedirectTo() },
+      options: {
+        emailRedirectTo: magicLinkRedirectTo(),
+        data: { invited: typeof window !== 'undefined' && isInviteSignup(window.location.search) },
+      },
     })
     if (error) setError(error.message)
     else setSent(true)
