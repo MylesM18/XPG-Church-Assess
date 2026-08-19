@@ -1,4 +1,5 @@
 import type { FactsPack, CategoryFact, BottomItemFact } from '@/lib/report/facts';
+import { buildImprovementFacts } from '@/lib/report/facts';
 import type { Theme } from '@/lib/methodology/schema';
 import { loadMethodology } from '@/lib/methodology/load';
 import { throughput, capacity, gap } from '@/lib/engine/throughput';
@@ -234,6 +235,10 @@ export function makeFacts(over: Partial<FactsPack> = {}): FactsPack {
     categories,
     bottom_items: bottomItems,
     pattern_counts: tally(bottomItems),
+    // Derived, never hand-typed — the SAME lib/report/facts.ts helper buildFacts calls, over
+    // this fixture's own categories and items. A fixture's item universe IS its bottom_items
+    // (no fixture carries a full per-item map), so weak_items here are drawn from those.
+    improvement: buildImprovementFacts(categories, bottomItems),
     themes: [],
     profile: { context: 'suburban', attendance_band: '250_499', growth_trajectory: 'growing_steadily' },
     blind_spots: [],

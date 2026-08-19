@@ -3,6 +3,7 @@ import { loadMethodology } from '../../lib/methodology/load';
 import type { Diagnosis, DiagnosisCategory, Response } from '../../lib/engine/types';
 import { buildFacts, type BuildFactsArgs, type ChurchFacts } from '../../lib/report/facts';
 import { knownLabels } from '../../lib/report/anonymity';
+import { IMPROVEMENT_STANDARD, needsWork, strongestAreas, priorityAreas } from '../../lib/report/improvement';
 
 const methodology = loadMethodology();
 const CAT_IDS = ['guest', 'conn', 'disc', 'vol', 'gen', 'gov', 'comm', 'sys'] as const;
@@ -360,5 +361,105 @@ describe('LabelSource controls the profile guard', () => {
       labelSource: { kind: 'known', labels: ['Priscilla Vandermeer'] },
     });
     expect(pack.profile.consultant_notes).toBeUndefined();
+  });
+});
+
+describe('improvement facts (the 80 standard)', () => {
+  it('carries the standard itself so no renderer re-types 80', () => {
+    const facts = buildFacts(baseArgs);
+    expect(facts.improvement.standard).toBe(IMPROVEMENT_STANDARD);
+  });
+
+  it('ranks every sub-standard area worst-first with its gap to the standard', () => {
+    const facts = buildFacts(baseArgs);
+    // makeDiagnosis scores: guest 72, conn 44, disc 61, vol 58, gen 66, gov 70, comm 55, sys 68.
+    expect(facts.improvement.areas_needing_work.map((a) => a.category_id)).toEqual([
+      'conn', 'comm', 'vol', 'disc', 'gen', 'sys', 'gov', 'guest',
+    ]);
+    const worst = facts.improvement.areas_needing_work[0]!;
+    expect(worst.score).toBe(44);
+    expect(worst.gap_to_standard).toBe(36);
+    expect(worst.name).toBe('Community / Connection');
+    expect(worst.kind).toBe('stage');
+  });
+
+  it('drops an area that clears the standard', () => {
+    const strong = makeDiagnosis({
+      categories: CAT_IDS.map((id, i) => makeCategory(id, [88, 44, 61, 58, 66, 70, 55, 68][i]!)),
+    });
+    const facts = buildFacts({ ...baseArgs, diagnosis: strong });
+    expect(facts.improvement.areas_needing_work.map((a) => a.category_id)).not.toContain('guest');
+    expect(facts.improvement.areas_needing_work).toHaveLength(7);
+  });
+
+  it('gives each area its OWN weak questions, not the report-wide six', () => {
+    const facts = buildFacts(baseArgs);
+    const byId = new Map(facts.improvement.areas_needing_work.map((a) => [a.category_id, a]));
+    expect(byId.get('guest')!.weak_items.map((w) => w.item_id)).toEqual(['G1', 'G2']);
+    expect(byId.get('conn')!.weak_items.map((w) => w.item_id)).toEqual(['C1']);
+  });
+
+  it('draws weak questions from every item, not from the six-item bottom list', () => {
+    // A 7th sub-standard item pushes SYS1 out of bottom_items (capped at 6) while leaving it
+    // well below the standard. Reading bottom_items would starve `sys` of its evidence.
+    const responses: Response[] = [...RESPONSES, resp('SYS1', 'sys', 7, 'a')];
+    const facts = buildFacts({ ...baseArgs, responses });
+    expect(facts.bottom_items.map((b) => b.item_id)).not.toContain('SYS1');
+    const sys = facts.improvement.areas_needing_work.find((a) => a.category_id === 'sys')!;
+    expect(sys.weak_items.map((w) => w.item_id)).toEqual(['SYS1']);
+    expect(sys.weak_items[0]!.mean).toBe(70);
+  });
+
+  it('leaves out a question that clears the standard', () => {
+    const facts = buildFacts(baseArgs);
+    const vol = facts.improvement.areas_needing_work.find((a) => a.category_id === 'vol')!;
+    // V2 means 85 — above the standard — while V1 means 50.
+    expect(vol.weak_items.map((w) => w.item_id)).toEqual(['V1']);
+  });
+
+  it('sorts weak questions worst-first, ties by item id', () => {
+    const facts = buildFacts(baseArgs);
+    const guest = facts.improvement.areas_needing_work.find((a) => a.category_id === 'guest')!;
+    expect(guest.weak_items.map((w) => w.mean)).toEqual([25, 30]);
+  });
+
+  it('carries each weak question’s statement and theme so a section never re-looks them up', () => {
+    const facts = buildFacts(baseArgs);
+    const conn = facts.improvement.areas_needing_work.find((a) => a.category_id === 'conn')!;
+    expect(conn.weak_items[0]!.text.length).toBeGreaterThan(0);
+    expect(['systems', 'culture', 'theology', 'relational']).toContain(conn.weak_items[0]!.theme);
+  });
+
+  it('lists an unanswered area with no weak questions rather than dropping it', () => {
+    const facts = buildFacts(baseArgs);
+    const gov = facts.improvement.areas_needing_work.find((a) => a.category_id === 'gov')!;
+    expect(gov.weak_items).toEqual([]);
+  });
+
+  it('names the three strongest areas even when none clear the standard', () => {
+    const facts = buildFacts(baseArgs);
+    expect(facts.improvement.strongest_areas.map((a) => a.category_id)).toEqual(['guest', 'gov', 'sys']);
+    expect(facts.improvement.strongest_areas[0]!.name).toBe('Guest Experience');
+    expect(facts.improvement.strongest_areas[0]!.score).toBe(72);
+  });
+
+  it('names the three priority areas, worst first', () => {
+    const facts = buildFacts(baseArgs);
+    expect(facts.improvement.priority_areas.map((a) => a.category_id)).toEqual(['conn', 'comm', 'vol']);
+  });
+
+  it('agrees with the improvement module rather than re-implementing the ranking', () => {
+    const facts = buildFacts(baseArgs);
+    expect(facts.improvement.areas_needing_work.map((a) => a.category_id))
+      .toEqual(needsWork(facts.categories).map((c) => c.id));
+    expect(facts.improvement.strongest_areas.map((a) => a.category_id))
+      .toEqual(strongestAreas(facts.categories).map((c) => c.id));
+    expect(facts.improvement.priority_areas.map((a) => a.category_id))
+      .toEqual(priorityAreas(facts.categories).map((c) => c.id));
+  });
+
+  it('stays JSON-serializable, like the rest of the pack', () => {
+    const facts = buildFacts(baseArgs);
+    expect(JSON.parse(JSON.stringify(facts.improvement))).toEqual(facts.improvement);
   });
 });
