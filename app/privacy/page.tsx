@@ -59,7 +59,7 @@ export default function PrivacyPage() {
         <h1 className="max-w-[16ch] font-display text-4xl leading-[1.05] text-ink sm:text-5xl">
           Privacy Policy
         </h1>
-        <p className="mt-4 font-body text-sm text-ink-soft">Last updated: August 7, 2026</p>
+        <p className="mt-4 font-body text-sm text-ink-soft">Last updated: August 19, 2026</p>
         <p className="mt-6 max-w-[58ch] font-body text-lg leading-relaxed text-ink-soft">
           This policy explains what information the Church Health Assessment collects, what happens
           to it, and the choices you have. We&rsquo;ve kept it in plain English because privacy

@@ -21,7 +21,7 @@ describe('public privacy page — content', () => {
     'Cookies, tracking, and Do Not Track',
     'A note on religious information',
     'Children',
-    'Last updated: August 7, 2026',
+    'Last updated: August 19, 2026',
     'info@xpgathering.com',
     '501(c)(3) nonprofit',
   ])('carries the "%s" content', (needle) => {
