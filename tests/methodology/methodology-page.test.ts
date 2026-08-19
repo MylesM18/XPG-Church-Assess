@@ -51,3 +51,37 @@ describe('public methodology page — IP safety (no leaked constants)', () => {
     expect(SOURCE).not.toContain(secret)
   })
 })
+
+describe('public methodology page — section 04 uses the report\'s own words (step F)', () => {
+  // SCOPED to the Section 04 block on purpose: "capacity" is a normal English word that may
+  // legitimately appear elsewhere on this page (and does, in the copy deck this page draws on),
+  // so a whole-file negative would be brittle and would fail for the wrong reason.
+  const S04 = SOURCE.slice(SOURCE.indexOf('n="04"'), SOURCE.indexOf('n="05"'))
+
+  it('is a genuine, non-empty section block, so nothing below passes vacuously', () => {
+    expect(S04.length).toBeGreaterThan(200)
+    expect(S04).toContain('The two headline numbers')
+  })
+
+  it.each(['health score', 'real-world result', 'points lost'])(
+    'names the two numbers as the report itself does: "%s"',
+    (phrase) => {
+      expect(S04.toLowerCase()).toContain(phrase)
+    },
+  )
+
+  it.each(['capacity', 'throughput'])(
+    'no longer explains the engine jargon "%s" the reader will never see',
+    (jargon) => {
+      // Without this the page keeps teaching two words that appear nowhere in the report.
+      expect(S04.toLowerCase()).not.toContain(jargon)
+    },
+  )
+
+  it.each(['weakest stage', 'wide gap', 'narrow gap'])(
+    'keeps the substance — "%s" — while the names change',
+    (substance) => {
+      expect(S04.toLowerCase()).toContain(substance)
+    },
+  )
+})

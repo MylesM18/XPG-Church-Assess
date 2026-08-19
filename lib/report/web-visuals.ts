@@ -49,6 +49,19 @@ function categoryLookup(
   };
 }
 
+/** Reader-facing names for the two headline numbers.
+ *
+ * "Capacity" and "throughput" are the ENGINE's words (lib/engine/throughput.ts) and they
+ * stay as field names here — but a church leader reading the report should never meet
+ * them. The strings live on the model, not in the component, so both surfaces of this
+ * seam (the model test and the component test) can pin them without rendering, and so
+ * there is exactly one place to change the wording. */
+const CAPACITY_LABEL = 'Health score';
+const CAPACITY_EXPLANATION = 'the average across your eight areas';
+const THROUGHPUT_LABEL = 'Real-world result';
+const THROUGHPUT_EXPLANATION =
+  'what actually gets through once your weakest area slows everything down';
+
 export type CapacityBarsModel = {
   band: BandKey;
   capacity: number;
@@ -56,7 +69,15 @@ export type CapacityBarsModel = {
   capacityPct: number;
   throughputPct: number;
   gap: number;
-  /** `${gap} POINTS LOST`. Null when the gap is zero or negative (spec §8). */
+  /** What the reader calls the top bar, and what it measures. */
+  capacityLabel: string;
+  capacityExplanation: string;
+  /** What the reader calls the lower bar, and what it measures. */
+  throughputLabel: string;
+  throughputExplanation: string;
+  /** A SENTENCE, not an eyebrow: `${gap} points lost to your weakest area.` Null when the
+   * gap is zero or negative (spec §8). The component must not shout it — see the CHIP
+   * class in app/app/[churchId]/diagnosis/report/web-visuals.tsx. */
   gapLabel: string | null;
 };
 
@@ -187,7 +208,11 @@ function capacityBars(facts: FactsPack): CapacityBarsModel {
     capacityPct: pct(capacity),
     throughputPct: pct(throughput),
     gap,
-    gapLabel: gap > 0 ? `${gap} POINTS LOST` : null,
+    capacityLabel: CAPACITY_LABEL,
+    capacityExplanation: CAPACITY_EXPLANATION,
+    throughputLabel: THROUGHPUT_LABEL,
+    throughputExplanation: THROUGHPUT_EXPLANATION,
+    gapLabel: gap > 0 ? `${gap} points lost to your weakest area.` : null,
   };
 }
 
