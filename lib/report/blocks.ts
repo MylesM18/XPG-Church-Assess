@@ -55,6 +55,13 @@ export interface PunchListArea {
 export type PunchListBlock = {
   kind: 'punch_list';
   standard: number;
+  /** The list's own lead line. It introduces itself because it CANNOT be introduced by s7's
+   *  report.yaml template: that string is both the fallback body and the model's per-archetype
+   *  system prompt (composeSection), and `SECTION_REGISTRY.s7.slice` hands the model only
+   *  `bottom_items` + `pattern_counts` — no `improvement`, and no 80 for gate 2's numeric
+   *  containment to allow. A template that described this list would be telling the model to
+   *  write about facts it was never given. */
+  heading: string;
   areas: PunchListArea[];
 };
 
@@ -76,6 +83,7 @@ export function punchListBlock(facts: FactsPack): PunchListBlock | null {
   return {
     kind: 'punch_list',
     standard,
+    heading: `Every area below the standard of ${standard}, weakest first.`,
     areas: areas_needing_work.map((a): PunchListArea => {
       const shown = a.weak_items.slice(0, WEAK_ITEMS_SHOWN);
       const hidden = a.weak_items.length - shown.length;
@@ -90,8 +98,11 @@ export function punchListBlock(facts: FactsPack): PunchListBlock | null {
           line: `${i.text} — ${i.mean} out of 100 (${i.theme})`,
           theme: i.theme,
         })),
-        // An area can sit below the standard with no question below it only when the pack's item
-        // map does not cover it; an empty list under a heading reads as a rendering bug, so say why.
+        // An area can sit below the standard with no question below it in live data, not only in
+        // a fixture whose item map is thin: the AREA score is `mu` over respondents who answered
+        // EVERY item in it (lib/engine/fit.ts's complete-rows rule), while item means are taken
+        // over every response to that item (lib/report/facts.ts). Different respondent sets, so
+        // the two can disagree. An empty list under a heading reads as a rendering bug, so say why.
         note:
           a.weak_items.length === 0
             ? 'No individual question in this area is below the standard.'

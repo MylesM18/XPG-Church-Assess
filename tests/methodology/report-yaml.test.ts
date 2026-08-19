@@ -85,9 +85,24 @@ describe("report.yaml s7 describes what s7 actually renders", () => {
     expect(missing).toEqual([]);
   });
 
-  it('names the areas below the standard in every archetype template too', () => {
-    const missing = ARCHETYPES.filter((a) => !s7.templates[a].toLowerCase().includes('standard'));
-    expect(missing).toEqual([]);
+  /**
+   * ⚠️ The TITLE may describe the punch list; the TEMPLATES may not.
+   *
+   * `templates[archetype]` is two things at once: the fallback BODY (fallback-sections.ts:449)
+   * and the model's per-archetype SYSTEM PROMPT (lib/ai/sections.ts composeSection). The s7
+   * slice is `{...head, bottom_items, pattern_counts}` — no `improvement`, so the model cannot
+   * see the areas, cannot see their scores, and cannot see the standard. A template naming them
+   * instructs it to write about facts it was never given, and gate 2's numeric containment
+   * (lib/ai/section-gates.ts) allows only numbers present in that slice, so an obedient model
+   * writing "the standard of 80" fails the gate, burns the section's one corrective, and can
+   * land on the fallback path.
+   *
+   * The punch list introduces itself instead — `PunchListBlock.heading`, deterministic, on both
+   * surfaces (lib/report/blocks.ts).
+   */
+  it('never asks the model for the areas or the standard, which its slice does not carry', () => {
+    const leaking = ARCHETYPES.filter((a) => /standard|areas? below/i.test(s7.templates[a]));
+    expect(leaking).toEqual([]);
   });
 });
 

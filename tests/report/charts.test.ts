@@ -9,6 +9,7 @@ import {
   BAND_TEXT, BAND_NAME, verdictBandFor, textOnBand,
   statGridModel, rankListModel, verdictBlockModel, coverModel, areaIndexFrom,
 } from '@/lib/report/charts';
+import { fallbackSection } from '@/lib/report/fallback-sections';
 import { ALL_FIXTURES, CAPACITY_FACTS, MOSTLY_STRONG_FACTS, makeFacts } from '../fixtures/facts';
 
 describe('seam tokens (visual overhaul)', () => {
@@ -222,12 +223,21 @@ describe('verdictBlockModel', () => {
   });
 
   it('keeps the s5 / s6 fallback partition total and disjoint even on that pack', () => {
-    // Whatever is decided above, these two must still cover all eight areas exactly once —
-    // s5 takes categories.slice(0, 3) and s6 takes .slice(3) (fallback-sections.ts).
-    const top = MOSTLY_STRONG_FACTS.categories.slice(0, 3).map((c) => c.id);
-    const rest = MOSTLY_STRONG_FACTS.categories.slice(3).map((c) => c.id);
-    expect([...top, ...rest].sort()).toEqual(MOSTLY_STRONG_FACTS.categories.map((c) => c.id).sort());
-    expect(top.filter((id) => rest.includes(id))).toEqual([]);
+    // Whatever is decided above, s5 and s6 must still name all eight areas exactly once between
+    // them. Asserted against the RENDERED bullets, never against a re-implementation of the two
+    // slices here: `x.slice(0, 3).concat(x.slice(3))` equals `x` for every array, so a test
+    // written that way stays green under any change to fallback-sections.ts — including the one
+    // the test above escalates, which is exactly when s6 would start double-counting an area.
+    const args = { facts: MOSTLY_STRONG_FACTS, methodology, reflections: [] };
+    const s5 = fallbackSection('s5', args).bullets.join(' | ');
+    const s6 = fallbackSection('s6', args).bullets.join(' | ');
+    const counts = MOSTLY_STRONG_FACTS.categories.map((c) => ({
+      id: c.id,
+      inS5: s5.includes(c.name),
+      inS6: s6.includes(c.name),
+    }));
+    expect(counts.filter((c) => !c.inS5 && !c.inS6).map((c) => c.id)).toEqual([]); // total
+    expect(counts.filter((c) => c.inS5 && c.inS6).map((c) => c.id)).toEqual([]); // disjoint
   });
 
   it('lays hero above a 2x2 dashboard inside the viewBox', () => {

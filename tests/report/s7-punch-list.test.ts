@@ -123,6 +123,12 @@ describe('S7 punch list survives the AI path', () => {
     )
   })
 
+  it('introduces the punch list on both surfaces, without help from the AI prose', async () => {
+    const heading = `Every area below the standard of ${facts.improvement.standard}, weakest first.`
+    expect(renderWeb(onlyS7(withAiS7(assembled())))).toContain(escapeHtml(heading))
+    expect((await renderPdfText(withAiS7(assembled()))).replace(/\s+/g, ' ')).toContain(heading)
+  })
+
   it('never hides the questions it did not print — the overflow note reaches the WEB AI path', () => {
     const html = renderWeb(onlyS7(withAiS7(assembled())))
     const notes = facts.improvement.areas_needing_work
@@ -131,6 +137,27 @@ describe('S7 punch list survives the AI path', () => {
       .map((hidden) => `And ${hidden} more questions in this area below the standard.`)
     expect(notes.length).toBeGreaterThan(0) // fixture guard
     expect(notes.filter((note) => !html.includes(escapeHtml(note)))).toEqual([])
+  })
+
+  it('reads in the same order on both surfaces: the six lowest questions, then the punch list', async () => {
+    // The web renders charts around the prose (SectionVisualsBelow); the PDF renders every chart
+    // above the section body. Blocks must land after BOTH so the rank list precedes the punch
+    // list either way — otherwise the web reader crosses ~3,700 characters of areas to reach the
+    // six lowest questions the prose just talked about.
+    const heading = `Every area below the standard of ${facts.improvement.standard}, weakest first.`
+    const sixth = facts.bottom_items[0]!.text
+
+    const html = renderWeb(onlyS7(withAiS7(assembled())))
+    expect(html.indexOf(escapeHtml(sixth))).toBeGreaterThan(-1)
+    expect(html.indexOf(escapeHtml(heading))).toBeGreaterThan(html.indexOf(escapeHtml(sixth)))
+
+    // The PDF's rank list is SVG, and pdf-parse extracts SVG glyphs character-spaced, so its
+    // question text is not a reliable needle. What IS assertable is the half this change owns:
+    // blocks render after SectionContent, and document.tsx renders every chart above it — so
+    // narrative-before-punch-list on the PDF is the same relative order the web now has.
+    const text = (await renderPdfText(withAiS7(assembled()))).replace(/\s+/g, ' ')
+    expect(text.indexOf(AI_S7.narrative)).toBeGreaterThan(-1)
+    expect(text.indexOf(heading)).toBeGreaterThan(text.indexOf(AI_S7.narrative))
   })
 
   it('prints each area exactly once on the FALLBACK path — the punch list is never doubled', () => {

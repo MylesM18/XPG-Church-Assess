@@ -39,10 +39,11 @@ export function renderReportDocument(props: ReportDocumentProps): Promise<Buffer
   // list than the one the facts pack was built from is a guard that fails open.
   //
   // Checks fallback body/bullets, every string inside the AI payload, and every string inside
-  // this section's chart models (lib/report/charts.ts) — not because chart strings can carry
-  // respondent text (they can't: every StatCell/RankRow/VerdictStat string is a category name,
-  // item text, theme key or tier name straight off methodology, never respondent-supplied),
-  // but so the invariant above is literally true rather than true-except-for-one-payload-shape.
+  // this section's chart models (lib/report/charts.ts) AND content blocks (lib/report/blocks.ts)
+  // — not because those strings can carry respondent text (they can't: every
+  // StatCell/RankRow/VerdictStat/PunchListArea string is a category name, item text, theme key
+  // or tier name straight off methodology, never respondent-supplied), but so the invariant
+  // above is literally true rather than true-except-for-one-payload-shape.
   // Deliberately NOT fallback.title: titles come from report.yaml, never from respondent data,
   // and a label that happens to be a common word would 500 every export.
   //

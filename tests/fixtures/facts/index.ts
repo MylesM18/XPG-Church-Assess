@@ -247,8 +247,9 @@ export function makeFacts(
     bottom_items: bottomItems,
     pattern_counts: tally(bottomItems),
     // Derived, never hand-typed — the SAME lib/report/facts.ts helper buildFacts calls, over
-    // this fixture's own categories and items. A fixture's item universe IS its bottom_items
-    // (no fixture carries a full per-item map), so weak_items here are drawn from those.
+    // this fixture's own categories and items. A fixture that passes no `allItems` has its item
+    // universe defined by its six `bottom_items`, so its weak_items are drawn from those; see
+    // FULL_ITEM_MAP_FACTS for the one that carries the whole map, as production does.
     improvement: buildImprovementFacts(categories, allItems ?? bottomItems),
     themes: [],
     profile: { context: 'suburban', attendance_band: '250_499', growth_trajectory: 'growing_steadily' },

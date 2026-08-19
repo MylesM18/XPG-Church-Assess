@@ -60,6 +60,15 @@ describe('punchListBlock', () => {
     }
   });
 
+  it('carries its own lead line, so the section does not depend on AI prose to introduce it', () => {
+    // s7's report.yaml template is BOTH the model's system prompt and the fallback body, and the
+    // s7 AI slice carries no `improvement` — so the template cannot describe this list without
+    // instructing the model to write about facts it was never given (and about the number 80,
+    // which gate 2's numeric containment would then reject). The list introduces itself.
+    const block = punchListBlock(facts)!;
+    expect(block.heading).toBe(`Every area below the standard of ${facts.improvement.standard}, weakest first.`);
+  });
+
   it('is null when nothing is below the standard, so s7 keeps its own bullets', () => {
     const healthy = makeFacts({ categories: CAPACITY_FACTS.categories.map((c) => ({ ...c, score: 85 })) });
     expect(healthy.improvement.areas_needing_work).toEqual([]); // fixture guard
@@ -139,6 +148,34 @@ describe('punchListBlock at production volume', () => {
     expect(uncapped).toBeGreaterThan(5000); // guard: otherwise the ratio below proves nothing
     expect(chars).toBeLessThan(uncapped * 0.7);
     expect(chars).toBeLessThan(4000);
+  });
+});
+
+describe('punchListBlock overflow wording', () => {
+  /** One area with exactly WEAK_ITEMS_SHOWN + 1 sub-standard questions — the only shape that
+   *  reaches the singular arm. FULL_ITEM_MAP_FACTS hides 2, 3 and 4, never 1. */
+  const oneHidden = () => {
+    const worstId = CAPACITY_FACTS.categories[CAPACITY_FACTS.categories.length - 1]!.id;
+    const items = [40, 45, 50, 55].map((mean, i) => ({
+      item_id: `X${i + 1}`,
+      category_id: worstId,
+      mean,
+      text: `Question ${i + 1} in the weakest area.`,
+      theme: 'systems' as const,
+    }));
+    return makeFacts({ bottom_items: items }, items);
+  };
+
+  it('fixture guard: exactly one question goes unprinted', () => {
+    const area = oneHidden().improvement.areas_needing_work.find((a) => a.weak_items.length === 4)!;
+    expect(area.weak_items.length - WEAK_ITEMS_SHOWN).toBe(1);
+  });
+
+  it('says "question", not "questions", when exactly one is unprinted', () => {
+    const facts = oneHidden();
+    const area = facts.improvement.areas_needing_work.find((a) => a.weak_items.length === 4)!;
+    const rendered = punchListBlock(facts)!.areas.find((a) => a.category_id === area.category_id)!;
+    expect(rendered.note).toBe('And 1 more question in this area below the standard.');
   });
 });
 

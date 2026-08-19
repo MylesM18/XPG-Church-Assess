@@ -458,10 +458,15 @@ export function ReportSections({ sections, band, visuals }: { sections: Assemble
             ) : (
               <SectionContent section={section} areaIndex={areaIndex} />
             )}
+            <SectionVisualsBelow section={section} visuals={visuals} />
+            {/* AFTER the below-visuals, not before: s7's below-visual is the rank list of the
+                six lowest questions, and the PDF renders every chart above the section body
+                (document.tsx). Rendering blocks first put ~3,700 characters of punch list
+                between the prose and the rank list on the web only, so the two surfaces read
+                in different orders. Both now put the rank list before the punch list. */}
             {section.blocks.map((block) => (
               <WebBlock key={block.kind} model={block} />
             ))}
-            <SectionVisualsBelow section={section} visuals={visuals} />
           </section>
           {section.id === 's12' && (
             <div className="flex flex-col items-start gap-2">
