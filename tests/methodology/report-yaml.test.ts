@@ -26,6 +26,43 @@ function dirWithMissingReportSection(): string {
   return dir;
 }
 
+describe("report.yaml carries no retired engine jargon in reader-facing copy", () => {
+  const sections = loadMethodology().report.sections;
+
+  /**
+   * Step F renamed the two headline numbers to "Health score" and "Real-world result" because
+   * "capacity" and "throughput" are the ENGINE's words for them, not a church leader's, and
+   * removed the /methodology entry that used to teach them. s4's capacity archetype template
+   * still opened on the bare word, so the one place a reader still met it was the one place
+   * nothing defined it any more.
+   *
+   * Scoped to `templates` on purpose: `capacity` is also the archetype KEY on every section
+   * (a key, never rendered), and "Capacity & Next-Ceiling Session" in offers.yaml is a product
+   * name, which is fine.
+   */
+  // The LABEL use — the bare word as its own sentence, which is how s4 opened. Not every
+  // occurrence: s12's "building the capacity to steward what is coming" is the ordinary English
+  // noun, in a sentence that never presents it as the name of a number, and step F did not
+  // touch it.
+  const LABEL_USE = /(^|\.\s+)(capacity|throughput)\.(\s|$)/i;
+
+  it('never opens a sentence with the bare metric name', () => {
+    const offenders: string[] = [];
+    for (const id of SECTION_IDS) {
+      for (const archetype of ARCHETYPES) {
+        if (LABEL_USE.test(sections[id].templates[archetype])) offenders.push(`${id}.${archetype}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('would catch the s4 regression it exists for', () => {
+    // Non-vacuity: the exact string this test was written against must still fail the rule.
+    expect(LABEL_USE.test('Capacity. Every stage is working, so what sits in front of you is a growth question.')).toBe(true);
+    expect(LABEL_USE.test('The objective for the next ninety days is building the capacity to steward what is coming.')).toBe(false);
+  });
+});
+
 describe("report.yaml s7 describes what s7 actually renders", () => {
   const s7 = loadMethodology().report.sections.s7;
 

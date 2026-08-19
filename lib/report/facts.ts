@@ -52,7 +52,7 @@ export interface AreaNeedingWorkFact {
   kind: CategoryFact['kind'];
   score: number;
   /** standard - score. Always a whole number: category scores are integers by construction
-   *  (lib/engine/assemble.ts:56 rounds), so this never prints a float tail. */
+   *  (lib/engine/fit.ts scoreFromFit rounds mu * 10), so this never prints a float tail. */
   gap_to_standard: number;
   /** THIS area's own sub-standard questions, worst first, ties by item id. Computed over
    *  EVERY answered item, never over `bottom_items` — that list is capped at six report-wide
