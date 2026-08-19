@@ -676,18 +676,18 @@ describe('assembleReport', () => {
 
   it('renders a persisted section when the hash matches', () => {
     const persisted = { inputs_hash: live, sections: { s2: goodS2 } };
-    const out = assembleReport({ facts: constraintFacts, methodology, reflections: [], persisted, liveInputsHash: live });
+    const out = assembleReport({ audience: 'screen', facts: constraintFacts, methodology, reflections: [], persisted, liveInputsHash: live });
     expect(out.find((s) => s.id === 's2')!.source).toBe('ai');
   });
 
   it('falls back when the hash is stale', () => {
     const persisted = { inputs_hash: 'x'.repeat(64), sections: { s2: goodS2 } };
-    const out = assembleReport({ facts: constraintFacts, methodology, reflections: [], persisted, liveInputsHash: live });
+    const out = assembleReport({ audience: 'screen', facts: constraintFacts, methodology, reflections: [], persisted, liveInputsHash: live });
     expect(out.find((s) => s.id === 's2')!.source).toBe('fallback');
   });
 
   it('falls back when there is no persisted row at all', () => {
-    const out = assembleReport({ facts: constraintFacts, methodology, reflections: [], persisted: null, liveInputsHash: live });
+    const out = assembleReport({ audience: 'screen', facts: constraintFacts, methodology, reflections: [], persisted: null, liveInputsHash: live });
     for (const s of out) expect(s.source, s.id).toBe('fallback');
   });
 
@@ -695,13 +695,13 @@ describe('assembleReport', () => {
     // A reports row outlives the code that wrote it and `sections` is untyped jsonb, so each
     // persisted section is re-parsed against its CURRENT schema at render.
     const persisted = { inputs_hash: live, sections: { s2: { summary: 42 } } };
-    const out = assembleReport({ facts: constraintFacts, methodology, reflections: [], persisted, liveInputsHash: live });
+    const out = assembleReport({ audience: 'screen', facts: constraintFacts, methodology, reflections: [], persisted, liveInputsHash: live });
     expect(out.find((s) => s.id === 's2')!.source).toBe('fallback');
   });
 
   it('returns a complete report from a partial persisted row', () => {
     const persisted = { inputs_hash: live, sections: { s2: goodS2 } };
-    const out = assembleReport({ facts: constraintFacts, methodology, reflections: [], persisted, liveInputsHash: live });
+    const out = assembleReport({ audience: 'screen', facts: constraintFacts, methodology, reflections: [], persisted, liveInputsHash: live });
     expect(out).toHaveLength(12);
     for (const s of out) expect(s.fallback.body.trim().length, s.id).toBeGreaterThan(0);
     expect(out.filter((s) => s.source === 'ai')).toHaveLength(1);
@@ -770,12 +770,52 @@ describe('chart models on AssembledSection', () => {
 
   it('attaches identical charts whether the section is ai or fallback', () => {
     const viaAssemble = assembleReport({
-      facts: CAPACITY_FACTS, methodology, reflections: [], persisted: null, liveInputsHash: 'x',
+      facts: CAPACITY_FACTS, methodology, reflections: [], persisted: null, liveInputsHash: 'x', audience: 'screen',
     });
-    const viaFallbackOnly = assembleFallbackOnly({ facts: CAPACITY_FACTS, methodology, reflections: [] });
+    const viaFallbackOnly = assembleFallbackOnly({ facts: CAPACITY_FACTS, methodology, reflections: [], audience: 'screen' });
     for (const id of ['s3', 's7'] as const) {
       expect(viaAssemble.find((s) => s.id === id)!.charts)
         .toEqual(viaFallbackOnly.find((s) => s.id === id)!.charts);
     }
+  });
+});
+
+/**
+ * Step E — the audience must survive the assembly seam, not just s8Bullets.
+ *
+ * `assembleReport` builds its OWN object literal for fallbackSections (compose.ts) rather than
+ * forwarding a FallbackSectionArgs, so a field added to that interface is silently dropped here
+ * unless it is threaded explicitly. These tests are what catch that drop.
+ */
+describe('audience threading through the assembly seam (step E)', () => {
+  const themeless = { ...CAPACITY_FACTS, themes: [] };
+  const reflections = [{ item_id: 'G6', reflection: 'greeters are great' }];
+  const withheld = methodology.copy.s8_below_threshold;
+  const s8Of = (sections: ReturnType<typeof assembleFallbackOnly>) =>
+    sections.find((x) => x.id === 's8')!.fallback.bullets.join(' ');
+
+  it('assembleReport prints the reflections for the private audience', () => {
+    const out = assembleReport({
+      facts: themeless, methodology, reflections, persisted: null, liveInputsHash: 'x', audience: 'screen',
+    });
+    expect(s8Of(out)).toContain('greeters are great');
+  });
+
+  it('assembleReport withholds the reflections for the shared audience', () => {
+    const out = assembleReport({
+      facts: themeless, methodology, reflections, persisted: null, liveInputsHash: 'x', audience: 'shared',
+    });
+    expect(s8Of(out)).not.toContain('greeters are great');
+    expect(s8Of(out)).toBe(withheld);
+  });
+
+  it('assembleFallbackOnly withholds the reflections for the shared audience', () => {
+    const out = assembleFallbackOnly({ facts: themeless, methodology, reflections, audience: 'shared' });
+    expect(s8Of(out)).not.toContain('greeters are great');
+  });
+
+  it('assembleFallbackOnly withholds the reflections when no audience is declared', () => {
+    const out = assembleFallbackOnly({ facts: themeless, methodology, reflections });
+    expect(s8Of(out)).not.toContain('greeters are great');
   });
 });

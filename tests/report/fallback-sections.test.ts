@@ -3,7 +3,7 @@ import { loadMethodology } from '@/lib/methodology/load';
 import type { Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types';
 import { buildFacts, type BuildFactsArgs, type ChurchFacts, type FactsPack } from '@/lib/report/facts';
 import { fallbackSection, fallbackSections } from '@/lib/report/fallback-sections';
-import { ALL_FIXTURES, CAPACITY_FACTS } from '../fixtures/facts';
+import { ALL_FIXTURES, CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
 
 // No healthy-church/broken-conn/gates-only fixtures exist anywhere in the repo (recon
 // divergence #1 / controller ruling 1) — built inline here, following the local/unexported
@@ -271,10 +271,15 @@ describe('S8 fallback', () => {
   });
 
   it('falls back to the per-area voices lists when there are no themes', () => {
+    // Declares a private audience since step E: the voices path is what the audience gate
+    // protects, so this test now has to say which surface it is. The behaviour it pins —
+    // reflections becoming per-area voice lines — is unchanged on that surface. The
+    // withheld-on-shared half lives in 'S8 audience gate (step E)' below.
     const s8 = fallbackSection('s8', {
       facts: { ...capacityFacts, themes: [] },
       methodology,
       reflections: [{ item_id: reflectionItemId, reflection: 'greeters are great' }],
+      audience: 'screen',
     });
     expect(s8.bullets.some((b) => b.includes('greeters are great'))).toBe(true);
   });
@@ -286,6 +291,69 @@ describe('S8 fallback', () => {
     };
     const s8 = fallbackSection('s8', { facts, methodology, reflections: [] });
     expect(s8.bullets.join(' ')).not.toContain('SENTINEL QUOTE');
+  });
+});
+
+/**
+ * Step E — Natalie's D2: the verbatim reflections are PRIVATE. They render on the two
+ * private surfaces (screen, pdf) and never on the share page.
+ *
+ * The gate is an ALLOW-list, not the deny-list buildReportView uses (lib/report/view.ts:442),
+ * and `audience` is OPTIONAL on FallbackSectionArgs — so a call site that forgets to declare
+ * itself WITHHOLDS rather than leaks. That direction is the whole point; the "absent" test
+ * below is what pins it.
+ */
+describe('S8 audience gate (step E)', () => {
+  const themeless = { ...CAPACITY_FACTS, themes: [] };
+  const reflections = [{ item_id: reflectionItemId, reflection: 'greeters are great' }];
+  const withheld = methodology.copy.s8_below_threshold;
+
+  it('renders the verbatim reflections on the screen report', () => {
+    const s8 = fallbackSection('s8', { facts: themeless, methodology, reflections, audience: 'screen' });
+    expect(s8.bullets.some((b) => b.includes('greeters are great'))).toBe(true);
+  });
+
+  it('renders the verbatim reflections on the pdf report', () => {
+    const s8 = fallbackSection('s8', { facts: themeless, methodology, reflections, audience: 'pdf' });
+    expect(s8.bullets.some((b) => b.includes('greeters are great'))).toBe(true);
+  });
+
+  it('withholds the verbatim reflections on the shared report', () => {
+    const s8 = fallbackSection('s8', { facts: themeless, methodology, reflections, audience: 'shared' });
+    expect(s8.bullets.join(' ')).not.toContain('greeters are great');
+    expect(s8.bullets).toEqual([withheld]);
+  });
+
+  it('withholds the verbatim reflections when no audience is declared', () => {
+    // Fail closed. An allow-list means a forgotten call site loses content; a deny-list would
+    // have leaked it. Deleting `audience` from the args must NOT print the reflection.
+    const s8 = fallbackSection('s8', { facts: themeless, methodology, reflections });
+    expect(s8.bullets.join(' ')).not.toContain('greeters are great');
+    expect(s8.bullets).toEqual([withheld]);
+  });
+
+  it('still renders the k-gated themes on the shared report', () => {
+    // Themes are aggregates that already ship on the share page. Gating them too would be a
+    // silent content regression — this is the test that would catch a gate placed at the top
+    // of s8Bullets instead of after the themes branch.
+    const facts = {
+      ...CAPACITY_FACTS,
+      themes: [{ label: 'Follow-up', gloss: 'People are lost after week two.', support_count: 4, item_ids: ['conn_2'], verbatims: [] }],
+    };
+    const s8 = fallbackSection('s8', { facts, methodology, reflections, audience: 'shared' });
+    expect(s8.bullets[0]).toContain('Follow-up');
+    expect(s8.bullets).not.toEqual([withheld]);
+  });
+
+  it('keeps the MIN_SUPPORT threshold on the private report', () => {
+    // Orthogonal to audience: Natalie asked to drop names, not the k-threshold. Two respondents
+    // is below MIN_SUPPORT (3), so even the screen report withholds.
+    const facts = {
+      ...themeless,
+      cover: { ...CAPACITY_FACTS.cover, respondent_count: 2 },
+    };
+    const s8 = fallbackSection('s8', { facts, methodology, reflections, audience: 'screen' });
+    expect(s8.bullets).toEqual([withheld]);
   });
 });
 
@@ -570,6 +638,54 @@ describe('s3 executive dashboard', () => {
     const s3 = fallbackSection('s3', { facts: CAPACITY_FACTS, methodology, reflections: [] });
     for (const c of CAPACITY_FACTS.categories) {
       expect(s3.bullets.join(' ')).not.toContain(`${c.name}: ${c.score} out of 100`);
+    }
+  });
+});
+
+/**
+ * Step D, relocated — S7's punch list is a deterministic BLOCK (lib/report/blocks.ts), not a
+ * bullet, because s7 is an AI section and every AI renderer drops `fallback.bullets`. The area
+ * assertions moved with it to tests/report/blocks.test.ts; what stays here is s7's BULLETS.
+ */
+describe('S7 bullets (step D, after the punch list moved to a block)', () => {
+  const facts = CAPACITY_FACTS; // every area 49-72, so all eight are below the 80 standard
+  const s7 = () => fallbackSection('s7', { facts, methodology, reflections: [] });
+
+  it('carries no area line at all — the punch list is a block now, and a bullet would double it', () => {
+    expect(facts.improvement.areas_needing_work).toHaveLength(8); // fixture guard
+    const bullets = s7().bullets;
+    for (const area of facts.improvement.areas_needing_work) {
+      expect(bullets.join(' ')).not.toContain(area.name);
+      expect(bullets.join(' ')).not.toContain(`${area.gap_to_standard} points below the standard`);
+    }
+  });
+
+  it('no longer repeats the six lowest indicators as their own bullets', () => {
+    const bullets = s7().bullets;
+    for (const b of facts.bottom_items) {
+      expect(bullets).not.toContain(`${b.text} — ${b.mean} out of 100 (${b.theme}).`);
+    }
+  });
+
+  it('still lists the six lowest indicators when no area is below the standard', () => {
+    const healthy = makeFacts({
+      categories: CAPACITY_FACTS.categories.map((c) => ({ ...c, score: 85 })),
+    });
+    expect(healthy.improvement.areas_needing_work).toEqual([]); // fixture guard
+    const bullets = fallbackSection('s7', { facts: healthy, methodology, reflections: [] }).bullets;
+    expect(bullets.length).toBeGreaterThan(0);
+    for (const b of healthy.bottom_items) {
+      expect(bullets).toContain(`${b.text} — ${b.mean} out of 100 (${b.theme}).`);
+    }
+  });
+
+  it('keeps the absent-theme pattern lines', () => {
+    const oneTheme = makeFacts({
+      bottom_items: CAPACITY_FACTS.bottom_items.map((b) => ({ ...b, theme: 'systems' as const })),
+    });
+    const bullets = fallbackSection('s7', { facts: oneTheme, methodology, reflections: [] }).bullets;
+    for (const theme of ['culture', 'theology', 'relational']) {
+      expect(bullets).toContain(`None of the six lowest indicators are ${theme}.`);
     }
   });
 });

@@ -47,7 +47,7 @@ describe('webVisuals — s3 capacity bars', () => {
       makeFacts({ overall: { ...CAPACITY_FACTS.overall, gap: 19 } }),
       methodology,
     ).s3.capacity;
-    expect(positive.gapLabel).toBe('19 POINTS LOST');
+    expect(positive.gapLabel).toBe('19 points lost to your weakest area.');
 
     for (const gap of [0, -3]) {
       const model = webVisuals(
@@ -382,5 +382,52 @@ describe('webVisuals — s10 phase rail', () => {
     expect(byPhase.get('align')).toEqual([1, 1, 1]);
     expect(byPhase.get('build')).toEqual([0.6, 0.6, 0.6]);
     expect(byPhase.get('scale')).toEqual([0.3, 0.3, 0.3]);
+  });
+});
+
+describe('webVisuals — s3 capacity bars name themselves in the reader\'s words (step F)', () => {
+  const methodology = loadMethodology();
+  const { capacity } = webVisuals(CAPACITY_FACTS, methodology).s3;
+
+  it('carries the two bar names, so the component never has to invent them', () => {
+    expect(capacity.capacityLabel).toBe('Health score');
+    expect(capacity.throughputLabel).toBe('Real-world result');
+  });
+
+  it('carries a plain-English explanation of what each number actually measures', () => {
+    expect(capacity.capacityExplanation).toBe('the average across your eight areas');
+    expect(capacity.throughputExplanation).toBe(
+      'what actually gets through once your weakest area slows everything down',
+    );
+  });
+
+  it('never prints the engine\'s own jargon in a reader-facing string', () => {
+    // The whole point of step F: "capacity" and "throughput" are the engine's words for
+    // these quantities, not a church leader's. They stay as FIELD names (capacityLabel,
+    // throughputPct) and disappear from every VALUE the reader can see. A regression that
+    // reinstates 'Capacity' as a label, or writes a gap chip mentioning throughput, trips here.
+    const reader = [
+      capacity.capacityLabel,
+      capacity.throughputLabel,
+      capacity.capacityExplanation,
+      capacity.throughputExplanation,
+      capacity.gapLabel ?? '',
+    ];
+    for (const text of reader) {
+      expect(text).not.toMatch(/capacity/i);
+      expect(text).not.toMatch(/throughput/i);
+    }
+  });
+
+  it('names both bars whatever the gap does — the labels are not chip state', () => {
+    // gapLabel goes null at gap <= 0 (above). The two names must not ride along with it.
+    for (const gap of [19, 0, -3]) {
+      const model = webVisuals(
+        makeFacts({ overall: { ...CAPACITY_FACTS.overall, gap } }),
+        methodology,
+      ).s3.capacity;
+      expect(model.capacityLabel).toBe('Health score');
+      expect(model.throughputLabel).toBe('Real-world result');
+    }
   });
 });

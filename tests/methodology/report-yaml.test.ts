@@ -26,6 +26,86 @@ function dirWithMissingReportSection(): string {
   return dir;
 }
 
+describe("report.yaml carries no retired engine jargon in reader-facing copy", () => {
+  const sections = loadMethodology().report.sections;
+
+  /**
+   * Step F renamed the two headline numbers to "Health score" and "Real-world result" because
+   * "capacity" and "throughput" are the ENGINE's words for them, not a church leader's, and
+   * removed the /methodology entry that used to teach them. s4's capacity archetype template
+   * still opened on the bare word, so the one place a reader still met it was the one place
+   * nothing defined it any more.
+   *
+   * Scoped to `templates` on purpose: `capacity` is also the archetype KEY on every section
+   * (a key, never rendered), and "Capacity & Next-Ceiling Session" in offers.yaml is a product
+   * name, which is fine.
+   */
+  // The LABEL use — the bare word as its own sentence, which is how s4 opened. Not every
+  // occurrence: s12's "building the capacity to steward what is coming" is the ordinary English
+  // noun, in a sentence that never presents it as the name of a number, and step F did not
+  // touch it.
+  const LABEL_USE = /(^|\.\s+)(capacity|throughput)\.(\s|$)/i;
+
+  it('never opens a sentence with the bare metric name', () => {
+    const offenders: string[] = [];
+    for (const id of SECTION_IDS) {
+      for (const archetype of ARCHETYPES) {
+        if (LABEL_USE.test(sections[id].templates[archetype])) offenders.push(`${id}.${archetype}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('would catch the s4 regression it exists for', () => {
+    // Non-vacuity: the exact string this test was written against must still fail the rule.
+    expect(LABEL_USE.test('Capacity. Every stage is working, so what sits in front of you is a growth question.')).toBe(true);
+    expect(LABEL_USE.test('The objective for the next ninety days is building the capacity to steward what is coming.')).toBe(false);
+  });
+});
+
+describe("report.yaml s7 describes what s7 actually renders", () => {
+  const s7 = loadMethodology().report.sections.s7;
+
+  /**
+   * s7 stopped being "the six lowest indicators" on 2026-08-19: it now leads with the
+   * areas-needing-work punch list — EVERY area below the 80 standard, worst first, each with its
+   * own questions (lib/report/blocks.ts) — and keeps the six lowest as its rank-list chart and
+   * its pattern lines. A title naming only the six sat directly above eight area entries.
+   *
+   * These templates are also the model's per-archetype system prompt (composeSection), so they
+   * have to stay true of the AI narrative as well: the model still writes about bottom_items,
+   * which is why the six are asserted to SURVIVE here rather than be replaced.
+   */
+  it('names the areas below the standard in the title, not just the six lowest questions', () => {
+    expect(s7.title.toLowerCase()).toMatch(/standard/);
+  });
+
+  it('still names the six lowest indicators in every archetype template', () => {
+    const missing = ARCHETYPES.filter((a) => !s7.templates[a].toLowerCase().includes('six lowest'));
+    expect(missing).toEqual([]);
+  });
+
+  /**
+   * ⚠️ The TITLE may describe the punch list; the TEMPLATES may not.
+   *
+   * `templates[archetype]` is two things at once: the fallback BODY (fallback-sections.ts:449)
+   * and the model's per-archetype SYSTEM PROMPT (lib/ai/sections.ts composeSection). The s7
+   * slice is `{...head, bottom_items, pattern_counts}` — no `improvement`, so the model cannot
+   * see the areas, cannot see their scores, and cannot see the standard. A template naming them
+   * instructs it to write about facts it was never given, and gate 2's numeric containment
+   * (lib/ai/section-gates.ts) allows only numbers present in that slice, so an obedient model
+   * writing "the standard of 80" fails the gate, burns the section's one corrective, and can
+   * land on the fallback path.
+   *
+   * The punch list introduces itself instead — `PunchListBlock.heading`, deterministic, on both
+   * surfaces (lib/report/blocks.ts).
+   */
+  it('never asks the model for the areas or the standard, which its slice does not carry', () => {
+    const leaking = ARCHETYPES.filter((a) => /standard|areas? below/i.test(s7.templates[a]));
+    expect(leaking).toEqual([]);
+  });
+});
+
 describe('report.yaml', () => {
   const m = loadMethodology();
 

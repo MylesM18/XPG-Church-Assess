@@ -63,7 +63,7 @@ sections:
   s4:
     title: "What the data suggests"
     templates:
-      capacity: "Capacity. Every stage is working, so what sits in front of you is a growth question."
+      capacity: "Every stage is working, so what sits in front of you is a growth question."
       constraint: "{primary_name}, at {primary_score} out of 100. This is the area the data points to first."
       foundation: "Foundation. The stages are holding; the enablers underneath them are not yet."
     length_ceiling: 1200
@@ -88,7 +88,7 @@ sections:
     required_mentions: []
 
   s7:
-    title: "Lowest scoring indicators"
+    title: "Areas below the standard"
     templates:
       capacity: "The six lowest indicators, and what they have in common."
       constraint: "The six lowest indicators, and what they have in common."

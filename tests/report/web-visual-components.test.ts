@@ -42,21 +42,28 @@ describe('WebCapacityBars', () => {
     capacityPct: 58,
     throughputPct: 35,
     gap: 21,
-    gapLabel: '21 POINTS LOST',
+    capacityLabel: 'Vitality index',
+    capacityExplanation: 'a made-up gloss for the top bar',
+    throughputLabel: 'End-to-end flow',
+    throughputExplanation: 'a made-up gloss for the lower bar',
+    gapLabel: '21 points lost to your weakest area.',
   }
 
   it('renders the gap chip with its text when gapLabel is non-null', () => {
     const html = renderToStaticMarkup(createElement(WebCapacityBars, { model: baseModel }))
-    expect(html).toContain(escapeHtml('21 POINTS LOST'))
+    expect(html).toContain(escapeHtml('21 points lost to your weakest area.'))
   })
 
   it('renders no chip at all — no empty element, no placeholder — when gapLabel is null', () => {
     const model: CapacityBarsModel = { ...baseModel, gap: 0, gapLabel: null }
     const html = renderToStaticMarkup(createElement(WebCapacityBars, { model }))
-    // The gap chip is the component's only <p>. Its absence (not an empty <p>)
-    // is what "never an empty frame" requires; a bug that renders an empty
-    // chip, or inverts the null check, changes this count.
-    expect((html.match(/<p /g) ?? []).length).toBe(0)
+    // Step F gave each bar a one-line gloss, so <p> is no longer unique to the chip: the
+    // two glosses are the only paragraphs a chipless render may contain. The count is what
+    // "never an empty frame" requires — a bug that renders an empty chip, or inverts the
+    // null check, makes it 3. Pinned alongside the chip's own class so the count cannot be
+    // satisfied by some other element standing in for it.
+    expect((html.match(/<p /g) ?? []).length).toBe(2)
+    expect(html).not.toContain('self-start')
   })
 
   it('both bars carry the SAME band hex and differ only by opacity 1 vs 0.45 — never a second colour for throughput', () => {
@@ -83,13 +90,83 @@ describe('WebCapacityBars', () => {
       capacityPct: 73,
       throughputPct: 30,
       gap: 33,
-      gapLabel: '33 POINTS LOST',
+      capacityLabel: 'Vitality index',
+      capacityExplanation: 'a made-up gloss for the top bar',
+      throughputLabel: 'End-to-end flow',
+      throughputExplanation: 'a made-up gloss for the lower bar',
+      gapLabel: '33 points lost to your weakest area.',
     }
     const html = renderToStaticMarkup(createElement(WebCapacityBars, { model }))
     expect(html).toContain('width:73%')
     expect(html).toContain('width:30%')
     expect(html).not.toContain('width:88%')
     expect(html).not.toContain('width:55%')
+  })
+
+  /** Class attribute of the innermost element that directly wraps `text`. */
+  const classOfWrapper = (html: string, text: string): string => {
+    const at = html.indexOf(text)
+    expect(at).toBeGreaterThan(-1)
+    const tag = html.slice(html.lastIndexOf('<', at), at)
+    return /class="([^"]*)"/.exec(tag)?.[1] ?? ''
+  }
+
+  it('takes both bar names from the model, never from its own hardcoded words', () => {
+    const html = renderToStaticMarkup(createElement(WebCapacityBars, { model: baseModel }))
+    expect(html).toContain('Vitality index')
+    expect(html).toContain('End-to-end flow')
+    // The regression this catches is the whole of step F: the model grows the fields and
+    // the component keeps printing the engine's jargon, so nothing on screen changes.
+    expect(html).not.toContain('Capacity')
+    expect(html).not.toContain('Throughput')
+  })
+
+  it('prints each bar explanation, so a number never appears without saying what it measures', () => {
+    const html = renderToStaticMarkup(createElement(WebCapacityBars, { model: baseModel }))
+    expect(html).toContain('a made-up gloss for the top bar')
+    expect(html).toContain('a made-up gloss for the lower bar')
+  })
+
+  it('does not shout the gap chip — the sentence keeps its own case', () => {
+    // The chip used to be an eyebrow ('21 POINTS LOST') rendered through the CAPS class,
+    // which sets text-transform:uppercase. The copy is now a sentence, so that class would
+    // render '21 POINTS LOST TO YOUR WEAKEST AREA.' — visually unchanged from the old shout
+    // even though the model changed. Only the SOURCE class can catch that; the markup still
+    // contains the sentence either way.
+    const html = renderToStaticMarkup(createElement(WebCapacityBars, { model: baseModel }))
+    expect(classOfWrapper(html, '21 points lost')).not.toContain('uppercase')
+  })
+
+  it('does not shout the bar explanations either', () => {
+    const html = renderToStaticMarkup(createElement(WebCapacityBars, { model: baseModel }))
+    expect(classOfWrapper(html, 'a made-up gloss for the top bar')).not.toContain('uppercase')
+    expect(classOfWrapper(html, 'a made-up gloss for the lower bar')).not.toContain('uppercase')
+  })
+
+  it('no longer carries the old bar names as literals in its own source', () => {
+    // NON-VACUITY GUARD for step F (same source-reading approach as the WebPhaseRail key
+    // test below). The rendered-markup test above is satisfied by ANY component that stops
+    // printing the words; this one pins that they are gone from the file, so the model
+    // cannot quietly become a set of fields nobody reads. Asserted on the QUOTED literals,
+    // never the bare word — `CapacityBarsModel` is a legitimate type reference in this body.
+    const source = fs.readFileSync(
+      path.join(
+        fileURLToPath(new URL('../..', import.meta.url)),
+        'app', 'app', '[churchId]', 'diagnosis', 'report', 'web-visuals.tsx',
+      ),
+      'utf8',
+    )
+    const start = source.indexOf('export function WebCapacityBars')
+    const body = source.slice(start, source.indexOf('export function', start + 1))
+    expect(body.length).toBeGreaterThan(0)
+    expect(body).not.toContain("'Capacity'")
+    expect(body).not.toContain("'Throughput'")
+    // ...and it genuinely reads them off the model, so the negatives above cannot be
+    // satisfied by deleting the labels altogether.
+    expect(body).toContain('model.capacityLabel')
+    expect(body).toContain('model.throughputLabel')
+    expect(body).toContain('model.capacityExplanation')
+    expect(body).toContain('model.throughputExplanation')
   })
 })
 

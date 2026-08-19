@@ -9,7 +9,8 @@ import {
   BAND_TEXT, BAND_NAME, verdictBandFor, textOnBand,
   statGridModel, rankListModel, verdictBlockModel, coverModel, areaIndexFrom,
 } from '@/lib/report/charts';
-import { ALL_FIXTURES, CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
+import { fallbackSection } from '@/lib/report/fallback-sections';
+import { ALL_FIXTURES, CAPACITY_FACTS, MOSTLY_STRONG_FACTS, makeFacts } from '../fixtures/facts';
 
 describe('seam tokens (visual overhaul)', () => {
   it('BAND_TEXT darkens watch and reuses the fill hex elsewhere', () => {
@@ -145,33 +146,122 @@ describe('verdictBlockModel', () => {
 
   it('hero mirrors overall and stats carry the four locked labels', () => {
     for (const { facts } of ALL_FIXTURES) {
-      const model = verdictBlockModel(facts, methodology);
+      const model = verdictBlockModel(facts);
       expect(model.kind).toBe('verdict_block');
       expect(model.hero.score).toBe(facts.overall.capacity);
       expect(model.hero.tierName).toBe(facts.overall.tier.name);
       expect(model.hero.band).toBe(verdictBandFor(facts.overall.tier.id));
       expect(model.stats.map((s) => s.label)).toEqual([
         'Areas assessed',
-        'Strengths',
-        'Questions at 20 or less',
-        'Priority areas',
+        'Highest scoring',
+        'Below the 80 standard',
+        'Focus first',
       ]);
     }
   });
 
-  it('computes the stat values from facts', () => {
-    const model = verdictBlockModel(CAPACITY_FACTS, methodology);
-    const bands = CAPACITY_FACTS.categories.map((c) =>
-      readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds),
-    );
+  /**
+   * Natalie's ruling, 2026-08-19: keep `rules.yaml`'s `strong: 70` — it drives CategoryState and
+   * every band colour in the engine — and stop the TILES borrowing band names.
+   *
+   * The tiles count against IMPROVEMENT_STANDARD (80); the grid directly beneath them bands at
+   * 70. "Strongest areas — 3" and "Priority areas — 3" therefore sat above a grid where a 72
+   * area is labelled "· STRENGTH" and NO area carries the "Priority" band at all, which reads as
+   * the dashboard contradicting itself rather than as two different bars.
+   */
+  it('never borrows a band name for a tile label', () => {
+    const bandNames = Object.values(BAND_NAME).map((n) => n.toLowerCase());
+    const offenders: string[] = [];
+    for (const { name, facts } of ALL_FIXTURES) {
+      for (const stat of verdictBlockModel(facts).stats) {
+        if (bandNames.some((b) => stat.label.toLowerCase().includes(b))) offenders.push(`${name}:${stat.label}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('computes every stat value from the improvement facts', () => {
+    const model = verdictBlockModel(CAPACITY_FACTS);
     expect(model.stats[0]!.value).toBe(CAPACITY_FACTS.categories.length);
-    expect(model.stats[1]!.value).toBe(bands.filter((b) => b === 'holding').length);
-    expect(model.stats[2]!.value).toBe(CAPACITY_FACTS.bottom_items.filter((b) => b.mean <= 20).length);
-    expect(model.stats[3]!.value).toBe(bands.filter((b) => b === 'severe').length);
+    expect(model.stats[1]!.value).toBe(CAPACITY_FACTS.improvement.strongest_areas.length);
+    expect(model.stats[2]!.value).toBe(CAPACITY_FACTS.improvement.areas_needing_work.length);
+    expect(model.stats[3]!.value).toBe(CAPACITY_FACTS.improvement.priority_areas.length);
+  });
+
+  it('out-reports the retired predicates on the mid-range church it exists for', () => {
+    // CAPACITY_FACTS is the 49-72 church the recalibration exists for. The retired tiles
+    // read the engine's bands and the six-item bottom list, and both under-report it: the
+    // dead 'Questions at 20 or less' tile can only ever be 0 here (mean <= 20 is 2.0 out of
+    // 10 on every respondent), which is the zero on the dashboard Natalie objected to.
+    const model = verdictBlockModel(CAPACITY_FACTS);
+    const retiredStrengths = CAPACITY_FACTS.categories.filter(
+      (c) => readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds) === 'holding',
+    ).length;
+    const retiredQuestions = CAPACITY_FACTS.bottom_items.filter((b) => b.mean <= 20).length;
+    expect(retiredQuestions).toBe(0);
+    expect(model.stats[1]!.value).toBeGreaterThan(retiredStrengths);
+    expect(model.stats[2]!.value).toBeGreaterThan(retiredQuestions);
+    for (const stat of model.stats) expect(stat.value).toBeGreaterThan(0);
+  });
+
+  it('agrees with the section that names the strengths in prose', () => {
+    const model = verdictBlockModel(CAPACITY_FACTS);
+    // s5 prints facts.categories.slice(0, 3) by name (fallback-sections.ts).
+    expect(model.stats[1]!.value).toBe(CAPACITY_FACTS.categories.slice(0, 3).length);
+    expect(CAPACITY_FACTS.improvement.strongest_areas.map((a) => a.category_id))
+      .toEqual(CAPACITY_FACTS.categories.slice(0, 3).map((c) => c.id));
+  });
+
+  /**
+   * ⚠️ OPEN PRODUCT DECISION (Natalie), NOT a passing guard.
+   *
+   * The agreement above holds only because every other fixture sits below 80 in all eight
+   * areas, so `strongestAreas`' top-3 FLOOR is what it returns and the comparison is vacuous.
+   * On a church where five areas clear the standard the two disagree: the tile counts five,
+   * s5 names three.
+   *
+   * It is characterised rather than fixed because every fix is a product change, not a defect
+   * fix: s5's own copy hardcodes the count in all three archetypes ("Three areas are carrying
+   * real weight", methodology/report.yaml:75-77), its length_ceiling of 2200 is costed for
+   * three, and `SECTION_REGISTRY.s5.slice` hands the model `categories.slice(0, 3)` while s6
+   * takes `.slice(3)` — so driving s5 off `improvement.strongest_areas` reworms Natalie's copy,
+   * re-costs an AI ceiling, and repartitions the two AI sections at once. Capping the tile at
+   * three instead would under-report a genuinely healthy church.
+   *
+   * Fixing only the FALLBACK partition is the one option that is definitely wrong: it would put
+   * the contradiction on the live AI path alone, which is precisely how S7's punch list came to
+   * ship to nobody.
+   */
+  it('DIVERGES from s5 when more than three areas clear the standard', () => {
+    const model = verdictBlockModel(MOSTLY_STRONG_FACTS);
+    const named = MOSTLY_STRONG_FACTS.categories.slice(0, 3); // what s5 prints, both paths
+    expect(MOSTLY_STRONG_FACTS.improvement.strongest_areas).toHaveLength(5); // fixture guard
+    expect(model.stats[1]!.value).toBe(5);
+    expect(named).toHaveLength(3);
+    // Named as a fact so a later fix flips this test loudly instead of leaving it green.
+    expect(model.stats[1]!.value).not.toBe(named.length);
+  });
+
+  it('keeps the s5 / s6 fallback partition total and disjoint even on that pack', () => {
+    // Whatever is decided above, s5 and s6 must still name all eight areas exactly once between
+    // them. Asserted against the RENDERED bullets, never against a re-implementation of the two
+    // slices here: `x.slice(0, 3).concat(x.slice(3))` equals `x` for every array, so a test
+    // written that way stays green under any change to fallback-sections.ts — including the one
+    // the test above escalates, which is exactly when s6 would start double-counting an area.
+    const args = { facts: MOSTLY_STRONG_FACTS, methodology, reflections: [] };
+    const s5 = fallbackSection('s5', args).bullets.join(' | ');
+    const s6 = fallbackSection('s6', args).bullets.join(' | ');
+    const counts = MOSTLY_STRONG_FACTS.categories.map((c) => ({
+      id: c.id,
+      inS5: s5.includes(c.name),
+      inS6: s6.includes(c.name),
+    }));
+    expect(counts.filter((c) => !c.inS5 && !c.inS6).map((c) => c.id)).toEqual([]); // total
+    expect(counts.filter((c) => c.inS5 && c.inS6).map((c) => c.id)).toEqual([]); // disjoint
   });
 
   it('lays hero above a 2x2 dashboard inside the viewBox', () => {
-    const model = verdictBlockModel(CAPACITY_FACTS, methodology);
+    const model = verdictBlockModel(CAPACITY_FACTS);
     expect(model.hero.w).toBeCloseTo(model.width, 5);
     expect(model.stats).toHaveLength(4);
     for (const stat of model.stats) {
@@ -183,7 +273,7 @@ describe('verdictBlockModel', () => {
   });
 
   it('is pure', () => {
-    expect(verdictBlockModel(CAPACITY_FACTS, methodology)).toEqual(verdictBlockModel(CAPACITY_FACTS, methodology));
+    expect(verdictBlockModel(CAPACITY_FACTS)).toEqual(verdictBlockModel(CAPACITY_FACTS));
   });
 });
 
@@ -253,6 +343,7 @@ describe('areaIndexFrom (shared seam, moved from lib/report/pdf/document.tsx)', 
         source: 'fallback',
         ai: null,
         fallback: { title: 'Health dashboard', body: '', bullets: [] },
+        blocks: [],
         charts: [grid],
       },
     ];

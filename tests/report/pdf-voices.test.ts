@@ -133,7 +133,8 @@ function factsFor(reflections: ReadonlyArray<{ item_id: string; reflection: stri
 
 function sectionsFor(reflections: ReadonlyArray<{ item_id: string; reflection: string | null }> = []): AssembledSection[] {
   const { facts } = factsFor(reflections);
-  return assembleFallbackOnly({ facts, methodology, reflections: [...reflections] });
+  // audience 'pdf' since step E — the voices path is private-only now.
+  return assembleFallbackOnly({ facts, methodology, reflections: [...reflections], audience: 'pdf' });
 }
 
 const DOC_ARGS = {

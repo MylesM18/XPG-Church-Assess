@@ -249,19 +249,33 @@ export type VerdictBlockModel = {
   stats: VerdictStat[];
 };
 
-/** Spec §2.6.3 — hero cell (giant verdict numeral + tier name) atop a 2x2
- * dashboard of context stats, all hairline-boxed. NOTE: 'Questions at 20 or
- * less' counts within bottom_items, which facts caps at 6 — it reads "of the
- * six weakest", not a whole-instrument count. */
-export function verdictBlockModel(facts: FactsPack, methodology: Methodology): VerdictBlockModel {
-  const bands = facts.categories.map((c) =>
-    readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds),
-  );
+/**
+ * Spec §2.6.3 — hero cell (giant verdict numeral + tier name) atop a 2x2 dashboard of
+ * context stats, all hairline-boxed.
+ *
+ * Every tile counts against the improvement standard (facts.improvement), NOT against the
+ * engine's reading bands. Two of the four used to be structurally unreachable for an
+ * ordinary church: 'Strengths' counted `holding` bands, which a church in the 50s and 60s
+ * can never earn — while section 05 named three strengths on the same page — and 'Questions
+ * at 20 or less' counted within bottom_items, a list already capped at six, so it read "of
+ * the six weakest" and mean <= 20 means 2.0 out of 10 on every respondent. A dashboard of
+ * zeros is not a finding; it is a broken instrument.
+ */
+export function verdictBlockModel(facts: FactsPack): VerdictBlockModel {
+  const { improvement } = facts;
+  // ⚠️ NO TILE MAY BORROW A BAND NAME (Natalie, 2026-08-19). These four count against
+  // IMPROVEMENT_STANDARD (80); the stat grid immediately beneath them bands by
+  // methodology/rules.yaml's own thresholds, where `strong` is 70. Both bars stay — 70 drives
+  // CategoryState and every colour in the engine, and re-banding on 80 would repaint a 72 area
+  // everywhere — so the tiles stop using the grid's words instead. "Strongest areas — 3" sat
+  // above a grid labelling a 72 area "· STRENGTH", and "Priority areas — 3" above a grid where
+  // NO area carries the Priority band, which reads as a dashboard contradicting itself rather
+  // than as two different bars. tests/report/charts.test.ts pins the separation.
   const entries: Array<[string, number]> = [
     ['Areas assessed', facts.categories.length],
-    ['Strengths', bands.filter((b) => b === 'holding').length],
-    ['Questions at 20 or less', facts.bottom_items.filter((b) => b.mean <= 20).length],
-    ['Priority areas', bands.filter((b) => b === 'severe').length],
+    ['Highest scoring', improvement.strongest_areas.length],
+    ['Below the 80 standard', improvement.areas_needing_work.length],
+    ['Focus first', improvement.priority_areas.length],
   ];
   const cellW = CHART_W / 2;
   const stats = entries.map(([label, value], i): VerdictStat => ({

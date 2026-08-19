@@ -25,7 +25,21 @@ const BAND = 'holding' as const
 // literal satisfying WebVisuals rather than the real facts/methodology pipeline — these tests
 // exercise dispatch/chrome, not the visual models themselves (that's tests/report/web-visuals*).
 const VISUALS: WebVisuals = {
-  s3: { capacity: { band: 'holding', capacity: 0, throughput: 0, capacityPct: 0, throughputPct: 0, gap: 0, gapLabel: null } },
+  s3: {
+    capacity: {
+      band: 'holding',
+      capacity: 0,
+      throughput: 0,
+      capacityPct: 0,
+      throughputPct: 0,
+      gap: 0,
+      capacityLabel: 'Health score',
+      capacityExplanation: 'the average across your eight areas',
+      throughputLabel: 'Real-world result',
+      throughputExplanation: 'what actually gets through once your weakest area slows everything down',
+      gapLabel: null,
+    },
+  },
   s4: { constraint: null, dumbbells: null },
   s7: { themeSplit: null },
   s8: { spread: null },
@@ -39,6 +53,7 @@ const fallbackSection = (id: string, title: string): AssembledSection => ({
   ai: null,
   fallback: { title, body: `body of ${id}`, bullets: [`bullet a ${id}`, `bullet b ${id}`] },
   charts: [],
+  blocks: [],
 })
 
 describe('SectionBodyView', () => {
@@ -113,6 +128,7 @@ const aiSection = (id: string, title: string, ai: unknown): AssembledSection => 
   ai,
   fallback: { title, body: `FALLBACK BODY ${id}`, bullets: [`FALLBACK BULLET ${id}`] },
   charts: [],
+  blocks: [],
 })
 
 const VALID_AI: Record<string, unknown> = {

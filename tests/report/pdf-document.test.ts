@@ -180,7 +180,9 @@ function sectionsFor(
   diagnosisOverride: Partial<Diagnosis> = {},
   reflections: ReadonlyArray<{ item_id: string; reflection: string | null }> = [],
 ): AssembledSection[] {
-  return assembleFallbackOnly({ facts: factsFor(diagnosisOverride), methodology, reflections: [...reflections] });
+  // audience 'pdf' since step E: this helper stands in for the PDF surface, and the
+  // label-guard test below is only meaningful if the reflection actually reaches the render.
+  return assembleFallbackOnly({ facts: factsFor(diagnosisOverride), methodology, reflections: [...reflections], audience: 'pdf' });
 }
 
 const DOC_ARGS = {
@@ -344,6 +346,7 @@ describe('areaIndexFrom', () => {
         source: 'fallback' as const,
         ai: null,
         fallback: { title: 'Health dashboard', body: '', bullets: [] },
+        blocks: [],
         charts: [grid],
       },
     ];

@@ -164,6 +164,7 @@ export async function GET(
       responseHash: hash,
       reflections, // the KEYLESS array
       hashReflections: reflectionRowsFor(rawResponses ?? []), // the KEYED array
+      audience: 'pdf', // this surface is private — respondents' verbatim reflections render here
       readPersisted: (inputsHash) => readPersistedReport(supabase, runId, inputsHash),
     })
 

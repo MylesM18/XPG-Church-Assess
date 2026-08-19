@@ -3,6 +3,7 @@ import type { Methodology, Theme } from '../methodology/schema';
 import { archetypeFor, tierFor, type Archetype, type Tier } from './tier';
 import { interp } from './view';
 import { containsRespondentLabel, type LabelSource } from './anonymity';
+import { IMPROVEMENT_STANDARD, needsWork, priorityAreas, strongestAreas } from './improvement';
 
 /**
  * The facts pack: the single deterministic source of every number, name, and theme any
@@ -30,6 +31,44 @@ export interface BottomItemFact {
   mean: number; // 1–10 answers × 10, rounded to the nearest integer (0–100 register)
   text: string;
   theme: Theme;
+}
+
+/**
+ * One question inside an area that sits below the improvement standard. Deliberately WITHOUT
+ * `category_id`: it only ever appears nested under the area it belongs to, and a second copy
+ * of that id is a chance for the two to disagree.
+ */
+export interface WeakItemFact {
+  item_id: string;
+  mean: number; // same 0-100 register as BottomItemFact
+  text: string;
+  theme: Theme;
+}
+
+/** One area below the standard, with its own evidence. */
+export interface AreaNeedingWorkFact {
+  category_id: string;
+  name: string;
+  kind: CategoryFact['kind'];
+  score: number;
+  /** standard - score. Always a whole number: category scores are integers by construction
+   *  (lib/engine/fit.ts scoreFromFit rounds mu * 10), so this never prints a float tail. */
+  gap_to_standard: number;
+  /** THIS area's own sub-standard questions, worst first, ties by item id. Computed over
+   *  EVERY answered item, never over `bottom_items` — that list is capped at six report-wide
+   *  and would leave most areas with no evidence at all. */
+  weak_items: WeakItemFact[];
+}
+
+/**
+ * The improvement layer's slice of the pack (see lib/report/improvement.ts for why
+ * `strongest_areas` is relative while the other two are absolute).
+ */
+export interface ImprovementFacts {
+  standard: number;
+  areas_needing_work: AreaNeedingWorkFact[];
+  strongest_areas: Array<{ category_id: string; name: string; score: number }>;
+  priority_areas: Array<{ category_id: string; name: string; score: number }>;
 }
 
 /** Shape plan 2's gated clustering output lands in. Empty until plan 3 wires the caller. */
@@ -73,6 +112,7 @@ export interface FactsPack {
   categories: CategoryFact[]; // sorted score desc, ties by id asc — S3's dashboard order
   bottom_items: BottomItemFact[]; // mean asc, ties by item id asc, max 6 — S7's table
   pattern_counts: Record<Theme, number>; // over bottom_items; all four keys always present (S7 gate 5)
+  improvement: ImprovementFacts; // the 80-standard ranking S3's tiles and S7's punch list read
   themes: ThemeClusterFact[];
   profile: Record<string, string>; // non-null profile fields only — absent, not empty (decision 6)
   blind_spots: Array<{ category_id: string; name: string; belief: number; evidence: number; gap: number }>;
@@ -121,6 +161,45 @@ const FREE_TEXT_PROFILE_KEYS = [
 const CLOSED_VOCAB_PROFILE_KEYS = ['context', 'attendance_band', 'growth_trajectory', 'facility_status'] as const;
 
 const BOTTOM_ITEM_COUNT = 6;
+
+/**
+ * The improvement slice, derived from a pack's own categories and its FULL item list.
+ *
+ * Exported so the test fixtures can derive this field the same way production does instead of
+ * hand-typing a ranking that could drift from `lib/report/improvement.ts`.
+ *
+ * `items` is the whole per-item mean map, NOT `bottom_items` — see AreaNeedingWorkFact.
+ */
+export function buildImprovementFacts(
+  categories: readonly CategoryFact[],
+  items: readonly BottomItemFact[],
+): ImprovementFacts {
+  const weakByCategory = new Map<string, WeakItemFact[]>();
+  for (const i of items) {
+    if (i.mean >= IMPROVEMENT_STANDARD) continue;
+    const weak: WeakItemFact = { item_id: i.item_id, mean: i.mean, text: i.text, theme: i.theme };
+    const bucket = weakByCategory.get(i.category_id);
+    if (bucket) bucket.push(weak);
+    else weakByCategory.set(i.category_id, [weak]);
+  }
+  for (const bucket of weakByCategory.values()) {
+    bucket.sort((a, b) => a.mean - b.mean || (a.item_id < b.item_id ? -1 : a.item_id > b.item_id ? 1 : 0));
+  }
+  const summarize = (c: CategoryFact) => ({ category_id: c.id, name: c.name, score: c.score });
+  return {
+    standard: IMPROVEMENT_STANDARD,
+    areas_needing_work: needsWork(categories).map((c) => ({
+      category_id: c.id,
+      name: c.name,
+      kind: c.kind,
+      score: c.score,
+      gap_to_standard: IMPROVEMENT_STANDARD - c.score,
+      weak_items: weakByCategory.get(c.id) ?? [],
+    })),
+    strongest_areas: strongestAreas(categories).map(summarize),
+    priority_areas: priorityAreas(categories).map(summarize),
+  };
+}
 
 export function buildFacts(args: BuildFactsArgs): FactsPack {
   const { diagnosis: d, methodology, responses, church, completedAt } = args;
@@ -207,6 +286,7 @@ export function buildFacts(args: BuildFactsArgs): FactsPack {
     categories,
     bottom_items: bottomItems,
     pattern_counts: patternCounts,
+    improvement: buildImprovementFacts(categories, itemFacts),
     themes: args.themes ?? [],
     profile,
     blind_spots: d.blind_spots.map((b) => ({

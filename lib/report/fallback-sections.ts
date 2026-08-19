@@ -2,7 +2,7 @@ import { MIN_SUPPORT } from '../ai/theme-gates';
 import type { CategoryState } from '../engine/types';
 import type { Methodology, Offer, SectionId, Theme } from '../methodology/schema';
 import type { CategoryFact, FactsPack } from './facts';
-import { buildOutreachVoices, dependencyReadLines, interp, readingBand } from './view';
+import { buildOutreachVoices, dependencyReadLines, interp, readingBand, type ReportAudience } from './view';
 
 /**
  * The deterministic spine. Every one of the twelve sections renders from the facts pack and
@@ -19,6 +19,13 @@ export interface FallbackSectionArgs {
   facts: FactsPack;
   methodology: Methodology;
   reflections: ReadonlyArray<{ item_id: string; reflection: string | null }>;
+  /**
+   * Which surface is rendering. OPTIONAL and gated by an ALLOW-list (`screen`/`pdf`) rather
+   * than the deny-list buildReportView uses (view.ts) — so a call site that forgets to declare
+   * itself WITHHOLDS the private free-text instead of leaking it. The failure mode has to point
+   * that way: the only content this gates is respondents' verbatim reflections.
+   */
+  audience?: ReportAudience;
 }
 
 export interface SectionBody {
@@ -165,12 +172,35 @@ function s6Bullet(c: CategoryFact, facts: FactsPack, methodology: Methodology): 
   return beats.filter((b): b is string => !!b).join(' ');
 }
 
+/**
+ * S7's bullets. The punch list itself — every area below the improvement standard, worst first,
+ * each with its own weak questions — is NOT here: it is a deterministic BLOCK
+ * (lib/report/blocks.ts punchListBlock, attached by compose.ts blocksForSection).
+ *
+ * ⚠️ It lived here, as bullets, for exactly one session and rendered on no live report. s7 is
+ * one of the seven AI sections and prose is on whenever OPENAI_API_KEY is set, so `S7View` on
+ * both surfaces rendered the model's narrative and dropped `fallback.bullets` entirely. Do not
+ * move computed content back into a bullet on any section listed in AI_SECTION_IDS.
+ *
+ * The flat six-item list the old body emitted is likewise gone whenever an area needs work: that
+ * same list is already printed twice around it — verbatim by the rank_list chart that renders
+ * beside s7 on BOTH surfaces (charts.ts rankListModel), and again question-by-question inside the
+ * punch list. It survives only on the path where there is nothing else to say, below.
+ *
+ * The pattern lines stay on every path: they describe `bottom_items`, not the areas, and gate 5
+ * (tests/ai/section-gates.test.ts) checks the AI's pattern claim against this exact phrasing.
+ */
 function s7Bullets(facts: FactsPack): string[] {
-  const itemLines = facts.bottom_items.map((b) => `${b.text} — ${b.mean} out of 100 (${b.theme}).`);
   const patternLines = Object.entries(facts.pattern_counts)
     .filter(([, count]) => count === 0)
     .map(([theme]) => `None of the six lowest indicators are ${theme}.`);
-  return [...itemLines, ...patternLines];
+  // Nothing below the standard: the punch-list block is null, so the six lowest questions are the
+  // only specific evidence s7 has. Without this the section can render with zero bullets.
+  if (facts.improvement.areas_needing_work.length === 0) {
+    const itemLines = facts.bottom_items.map((b) => `${b.text} — ${b.mean} out of 100 (${b.theme}).`);
+    return [...itemLines, ...patternLines];
+  }
+  return patternLines;
 }
 
 /**
@@ -194,10 +224,18 @@ function s8Bullets(
   facts: FactsPack,
   methodology: Methodology,
   reflections: ReadonlyArray<{ item_id: string; reflection: string | null }>,
+  audience: ReportAudience | undefined,
 ): string[] {
   if (facts.themes.length > 0) {
     return facts.themes.map((t) => `${t.label}: ${t.gloss} (${t.support_count} people).`);
   }
+  // ⚠️ ORDER IS LOAD-BEARING. The audience gate sits BELOW the themes branch, never above it.
+  // Themes are k-gated AGGREGATES that already ship on the share page today; Natalie asked that
+  // the VERBATIM reflections become private, not the themes. A gate at the top of this function
+  // would strip themes from the share page — a silent content regression.
+  if (audience !== 'screen' && audience !== 'pdf') return [methodology.copy.s8_below_threshold];
+  // Orthogonal to audience, and kept on BOTH paths: dropping names is not dropping the
+  // k-threshold.
   if (facts.cover.respondent_count < MIN_SUPPORT) return [methodology.copy.s8_below_threshold];
   // buildOutreachVoices groups per category_id (Map<string, OutreachVoicesGroup[]>) — flatten
   // across the Map's values before producing lines (ruling 10). Verbatims never enter a
@@ -351,6 +389,7 @@ function bulletsFor(
   methodology: Methodology,
   reflections: ReadonlyArray<{ item_id: string; reflection: string | null }>,
   tokens: Record<string, string>,
+  audience: ReportAudience | undefined,
 ): string[] {
   switch (id) {
     case 's1':
@@ -372,7 +411,7 @@ function bulletsFor(
     case 's7':
       return s7Bullets(facts);
     case 's8':
-      return s8Bullets(facts, methodology, reflections);
+      return s8Bullets(facts, methodology, reflections, audience);
     case 's9':
       return s9Bullets(facts);
     case 's10':
@@ -389,7 +428,7 @@ function bulletsFor(
 }
 
 export function fallbackSection(id: SectionId, args: FallbackSectionArgs): SectionBody {
-  const { facts, methodology, reflections } = args;
+  const { facts, methodology, reflections, audience } = args;
   const section = methodology.report.sections[id];
 
   const tokens: Record<string, string> = {
@@ -408,7 +447,7 @@ export function fallbackSection(id: SectionId, args: FallbackSectionArgs): Secti
   return {
     title: section.title,
     body: interp(section.templates[facts.archetype], tokens),
-    bullets: bulletsFor(id, facts, methodology, reflections, tokens),
+    bullets: bulletsFor(id, facts, methodology, reflections, tokens, audience),
   };
 }
 

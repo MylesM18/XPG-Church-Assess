@@ -353,8 +353,11 @@ describe('per-section visual placement (Task 16 dispatchers)', () => {
   // 2026-08-16; this string is kept as the shape a re-added meter would render, so the guard
   // below goes red rather than silently passing on a component that no longer exists.
   const CONFIDENCE_HEAD = `<p class="${CAPS_SOFT}">Confidence</p>`
-  // WebCapacityBars' first bar label.
-  const CAPACITY_LABEL = `<span class="${CAPS_SOFT}">Capacity</span>`
+  // WebCapacityBars' first bar label. The WORD comes from the model (step F moved it there),
+  // so a copy change lands here automatically and this file never re-litigates the wording —
+  // that is pinned in tests/report/web-visuals.test.ts. The ELEMENT shape around it is still
+  // spelled out, which is what makes this an ordering anchor rather than a bare phrase.
+  const CAPACITY_LABEL = `<span class="${CAPS_SOFT}">${visuals.s3.capacity.capacityLabel}</span>`
   const STAT_GRID = 'aria-label="Area scores with health bands"'
   const RANK_LIST = 'aria-label="Weakest questions, ranked"'
   const THEME_SPLIT = `<p class="${CAPS_SOFT}">THEME OF THE WEAKEST INDICATORS</p>`

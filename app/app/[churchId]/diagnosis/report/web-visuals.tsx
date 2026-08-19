@@ -35,6 +35,13 @@ const CAPS = 'font-body text-[0.6875rem] font-bold uppercase tracking-[0.1em]';
  * colour from a band ground instead. */
 const CAPS_SOFT = `${CAPS} text-ink-soft`;
 const NUM = 'font-display font-semibold leading-none';
+/** Sentence-case chip. Deliberately NOT built on CAPS: the gap chip carries a sentence
+ * ("3 points lost to your weakest area."), and CAPS's text-transform would shout it back
+ * into the eyebrow it used to be. Sized a step up from CAPS's 0.6875rem so that losing the
+ * caps does not also lose the apparent size. */
+const CHIP = 'font-body text-[0.8125rem] font-semibold leading-snug';
+/** The gloss under a bar: a sentence in the secondary ink, never eyebrow chrome. */
+const GLOSS = 'font-body text-[0.8125rem] leading-[1.5] text-ink-soft';
 
 /**
  * Capacity vs throughput on one shared 0-100 axis (spec §6.3) — the two bars are
@@ -46,8 +53,22 @@ const NUM = 'font-display font-semibold leading-none';
  */
 export function WebCapacityBars({ model }: { model: CapacityBarsModel }) {
   const bars = [
-    { key: 'capacity', label: 'Capacity', value: model.capacity, pct: model.capacityPct, opacity: 1 },
-    { key: 'throughput', label: 'Throughput', value: model.throughput, pct: model.throughputPct, opacity: 0.45 },
+    {
+      key: 'capacity',
+      label: model.capacityLabel,
+      explanation: model.capacityExplanation,
+      value: model.capacity,
+      pct: model.capacityPct,
+      opacity: 1,
+    },
+    {
+      key: 'throughput',
+      label: model.throughputLabel,
+      explanation: model.throughputExplanation,
+      value: model.throughput,
+      pct: model.throughputPct,
+      opacity: 0.45,
+    },
   ];
   return (
     <div className="flex flex-col gap-4">
@@ -70,12 +91,13 @@ export function WebCapacityBars({ model }: { model: CapacityBarsModel }) {
                 }}
               />
             </div>
+            <p className={GLOSS}>{bar.explanation}</p>
           </li>
         ))}
       </ul>
       {model.gapLabel === null ? null : (
         <p
-          className={`self-start px-2 py-1 ${CAPS}`}
+          className={`self-start px-2 py-1 ${CHIP}`}
           style={{ backgroundColor: BAND_FILL[model.band], color: textOnBand(model.band) }}
         >
           {model.gapLabel}

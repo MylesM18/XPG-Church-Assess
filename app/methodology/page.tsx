@@ -164,23 +164,38 @@ export default function MethodologyPage() {
 
           <Section n="04" title="The two headline numbers">
             <p>
-              The report leads with two numbers.{' '}
-              <strong className="text-ink">Capacity</strong>{' '}is how you&rsquo;re doing on average
-              across all eight areas, your raw strength.{' '}
-              <strong className="text-ink">Throughput</strong>{' '}is how well the whole chain actually
-              moves people all the way through.
+              The report leads with two numbers. Your{' '}
+              <strong className="text-ink">health score</strong>{' '}is how you&rsquo;re doing on
+              average across all eight areas, your raw strength. Your{' '}
+              <strong className="text-ink">real-world result</strong>{' '}is how well the whole chain
+              actually moves people all the way through.
             </p>
             <p>
-              Throughput is weighted{' '}
+              The real-world result is weighted{' '}
               <strong className="text-ink">heavily toward your weakest stage</strong>, on purpose: a
               chain is only as strong as its weakest link, and one blocked stage caps how many people
               reach the end no matter how strong the others are.
             </p>
             <p>
-              The <strong className="text-ink">gap</strong>{' '}between Capacity and Throughput is the
+              The distance between the two &mdash; the{' '}
+              <strong className="text-ink">points lost</strong>{' '}to your weakest area &mdash; is the
               revealing part. A wide gap means you have real strength that isn&rsquo;t translating
               into end-to-end flow: hidden drag. A narrow gap means what you&rsquo;ve built is
               actually carrying people through.
+            </p>
+            <p>
+              Each of your eight areas is then read against a single bar we call the{' '}
+              <strong className="text-ink">standard: 80 out of 100</strong>. Anything below it is
+              real room to improve, and the dashboard counts against that bar &mdash; how many
+              areas sit below the standard, and which three to work on first.
+            </p>
+            <p>
+              The{' '}
+              <strong className="text-ink">colour</strong>{' '}on each area is a separate reading, and
+              a deliberately gentler one: it describes how an area is holding up in its own right,
+              not how far it is from the standard. So an area can be coloured as a strength and
+              still be below the standard &mdash; that is not a contradiction. It is doing well
+              compared with where churches usually are, and it still has room to grow.
             </p>
           </Section>
 
