@@ -225,7 +225,7 @@ export function chartsForSection(
   facts: FactsPack,
   methodology: Methodology,
 ): ChartModel[] {
-  if (id === 's3') return [verdictBlockModel(facts, methodology), statGridModel(facts, methodology)];
+  if (id === 's3') return [verdictBlockModel(facts), statGridModel(facts, methodology)];
   if (id === 's7') {
     const model = rankListModel(facts);
     return model ? [model] : [];

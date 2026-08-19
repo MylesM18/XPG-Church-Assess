@@ -145,33 +145,54 @@ describe('verdictBlockModel', () => {
 
   it('hero mirrors overall and stats carry the four locked labels', () => {
     for (const { facts } of ALL_FIXTURES) {
-      const model = verdictBlockModel(facts, methodology);
+      const model = verdictBlockModel(facts);
       expect(model.kind).toBe('verdict_block');
       expect(model.hero.score).toBe(facts.overall.capacity);
       expect(model.hero.tierName).toBe(facts.overall.tier.name);
       expect(model.hero.band).toBe(verdictBandFor(facts.overall.tier.id));
       expect(model.stats.map((s) => s.label)).toEqual([
         'Areas assessed',
-        'Strengths',
-        'Questions at 20 or less',
+        'Strongest areas',
+        'Areas needing work',
         'Priority areas',
       ]);
     }
   });
 
-  it('computes the stat values from facts', () => {
-    const model = verdictBlockModel(CAPACITY_FACTS, methodology);
-    const bands = CAPACITY_FACTS.categories.map((c) =>
-      readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds),
-    );
+  it('computes every stat value from the improvement facts', () => {
+    const model = verdictBlockModel(CAPACITY_FACTS);
     expect(model.stats[0]!.value).toBe(CAPACITY_FACTS.categories.length);
-    expect(model.stats[1]!.value).toBe(bands.filter((b) => b === 'holding').length);
-    expect(model.stats[2]!.value).toBe(CAPACITY_FACTS.bottom_items.filter((b) => b.mean <= 20).length);
-    expect(model.stats[3]!.value).toBe(bands.filter((b) => b === 'severe').length);
+    expect(model.stats[1]!.value).toBe(CAPACITY_FACTS.improvement.strongest_areas.length);
+    expect(model.stats[2]!.value).toBe(CAPACITY_FACTS.improvement.areas_needing_work.length);
+    expect(model.stats[3]!.value).toBe(CAPACITY_FACTS.improvement.priority_areas.length);
+  });
+
+  it('out-reports the retired predicates on the mid-range church it exists for', () => {
+    // CAPACITY_FACTS is the 49-72 church the recalibration exists for. The retired tiles
+    // read the engine's bands and the six-item bottom list, and both under-report it: the
+    // dead 'Questions at 20 or less' tile can only ever be 0 here (mean <= 20 is 2.0 out of
+    // 10 on every respondent), which is the zero on the dashboard Natalie objected to.
+    const model = verdictBlockModel(CAPACITY_FACTS);
+    const retiredStrengths = CAPACITY_FACTS.categories.filter(
+      (c) => readingBand(c.state as CategoryState, c.score, methodology.rules.thresholds) === 'holding',
+    ).length;
+    const retiredQuestions = CAPACITY_FACTS.bottom_items.filter((b) => b.mean <= 20).length;
+    expect(retiredQuestions).toBe(0);
+    expect(model.stats[1]!.value).toBeGreaterThan(retiredStrengths);
+    expect(model.stats[2]!.value).toBeGreaterThan(retiredQuestions);
+    for (const stat of model.stats) expect(stat.value).toBeGreaterThan(0);
+  });
+
+  it('agrees with the section that names the strengths in prose', () => {
+    const model = verdictBlockModel(CAPACITY_FACTS);
+    // s5 prints facts.categories.slice(0, 3) by name (fallback-sections.ts).
+    expect(model.stats[1]!.value).toBe(CAPACITY_FACTS.categories.slice(0, 3).length);
+    expect(CAPACITY_FACTS.improvement.strongest_areas.map((a) => a.category_id))
+      .toEqual(CAPACITY_FACTS.categories.slice(0, 3).map((c) => c.id));
   });
 
   it('lays hero above a 2x2 dashboard inside the viewBox', () => {
-    const model = verdictBlockModel(CAPACITY_FACTS, methodology);
+    const model = verdictBlockModel(CAPACITY_FACTS);
     expect(model.hero.w).toBeCloseTo(model.width, 5);
     expect(model.stats).toHaveLength(4);
     for (const stat of model.stats) {
@@ -183,7 +204,7 @@ describe('verdictBlockModel', () => {
   });
 
   it('is pure', () => {
-    expect(verdictBlockModel(CAPACITY_FACTS, methodology)).toEqual(verdictBlockModel(CAPACITY_FACTS, methodology));
+    expect(verdictBlockModel(CAPACITY_FACTS)).toEqual(verdictBlockModel(CAPACITY_FACTS));
   });
 });
 
