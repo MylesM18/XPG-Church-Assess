@@ -14,7 +14,9 @@ export const metadata: Metadata = {
 // (schema.sql), respondent anonymity (lib/report/view.ts strips + lib/report/pdf/render.ts:28
 // fail-closed guard), Supabase session cookies only (no analytics — audited zero hits), Resend
 // invitation/reminder emails, Vercel cron, optional OpenAI prose (on iff OPENAI_API_KEY is set;
-// PROSE_MODE=fallback opts out — lib/ai/prose-mode.ts),
+// PROSE_MODE=fallback opts out — lib/ai/prose-mode.ts; two payloads: computed facts incl. church
+// name + profile via lib/ai/sections.ts slices, and de-identified reflection text via
+// lib/ai/themes.ts `indexed` — respondent labels never sent),
 // no payments. If a feature changes any of these, this document must change in the same PR.
 function Section({ n, title, children }: { n: string; title: string; children: ReactNode }) {
   return (
@@ -120,8 +122,9 @@ export default function PrivacyPage() {
                 the invitation&rsquo;s status. Invitations expire after 14 days.
               </li>
               <li>
-                <strong className="text-ink">Assessment answers.</strong> Your 1&ndash;10 ratings,
-                linked to your account so you can pause and resume.
+                <strong className="text-ink">Assessment answers.</strong> Your 1&ndash;10 ratings
+                and any written reflections you choose to add, linked to your account so you can
+                pause and resume.
               </li>
               <li>
                 <strong className="text-ink">Church profile.</strong> Information an administrator
@@ -220,9 +223,14 @@ export default function PrivacyPage() {
                 reminder scheduler; it keeps standard server logs.
               </li>
               <li>
-                <strong className="text-ink">OpenAI</strong>: when AI phrasing is enabled, the
-                already-computed report results are sent to OpenAI&rsquo;s API to be worded into
-                readable prose. As our{' '}
+                <strong className="text-ink">OpenAI</strong>: when AI phrasing is enabled, two
+                kinds of information are sent to OpenAI&rsquo;s API. First, the already-computed
+                report results &mdash; scores, rankings, and the church profile an administrator
+                entered, including the church&rsquo;s name &mdash; to be worded into readable
+                prose. Second, the written reflections members add alongside their ratings, so the
+                model can group them into themes and select short quotes for the report.
+                Reflections are sent as text only &mdash; nothing that identifies who wrote them
+                goes with them, and the list of who answered is never sent. As our{' '}
                 <Link href="/methodology" className="text-ink underline decoration-line underline-offset-4 hover:decoration-ink">
                   Methodology
                 </Link>{' '}
