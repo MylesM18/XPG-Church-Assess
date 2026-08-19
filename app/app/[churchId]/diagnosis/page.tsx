@@ -215,6 +215,7 @@ export default async function DiagnosisPage({
   let needsGeneration = false
   let cover: CoverModel | null = null
   let visuals: WebVisuals | null = null
+  let inputsHash: string | null = null
 
   if (resolution.scoreable) {
     // Mirrors app/app/[churchId]/actions.ts's `hash = responseHash(responses, diagnosis
@@ -249,6 +250,7 @@ export default async function DiagnosisPage({
     needsGeneration = resolved.needsGeneration
     cover = resolved.cover
     visuals = resolved.visuals
+    inputsHash = resolved.inputsHash
   }
 
   // H7: a completed run with NO usable AI section — no `reports` row at all (diagnosis finished
@@ -259,8 +261,10 @@ export default async function DiagnosisPage({
   // proseEnabled() (lib/ai/prose-mode.ts: OPENAI_API_KEY present ⇒ on; PROSE_MODE=ai|fallback
   // overrides): when the action would silently return, neither the button nor the auto-trigger
   // renders. Since fix/prose-auto-generate-on-view both notice blocks also mount
-  // <AutoGenerateReport>, which fires regenerateReport once per session on admin view; the forms
-  // stay as the retry path.
+  // <AutoGenerateReport>, which fires regenerateReport once per session per (church, inputsHash)
+  // on admin view — keyed on the resolver's hash, so a later settings change (new hash) auto-fires
+  // again while the same hash never re-fires; the forms stay as the retry path. `inputsHash!` is
+  // safe: both notice blocks sit inside the scoreable branch, where the resolver has run.
   const aiOn = proseEnabled()
 
   // The cover's date line: the run's completion month in the PDF cover's exact format
@@ -301,7 +305,7 @@ export default async function DiagnosisPage({
           {stale && (
             <ReportNotice>
               <p>This report predates your latest settings change.</p>
-              {aiOn && <AutoGenerateReport churchId={churchId} trigger="stale" action={regenerateReport} />}
+              {aiOn && <AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} />}
               <form action={regenerateReport}>
                 <input type="hidden" name="churchId" value={churchId} />
                 <button
@@ -316,7 +320,7 @@ export default async function DiagnosisPage({
           {!stale && needsGeneration && aiOn && (
             <ReportNotice>
               <p>This report hasn’t been written by the model yet.</p>
-              <AutoGenerateReport churchId={churchId} trigger="generate" action={regenerateReport} />
+              <AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} />
               <form action={regenerateReport}>
                 <input type="hidden" name="churchId" value={churchId} />
                 <button

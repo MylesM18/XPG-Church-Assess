@@ -30,6 +30,12 @@ interface RunResponseRow {
   reflection: string | null
 }
 
+// regenerateReport's recency guard: a USABLE `reports` row at the live inputs hash written more
+// recently than this is not regenerated again (see the dedup block in regenerateReport). Long
+// enough to cover two admins / two tabs auto-firing on the same view, short enough that a
+// deliberate later regenerate at the same hash still goes through.
+const REGENERATE_DEDUP_WINDOW_MS = 10 * 60_000
+
 export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -302,10 +308,24 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
  * when an admin views the page and `needsGeneration || stale` holds while prose is enabled: it
  * passes `regenerateReport` as the `action` prop of the client component
  * app/app/[churchId]/diagnosis/auto-generate-report.tsx, which fires it once per browser session
- * per (church, trigger) — a sessionStorage latch — and then router.refresh()es to show the model's
- * output. The manual Generate / Regenerate forms remain as the fallback and retry path (a failed
- * auto-run leaves the latch set, so the admin's next resort is the button, not a loop). Auto or
- * manual, the same admin gate below applies; an invitee viewing the page renders neither.
+ * per (church, inputs hash) — a sessionStorage latch keyed on the resolver's `inputsHash`, so a
+ * later settings change is a new latch — and then router.refresh()es to show the model's output.
+ * The manual Generate / Regenerate forms remain as the fallback and retry path (a failed auto-run
+ * leaves the latch set, so the admin's next resort is the button, not a loop). Auto or manual,
+ * the same admin gate below applies; an invitee viewing the page renders neither.
+ *
+ * That latch is per BROWSER, so two admins — or one admin in two tabs — viewing at once each pass
+ * their own latch and each invoke this action for the same inputs (Greptile P1, PR #79). The
+ * server therefore closes the post-write window itself: after the inputs hash is computed and
+ * BEFORE any model call, it re-reads the `reports` row scoped to (run_id, inputs_hash) and, when
+ * that row is USABLE (isUsableCachedReport — at least one AI section) and was written within
+ * REGENERATE_DEDUP_WINDOW_MS, logs a skip and returns without spending. No migration, no lock:
+ * truly simultaneous in-flight calls can still both run — accepted; save_report's UPSERT makes
+ * that safe and the only cost is duplicate spend. Nothing is revalidated on a skip (nothing
+ * changed); the auto-generate component's router.refresh() re-renders the fresh row anyway. The
+ * manual forms are unaffected in practice: the page only renders them when NO usable row exists at
+ * the live hash, so a click there never meets a fresh usable row unless another admin just wrote
+ * one — which is exactly the case to skip.
  *
  * Gate: `proseEnabled()` (lib/ai/prose-mode.ts) — OPENAI_API_KEY present ⇒ on, PROSE_MODE=ai
  * forces on, PROSE_MODE=fallback forces off. The page's affordances read the same function.
@@ -399,9 +419,39 @@ export async function regenerateReport(formData: FormData): Promise<void> {
       reflections: reflectionRows,
     })
 
-    // No cache check. Regenerating is the point; save_report's on-conflict UPSERT (migration
-    // 20260814000100) makes it both safe and effective — an unchanged inputs hash overwrites the
-    // stored row rather than being discarded.
+    // No cache check on CONTENT staleness. Regenerating is the point; save_report's on-conflict
+    // UPSERT (migration 20260814000100) makes it both safe and effective — an unchanged inputs
+    // hash overwrites the stored row rather than being discarded. The ONLY guard is the short
+    // recency window below: the auto-generate component's sessionStorage latch is per browser, so
+    // two admins / two tabs viewing at once each pass their own latch and would each spend the
+    // model on identical inputs. Same scoped read as generation's cache check (run_id AND
+    // inputs_hash — unscoped, a sibling church's row could suppress this one; unique
+    // (run_id, inputs_hash) ⇒ .maybeSingle() is safe). A row that is 100 % fallback is NOT usable
+    // and never suppresses regenerate — that is the H7 point. No migration and no lock: truly
+    // simultaneous in-flight calls can still both run (accepted — the UPSERT keeps that safe, the
+    // only cost is duplicate spend); this closes the post-write window. Manual Generate /
+    // Regenerate is unaffected in practice: the page only renders those forms when no usable row
+    // exists at the live hash. Skip ⇒ no revalidatePath (nothing changed); the auto-generate
+    // component's router.refresh() re-renders the fresh row anyway.
+    const { data: cached } = await supabase
+      .from('reports')
+      .select('section_sources, generated_at')
+      .eq('run_id', run.id)
+      .eq('inputs_hash', inputsHash)
+      .maybeSingle()
+    if (cached && isUsableCachedReport(cached.section_sources)) {
+      const writtenAt = cached.generated_at ? Date.parse(cached.generated_at) : NaN
+      const ageMs = Date.now() - writtenAt
+      if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < REGENERATE_DEDUP_WINDOW_MS) {
+        // Seconds only — never the row, the sections, or any church / respondent data.
+        console.warn(
+          '[report] regenerate skipped: a usable report for these inputs was written ' +
+            `${Math.round(ageMs / 1000)}s ago`,
+        )
+        return
+      }
+    }
+
     const themes = await clusterThemes(reflectionRows, derived.effectiveMethodology, labelSource)
     const facts = themes === null
       ? baseFacts

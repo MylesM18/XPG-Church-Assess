@@ -111,8 +111,15 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
   // fix/prose-auto-generate-on-view (2026-08-19): the owner wants the model to run WHEN AN ADMIN
   // VIEWS the diagnosis, not only when they find and click the Generate / Regenerate button. The
   // page therefore mounts a small client component in BOTH notice blocks that fires the same
-  // `regenerateReport` server action once per browser session per (church, trigger) and then
+  // `regenerateReport` server action once per browser session per (church, INPUTS HASH) and then
   // router.refresh()es. The forms stay exactly as they were: they are the retry path.
+  //
+  // Greptile P1 (PR #79, "Stale latch blocks later generations"): the latch used to be keyed on
+  // the TRIGGER ('stale' | 'generate'), so once an auto-run had fired for `stale`, a LATER settings
+  // change in the same tab session — a new inputs hash, a genuinely new stale state — was
+  // suppressed for the rest of the session. Keyed on the resolver's `inputsHash` instead: a new
+  // hash is a new latch (auto-fires again), the same hash never re-fires (the manual form is the
+  // retry), and the trigger prop is gone — a hash is stale-or-generate, the distinction is moot.
   describe('auto-generate on admin view (AutoGenerateReport)', () => {
     const component = read('app', 'app', '[churchId]', 'diagnosis', 'auto-generate-report.tsx')
     const rawComponent = fs.readFileSync(
@@ -120,24 +127,31 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
       'utf8',
     )
 
-    it('is a client component that receives the server action as a prop and never imports ../actions itself', () => {
+    it('is a client component that receives the server action + inputsHash as props (no trigger) and never imports ../actions itself', () => {
       // The action is passed DOWN from the Server Component so page.tsx keeps its single import of
       // regenerateReport (pinned below); the client file must not grow its own import path to it.
       expect(rawComponent.trimStart().startsWith("'use client'")).toBe(true)
       expect(component).not.toContain("from '../actions'")
       expect(component).not.toContain("from './actions'")
       expect(component).toMatch(/action: \(formData: FormData\) => Promise<void>/)
-      expect(component).toMatch(/trigger: 'generate' \| 'stale'/)
+      expect(component).toMatch(/inputsHash: string/)
+      expect(component).not.toMatch(/trigger: 'generate' \| 'stale'/)
+      expect(count(component, /\btrigger\b/g)).toBe(0)
     })
 
-    it('fires inside a transition, refreshes the router afterwards, and latches on a namespaced sessionStorage key', () => {
+    it('fires inside a transition, refreshes the router afterwards, and latches on a sessionStorage key namespaced by (church, inputsHash)', () => {
       expect(component).toContain("import { useEffect, useTransition } from 'react'")
       expect(component).toContain("import { useRouter } from 'next/navigation'")
       expect(count(component, /startTransition\(/g)).toBe(1)
       expect(count(component, /router\.refresh\(\)/g)).toBe(1)
       // The latch is SET before the action is awaited (survives strict-mode double effects and
       // any later refresh), and read first so a second mount with the key present does nothing.
-      expect(component).toContain('`xpg:autogen:${churchId}:${trigger}`')
+      // Keyed on the INPUTS HASH, never the trigger: a later settings change ⇒ new hash ⇒ new key.
+      expect(component).toContain('`xpg:autogen:${churchId}:${inputsHash}`')
+      expect(component).not.toContain('`xpg:autogen:${churchId}:${trigger}`')
+      expect(count(component, /xpg:autogen:/g)).toBe(1)
+      // The effect re-runs when the hash changes: inputsHash is in its dependency list.
+      expect(component).toMatch(/\}, \[churchId, inputsHash, action, router\]\)/)
       expect(count(component, /sessionStorage\.getItem\(/g)).toBe(1)
       expect(count(component, /sessionStorage\.setItem\(/g)).toBe(1)
       expect(component.indexOf('sessionStorage.getItem(')).toBeLessThan(component.indexOf('sessionStorage.setItem('))
@@ -162,24 +176,33 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
       expect(component).not.toContain('aria-live')
     })
 
-    it('page.tsx imports it once and renders it exactly twice — trigger="stale" and trigger="generate" — each with action={regenerateReport}', () => {
+    it('page.tsx threads the resolver\'s inputsHash through a `let`, like `stale` / `cover`', () => {
+      // resolveReportSections already returns `inputsHash` (lib/report/resolve.ts); the page reads
+      // it off `resolved` in the scoreable block, alongside the other resolver outputs.
+      expect(page).toContain('let inputsHash: string | null = null')
+      expect(page).toContain('inputsHash = resolved.inputsHash')
+    })
+
+    it('page.tsx imports it once and renders it exactly twice — each with inputsHash={inputsHash!} and action={regenerateReport}, no trigger prop', () => {
       expect(count(page, /import \{ AutoGenerateReport \} from '\.\/auto-generate-report'/g)).toBe(1)
       expect(count(page, /import \{ regenerateReport \} from '\.\.\/actions'/g)).toBe(1)
       expect(count(page, /<AutoGenerateReport\b/g)).toBe(2)
-      expect(count(page, /<AutoGenerateReport churchId=\{churchId\} trigger="stale" action=\{regenerateReport\} \/>/g)).toBe(1)
-      expect(count(page, /<AutoGenerateReport churchId=\{churchId\} trigger="generate" action=\{regenerateReport\} \/>/g)).toBe(1)
+      // Occurrence-count equality: both mounts carry the hash and the action; the trigger prop is
+      // gone everywhere (a bare `not.toContain('trigger="stale"')` would survive a renamed leftover).
+      expect(count(page, /<AutoGenerateReport churchId=\{churchId\} inputsHash=\{inputsHash!\} action=\{regenerateReport\} \/>/g)).toBe(2)
+      expect(count(page, /trigger=/g)).toBe(0)
     })
 
-    it('places the stale trigger inside the stale notice (gated on aiOn, above its form) and the generate trigger inside the generate notice', () => {
+    it('places one auto-trigger inside the stale notice (gated on aiOn, above its form) and one inside the generate notice', () => {
       const staleBlock = page.match(/\{stale\s*&&\s*\(\s*<ReportNotice>([\s\S]*?)<\/ReportNotice>/)![1]!
       // The stale notice + form still render when prose is off (regenerate would silently no-op),
       // exactly as before — only the auto-trigger is additionally gated on aiOn.
       expect(staleBlock).toContain('This report predates your latest settings change.')
-      expect(staleBlock).toMatch(/\{aiOn && <AutoGenerateReport churchId=\{churchId\} trigger="stale" action=\{regenerateReport\} \/>\}/)
+      expect(staleBlock).toMatch(/\{aiOn && <AutoGenerateReport churchId=\{churchId\} inputsHash=\{inputsHash!\} action=\{regenerateReport\} \/>\}/)
       expect(staleBlock.indexOf('<AutoGenerateReport')).toBeLessThan(staleBlock.indexOf('<form action={regenerateReport}>'))
 
       const genBlock = page.match(/\{!stale\s*&&\s*needsGeneration\s*&&\s*aiOn\s*&&\s*\(\s*<ReportNotice>([\s\S]*?)<\/ReportNotice>/)![1]!
-      expect(genBlock).toContain('<AutoGenerateReport churchId={churchId} trigger="generate" action={regenerateReport} />')
+      expect(genBlock).toContain('<AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} />')
       expect(genBlock.indexOf('<AutoGenerateReport')).toBeLessThan(genBlock.indexOf('<form action={regenerateReport}>'))
     })
   })
