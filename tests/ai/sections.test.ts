@@ -165,7 +165,7 @@ describe('facts slices', () => {
       // sent an empty body cannot satisfy this. Scoped to the USER message and pinned to the
       // rendered key — a bare `String(capacity)` against the whole stringified call is fail-open,
       // since a two-digit capacity also matches inside `"max_output_tokens":4000`.
-      expect(String(call.input[1].content), id).toContain(`"capacity": ${facts.overall.capacity}`);
+      expect(String(call.input[1].content), id).toContain(`"health score": ${facts.overall.capacity}`);
     }
   });
 
@@ -203,6 +203,38 @@ describe('facts slices', () => {
    * pattern". Item ids are engine vocabulary; a reader gets the question text. The ids leave
    * the s6 and s7 slices entirely, so the model can only name a question by what it asks.
    */
+  /**
+   * The same leak through head(): every slice's shared head taught the model the engine's own
+   * vocabulary — overall.capacity / overall.throughput (the s2 narrative on that report read
+   * "Capacity at 63 and throughput at 59"), tier ids like healthy_stretched, and the primary
+   * constraint's category_id slug. The reader-facing names are "health score" and "real-world
+   * result" (step F); the model now gets those, the tier NAME only, and the constraint's name.
+   */
+  it('sends every section the reader words for the two headline numbers, never the engine names', async () => {
+    for (const id of AI_SECTION_IDS) {
+      mockParse.mockReset();
+      mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+      await composeSection(id, capacityFacts, methodology);
+      const payload = String(mockParse.mock.calls[0]![0].input[1].content);
+      expect(payload, id).toContain(`"health score": ${capacityFacts.overall.capacity}`);
+      expect(payload, id).toContain(`"real-world result": ${capacityFacts.overall.throughput}`);
+      expect(payload, id).not.toContain('"capacity":');
+      expect(payload, id).not.toContain('"throughput":');
+      expect(payload, id).not.toContain(capacityFacts.overall.tier.id); // the tier slug
+      expect(payload, id).toContain(capacityFacts.overall.tier.name);
+    }
+  });
+
+  it('sends the primary constraint by name, never by category slug', async () => {
+    const facts = { ...capacityFacts, primary_constraint: { category_id: 'conn', name: 'Community / Connection' } };
+    mockParse.mockReset();
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    await composeSection('s4', facts, methodology);
+    const payload = String(mockParse.mock.calls[0]![0].input[1].content);
+    expect(payload).toContain('Community / Connection');
+    expect(payload).not.toContain('"category_id": "conn"');
+  });
+
   it('never sends an item id over the wire for s6 or s7', async () => {
     for (const id of ['s6', 's7'] as const) {
       mockParse.mockReset();
@@ -236,7 +268,7 @@ describe('facts slices', () => {
       const payload = JSON.stringify(call);
       expect(payload, id).not.toContain('SENTINEL NOTE');
       // Non-vacuity scoped to the USER message, for the reason given in the test above.
-      expect(String(call.input[1].content), id).toContain(`"capacity": ${facts.overall.capacity}`);
+      expect(String(call.input[1].content), id).toContain(`"health score": ${facts.overall.capacity}`);
     }
   });
 });
@@ -427,7 +459,7 @@ describe('composeSection — the corrective on the wire (spec §4.3, D1)', () =>
     expect(input[0]!.role).toBe('system');
     expect(input[0]!.content).toContain(methodology.report.style_spine);
     expect(input[2]!.role).toBe('user');
-    expect(input[2]!.content).toContain(`"capacity": ${capacityFacts.overall.capacity}`);
+    expect(input[2]!.content).toContain(`"health score": ${capacityFacts.overall.capacity}`);
   });
 
   it('sends two messages, and no corrective, when none is given', async () => {

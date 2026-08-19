@@ -90,8 +90,18 @@ export const AI_SECTION_IDS = ['s2', 's4', 's5', 's6', 's7', 's9', 's12'] as con
 function head(facts: FactsPack) {
   return {
     archetype: facts.archetype,
-    overall: facts.overall,
-    primary_constraint: facts.primary_constraint,
+    // The reader words for the two headline numbers (step F), never the engine's. Handed
+    // `overall` raw, the model wrote "Capacity at 63 and throughput at 59" onto a live report
+    // (Natalie, 2026-08-19) — it can only speak the vocabulary this slice teaches it. The tier
+    // travels by NAME only; tier ids are slugs (healthy_stretched) with the same problem.
+    overall: {
+      'health score': facts.overall.capacity,
+      'real-world result': facts.overall.throughput,
+      'points lost to the weakest area': facts.overall.gap,
+      tier: facts.overall.tier.name,
+    },
+    // By name only — category_id is the same slug vocabulary the profile fix strips.
+    primary_constraint: facts.primary_constraint ? { name: facts.primary_constraint.name } : null,
   };
 }
 
