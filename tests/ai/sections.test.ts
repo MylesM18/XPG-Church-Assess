@@ -169,6 +169,62 @@ describe('facts slices', () => {
     }
   });
 
+  /**
+   * Natalie, 2026-08-19, on a live report whose AI summary read "In a growing_steadily,
+   * small_town setting ... how you steward staff_fte_band and budget_band": the model was
+   * quoting the slice verbatim, under a user message that tells it to use no name absent from
+   * the facts. The slice now speaks plain English — keys and closed-vocabulary values both —
+   * so the model CANNOT echo a slug, because it never sees one.
+   */
+  it('sends the s2 profile in plain English — no slug keys, no slug values', async () => {
+    const facts = buildFacts({
+      methodology,
+      responses: RESPONSES,
+      church: { ...CHURCH, context: 'small_town', growth_trajectory: 'growing_steadily' },
+      completedAt: '2026-08-10T00:00:00Z',
+      labelSource: { kind: 'known', labels: [] },
+      diagnosis: makeDiagnosis(),
+    });
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    await composeSection('s2', facts, methodology);
+    const payload = String(mockParse.mock.calls[0]![0].input[1].content);
+    for (const slug of ['small_town', 'growing_steadily', 'attendance_band', '250_499', 'staff_fte_band', 'budget_band', 'church_age_band', 'campuses_band', 'facility_status', 'consultant_notes']) {
+      expect(payload, slug).not.toContain(slug);
+    }
+    expect(payload).toContain('small town');
+    expect(payload).toContain('growing steadily');
+    expect(payload).toContain('250 to 499');
+    expect(payload).toContain('weekend attendance');
+    expect(payload).toContain('annual budget');
+  });
+
+  /**
+   * Same report, section 7: "COM6 and GEN6 suggest ... D3, SYS3, and SYS6 together suggest a
+   * pattern". Item ids are engine vocabulary; a reader gets the question text. The ids leave
+   * the s6 and s7 slices entirely, so the model can only name a question by what it asks.
+   */
+  it('never sends an item id over the wire for s6 or s7', async () => {
+    for (const id of ['s6', 's7'] as const) {
+      mockParse.mockReset();
+      mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+      await composeSection(id, capacityFacts, methodology);
+      const payload = String(mockParse.mock.calls[0]![0].input[1].content);
+      expect(payload, id).not.toContain('item_id');
+      // Non-vacuity: the questions themselves still travel, with their means and themes.
+      expect(payload, id).toContain(capacityFacts.bottom_items[0]!.text);
+      expect(payload, id).toContain('"mean"');
+    }
+  });
+
+  it('sends s6 a plain-English growth trajectory', async () => {
+    const facts = { ...capacityFacts, profile: { ...capacityFacts.profile, growth_trajectory: 'growing_steadily' } };
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: {} });
+    await composeSection('s6', facts, methodology);
+    const payload = String(mockParse.mock.calls[0]![0].input[1].content);
+    expect(payload).not.toContain('growing_steadily');
+    expect(payload).toContain('growing steadily');
+  });
+
   it('never sends a profile field over the wire for a section that has no use for it', async () => {
     const facts = { ...capacityFacts, profile: { consultant_notes: 'SENTINEL NOTE' } };
     for (const id of AI_SECTION_IDS) {

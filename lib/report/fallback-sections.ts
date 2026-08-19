@@ -35,21 +35,6 @@ export interface SectionBody {
 }
 
 /** Settings-form labels for the 12 profile keys (app/app/[churchId]/settings/settings-form.tsx). */
-const PROFILE_LABELS: Record<string, string> = {
-  context: 'Context',
-  attendance_band: 'Weekend attendance (required)',
-  denomination: 'Denomination',
-  adults_band: 'Adults',
-  staff_fte_band: 'Staff (FTE)',
-  budget_band: 'Annual budget',
-  church_age_band: 'Church age',
-  campuses_band: 'Campuses',
-  growth_trajectory: 'Growth trajectory',
-  facility_status: 'Facility',
-  leadership_history: 'Leadership history',
-  consultant_notes: 'Consultant notes',
-};
-
 /** Exported for the web phase rail, which keys its opacity ramp off the PHASE rather than
  *  the entry's array position — see roadmapEntries below and lib/report/web-visuals.ts. */
 export type Phase = 'align' | 'build' | 'scale';

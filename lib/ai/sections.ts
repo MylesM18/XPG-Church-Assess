@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 import type { CategoryFact, FactsPack } from '../report/facts';
 import type { SectionId } from '../methodology/schema';
+import { plainProfileValue, profileInPlainEnglish } from '../report/profile-display';
 
 /**
  * GPT task: per-section composition (parent spec line 72).
@@ -101,6 +102,19 @@ function themeDigest(facts: FactsPack) {
   }));
 }
 
+/**
+ * bottom_items as a model may see them: PICKED field by field (the head() discipline), and
+ * WITHOUT item_id. The ids are engine vocabulary — handed the raw list under "use no name
+ * absent from this", the model wrote "COM6 and GEN6 suggest ... D3, SYS3, and SYS6 together
+ * suggest a pattern" onto a live report (Natalie, 2026-08-19). With only text, mean, theme and
+ * category_id to quote, it can name a question solely by what it asks.
+ */
+function itemsForModel(facts: FactsPack) {
+  return facts.bottom_items.map((b) => ({
+    category_id: b.category_id, mean: b.mean, text: b.text, theme: b.theme,
+  }));
+}
+
 export interface SectionRegistryEntry {
   /** `ZodObject`, not `ZodType`: zodTextFormat needs an object schema, and typing it loosely
    *  here forces an `as never` at the call site that would hide a real mismatch. */
@@ -110,11 +124,11 @@ export interface SectionRegistryEntry {
 }
 
 export const SECTION_REGISTRY: Record<AiSectionId, SectionRegistryEntry> = {
-  s2:  { schema: S2Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), cover: f.cover, profile: f.profile }) },
+  s2:  { schema: S2Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), cover: f.cover, profile: profileInPlainEnglish(f.profile) }) },
   s4:  { schema: S4Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories, gating: f.gating }) },
   s5:  { schema: S5Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories.slice(0, 3) }) },
-  s6:  { schema: S6Schema,  maxOutputTokens: 8000, slice: (f) => ({ ...head(f), categories: f.categories.slice(3), blind_spots: f.blind_spots, dispersion: f.dispersion, top_three: f.categories.slice(0, 3), bottom_items: f.bottom_items, growth_trajectory: f.profile.growth_trajectory ?? null }) },
-  s7:  { schema: S7Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), bottom_items: f.bottom_items, pattern_counts: f.pattern_counts }) },
+  s6:  { schema: S6Schema,  maxOutputTokens: 8000, slice: (f) => ({ ...head(f), categories: f.categories.slice(3), blind_spots: f.blind_spots, dispersion: f.dispersion, top_three: f.categories.slice(0, 3), bottom_items: itemsForModel(f), growth_trajectory: f.profile.growth_trajectory ? plainProfileValue('growth_trajectory', f.profile.growth_trajectory) : null }) },
+  s7:  { schema: S7Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), bottom_items: itemsForModel(f), pattern_counts: f.pattern_counts }) },
   s9:  { schema: S9Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), dependencies: f.dependencies, gating: f.gating, themes: themeDigest(f) }) },
   s12: { schema: S12Schema, maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories }) },
 };
