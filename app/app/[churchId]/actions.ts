@@ -313,10 +313,13 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
  * passes `regenerateReport` as the `action` prop of the client component
  * app/app/[churchId]/diagnosis/auto-generate-report.tsx, which fires it once per browser session
  * per (church, inputs hash) — a sessionStorage latch keyed on the resolver's `inputsHash`, so a
- * later settings change is a new latch — and then router.refresh()es to show the model's output.
- * The manual Generate / Regenerate forms remain as the fallback and retry path (a failed auto-run
- * leaves the latch set, so the admin's next resort is the button, not a loop). Auto or manual,
- * the same admin gate below applies; an invitee viewing the page renders neither.
+ * later settings change is a new latch — with `auto=1` in the FormData, and only for a COMPLETED
+ * run (the page passes `auto={!runIsOpen}`; on an open / reopened run every member submission is
+ * a new hash). That component also owns the Generate / Regenerate button, which is the fallback
+ * and retry path (a failed auto-run leaves the latch set, so the admin's next resort is the button,
+ * not a loop) and sends no `auto` flag. This action revalidates the diagnosis path itself on every
+ * path that changes what the page shows — the client does not refresh. Auto or manual, the same
+ * admin gate below applies; an invitee viewing the page renders neither.
  *
  * That latch is per TAB, so two admins — or one admin in two tabs — viewing at once each pass
  * their own latch and each invoke this action for the same inputs (Greptile P1, PR #79). The

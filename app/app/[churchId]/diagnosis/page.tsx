@@ -260,11 +260,17 @@ export default async function DiagnosisPage({
   // `regenerateReport` action under its own copy. The gate is the action's own gate FUNCTION,
   // proseEnabled() (lib/ai/prose-mode.ts: OPENAI_API_KEY present ⇒ on; PROSE_MODE=ai|fallback
   // overrides): when the action would silently return, neither the button nor the auto-trigger
-  // renders. Since fix/prose-auto-generate-on-view both notice blocks also mount
-  // <AutoGenerateReport>, which fires regenerateReport once per session per (church, inputsHash)
-  // on admin view — keyed on the resolver's hash, so a later settings change (new hash) auto-fires
-  // again while the same hash never re-fires; the forms stay as the retry path. `inputsHash!` is
-  // safe: both notice blocks sit inside the scoreable branch, where the resolver has run.
+  // renders. Since fix/prose-auto-generate-on-view both notice blocks mount <AutoGenerateReport>,
+  // which fires regenerateReport once per session per (church, inputsHash) on admin view — keyed
+  // on the resolver's hash, so a later settings change (new hash) auto-fires again while the same
+  // hash never re-fires. Since fix/auto-generate-hardening that component also OWNS the Generate /
+  // Regenerate button (aria-disabled while its own auto-run is in flight, so a click cannot start
+  // a second concurrent run), and its auto-run is gated on `!runIsOpen`: on an open / reopened
+  // run every member submission is a new hash, and view-time generation would regenerate per
+  // submission — there the button is manual only. The plain Server-Component form survives only
+  // in the prose-off stale branch (regenerate silently no-ops there — deliberately unchanged).
+  // `inputsHash!` is safe: both notice blocks sit inside the scoreable branch, where the resolver
+  // has run.
   const aiOn = proseEnabled()
 
   // The cover's date line: the run's completion month in the PDF cover's exact format
@@ -305,31 +311,25 @@ export default async function DiagnosisPage({
           {stale && (
             <ReportNotice>
               <p>This report predates your latest settings change.</p>
-              {aiOn && <AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} />}
-              <form action={regenerateReport}>
-                <input type="hidden" name="churchId" value={churchId} />
-                <button
-                  type="submit"
-                  className="py-1.5 font-body text-sm text-ink underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-                >
-                  Regenerate report
-                </button>
-              </form>
+              {aiOn ? (
+                <AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} label="Regenerate report" auto={!runIsOpen} />
+              ) : (
+                <form action={regenerateReport}>
+                  <input type="hidden" name="churchId" value={churchId} />
+                  <button
+                    type="submit"
+                    className="py-1.5 font-body text-sm text-ink underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                  >
+                    Regenerate report
+                  </button>
+                </form>
+              )}
             </ReportNotice>
           )}
           {!stale && needsGeneration && aiOn && (
             <ReportNotice>
               <p>This report hasn’t been written by the model yet.</p>
-              <AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} />
-              <form action={regenerateReport}>
-                <input type="hidden" name="churchId" value={churchId} />
-                <button
-                  type="submit"
-                  className="py-1.5 font-body text-sm text-ink underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-                >
-                  Generate report
-                </button>
-              </form>
+              <AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} label="Generate report" auto={!runIsOpen} />
             </ReportNotice>
           )}
           {cover && visuals && (
