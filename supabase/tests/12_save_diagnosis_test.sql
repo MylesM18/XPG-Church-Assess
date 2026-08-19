@@ -1,5 +1,5 @@
 begin;
-select plan(7);
+select plan(8);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at) values
  ('d1111111-1111-1111-1111-111111111111','authenticated','authenticated','saveadmin@test.com','x',now(),now()),
@@ -29,16 +29,16 @@ select is((select count(*)::int from diagnoses d
            join assessment_runs r on r.id = d.run_id
            where r.church_id = (select id from churches where name = 'Save Test Church')), 1,
           'admin save inserts exactly one diagnoses row');
+-- ADR 0003: save_diagnosis no longer writes run status. Closing is a separate admin action
+-- (close_run, 20260818000100); Generate leaves the run exactly as it found it.
 select is((select status from assessment_runs
-           where church_id = (select id from churches where name = 'Save Test Church')), 'complete',
-          'the run is flipped to complete');
-select ok((select completed_at is not null from assessment_runs
+           where church_id = (select id from churches where name = 'Save Test Church')), 'in_progress',
+          'save_diagnosis leaves the run in_progress (status is close_run''s job — ADR 0003)');
+select ok((select completed_at is null from assessment_runs
            where church_id = (select id from churches where name = 'Save Test Church')),
-          'completed_at is set');
+          'save_diagnosis leaves completed_at null');
 
--- idempotency: re-open the run, save again with the SAME hash → still one row
-update assessment_runs set status = 'in_progress', completed_at = null
-where church_id = (select id from churches where name = 'Save Test Church');
+-- idempotency: save again with the SAME hash → still one row
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"d1111111-1111-1111-1111-111111111111","email":"saveadmin@test.com","role":"authenticated"}';
 select save_diagnosis(
@@ -63,12 +63,20 @@ select throws_ok(
   $$select save_diagnosis((select id from churches where name = 'Save Test Church'), 'hash-xyz', '0.1.0', '{}'::jsonb)$$,
   '42501', 'must be an admin of this church', 'a non-member cannot save a diagnosis');
 
--- run already complete → raise (the run is complete again after the idempotent save above)
+-- ADR 0003: a manually-completed (closed) run STILL accepts save_diagnosis — Generate and
+-- Regenerate work after Close — and the save does not touch the status.
+reset role;
+update assessment_runs set status = 'complete', completed_at = now()
+where church_id = (select id from churches where name = 'Save Test Church');
+set local role authenticated;
 set local request.jwt.claims to '{"sub":"d1111111-1111-1111-1111-111111111111","email":"saveadmin@test.com","role":"authenticated"}';
-select throws_ok(
-  $$select save_diagnosis((select id from churches where name = 'Save Test Church'), 'hash-abc', '0.1.0', '{"overall_score":50}'::jsonb)$$,
-  'run is already complete',
-  'admin save on an already-complete run is rejected');
+select lives_ok(
+  $$select save_diagnosis((select id from churches where name = 'Save Test Church'), 'hash-def', '0.1.0', '{"overall_score":60}'::jsonb)$$,
+  'admin save on a closed (complete) run succeeds — Generate works after Close');
+reset role;
+select is((select status from assessment_runs
+           where church_id = (select id from churches where name = 'Save Test Church')), 'complete',
+          'save_diagnosis does not touch the status of a closed run');
 
 select * from finish();
 rollback;

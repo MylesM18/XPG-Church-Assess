@@ -125,9 +125,10 @@ export async function composeReport(args: {
   // Latency moves the OTHER way — five small parallel calls replace two large serial ones — at
   // the cost of round-1 concurrency rising 7 -> 11. The SDK retry is kept because the
   // alternative failure — a transient blip pinning a section to fallback with no regenerate
-  // path — is permanent: generateDiagnosis is effectively one-shot per church (save_diagnosis
-  // completes the run and get_run_responses filters in_progress — actions.ts:135). Any FURTHER
-  // change that adds calls per section must be costed against this 4x, not against 1x.
+  // path — otherwise costs a full regeneration to fix. Under ADR 0003, Generate is repeatable
+  // (the admin can Regenerate at a changed answer set), so each Generate at a changed answer
+  // set is a fresh full run: any FURTHER change that adds calls per section multiplies real
+  // spend on every regeneration, and must be costed against this 4x, not against 1x.
   if (failed.length > 0) {
     await Promise.allSettled(
       failed.map(({ index, failure }) => {

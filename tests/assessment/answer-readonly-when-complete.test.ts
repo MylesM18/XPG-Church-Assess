@@ -1,7 +1,8 @@
 // Source-reading tripwire (node env, no DOM). Once the church's run is complete, the answer page
-// must render a READ-ONLY review, not the editable SelfForm — v1 completion is terminal and the
-// write RPC rejects a completed run, so rendering the form there reopened the "no active run" throw
-// on the old "Take Again" path. Regressing to an unconditional <SelfForm> turns this red.
+// must render a READ-ONLY review, not the editable SelfForm — completion is an admin Close (ADR
+// 0003, reversible); complete still means read-only, and the write RPC rejects a completed run,
+// so rendering the form there reopened the "no active run" throw on the old "Take Again" path.
+// Regressing to an unconditional <SelfForm> turns this red.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'

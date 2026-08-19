@@ -160,12 +160,12 @@ select is(
 
 -- ── (7) get_run_responses / get_completed_run_responses return reflection ──
 reset role;
-insert into assessment_runs (church_id, methodology_version, status, completed_at)
-values ((select id from churches where name = 'Outreach Reflection Church'), '0.1.0', 'complete', now());
-
+-- ADR 0003: get_run_responses / get_completed_run_responses both resolve the church's CURRENT run
+-- (current_run(), earliest by created_at, status-agnostic), so the reflection row is seeded on that
+-- run — no second "complete" run is needed for the read RPCs to see it.
 insert into responses (run_id, church_id, category_id, item_id, value, respondent_kind, respondent_user_id, respondent_label, reflection)
 values (
-  (select id from assessment_runs where church_id = (select id from churches where name = 'Outreach Reflection Church') and status = 'complete'),
+  (select id from assessment_runs where church_id = (select id from churches where name = 'Outreach Reflection Church') order by created_at asc limit 1),
   (select id from churches where name = 'Outreach Reflection Church'),
   'guest', 'G1', 5, 'member', 'd1111111-1111-1111-1111-111111111111', 'Member',
   'wonderful welcome team'
@@ -190,7 +190,7 @@ reset role;
 insert into report_shares (id, run_id, church_id, created_by, revoked, expires_at)
 values (
   'dddddddd-dddd-dddd-dddd-dddddddddddd',
-  (select id from assessment_runs where church_id = (select id from churches where name = 'Outreach Reflection Church') and status = 'complete'),
+  (select id from assessment_runs where church_id = (select id from churches where name = 'Outreach Reflection Church') order by created_at asc limit 1),
   (select id from churches where name = 'Outreach Reflection Church'),
   'd1111111-1111-1111-1111-111111111111',
   false,

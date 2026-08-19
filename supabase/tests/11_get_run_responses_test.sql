@@ -53,7 +53,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"c1111111-1111-1111-1111-111111111111","email":"respadmin@test.com","role":"authenticated"}';
 select is((select count(*)::int from get_run_responses(
             (select id from churches where name = 'Responses Test Church'))), 3,
-          'only the in_progress run''s rows are returned (complete run excluded)');
+          'only the church''s CURRENT run''s rows are returned (a later run is excluded)');
 
 -- a non-member cannot read
 set local request.jwt.claims to '{"sub":"c2222222-2222-2222-2222-222222222222","email":"respstranger@test.com","role":"authenticated"}';
@@ -67,15 +67,16 @@ select throws_ok(
   $$select * from get_run_responses((select id from churches where name = 'Responses Test Church'))$$,
   '42501');
 
--- no in_progress run → zero rows
+-- ADR 0003: the run is resolved through current_run() (status-agnostic). Completing the church's
+-- run must NOT hide its rows — Generate / Regenerate work after Close.
 reset role;
 update assessment_runs set status = 'complete', completed_at = now()
 where church_id = (select id from churches where name = 'Responses Test Church') and status = 'in_progress';
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"c1111111-1111-1111-1111-111111111111","email":"respadmin@test.com","role":"authenticated"}';
 select is((select count(*)::int from get_run_responses(
-            (select id from churches where name = 'Responses Test Church'))), 0,
-          'no in_progress run → zero rows');
+            (select id from churches where name = 'Responses Test Church'))), 3,
+          'returns rows when the run is complete (status-agnostic — ADR 0003)');
 
 select * from finish();
 rollback;

@@ -1,6 +1,10 @@
 # ADR 0001 — Completed runs are review-only; multi-run re-assessment is deferred
 
 - **Status:** Accepted
+- **Amended by:** ADR 0003 (2026-08-18) — completion is now an explicit, reversible admin action
+  (`close_run` / `reopen_run`) and `save_diagnosis` no longer writes run status; see
+  [0003-admin-close-reopen-decoupled-from-diagnosis.md](0003-admin-close-reopen-decoupled-from-diagnosis.md).
+  The original text below is left as written.
 - **Date:** 2026-07-30
 - **Deciders:** Natalie (owner), architecture review
 - **Related:** `docs/XPG-Engineering-Spec.md` §14 (out-of-scope for v1); `CONTEXT.md`
