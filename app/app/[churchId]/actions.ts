@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/server'
 import { deriveDiagnosisForRun } from '@/lib/report/derive'
 import type { Response } from '@/lib/engine/types'
 import { responseHash } from '@/lib/report/response-hash'
-import { generateProse } from '@/lib/ai/prose'
 import { buildFacts } from '@/lib/report/facts'
 import { knownLabels } from '@/lib/report/anonymity'
 import { clusterThemes } from '@/lib/ai/themes'
@@ -140,71 +139,17 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
   })
   if (saveError) return { ok: false, error: saveError.message }
 
-  // M5b: best-effort AI prose. Gated by the shared proseEnabled() helper (lib/ai/prose-mode.ts:
-  // OPENAI_API_KEY present ⇒ on; PROSE_MODE=ai|fallback overrides), the same function the report
-  // page reads (diagnosis/page.tsx), so the two can never disagree; when it is off no API call is
-  // made and the helper itself logs the single reason line. The diagnosis is already committed
-  // above, so this whole block is wrapped: no SDK/network/RPC failure may break the saved
-  // diagnosis or the redirect below.
-  if (proseEnabled()) {
-    try {
-      // Cache-check: array-tolerant SELECT (RLS permits member SELECT on diagnoses).
-      // Regenerate only when no 'ai' row exists for this hash; the hash changes iff the
-      // answer set changes, so resubmitting identical answers is a no-op.
-      //
-      // Scoped to THIS church's run — `run`, resolved above the derive because its
-      // methodology_version selects the scoring edition. responseHash carries no church
-      // identifier (lib/report/response-hash.ts) and `diagnoses` has no church_id column — the
-      // church link is run_id → assessment_runs.church_id. Unscoped, an identically-answered
-      // sibling church's 'ai' row is visible under RLS to a shared admin and would suppress
-      // generation here permanently. The lookup resolves the same run the report actually
-      // renders. (save_prose narrows server-side too, by church_id + response_hash; the two
-      // coincide while v1 keeps one run per church.) No status filter, so hoisting the read to
-      // before save_diagnosis flips the run to 'complete' selects the same row either way.
-      //
-      // An unresolvable run degrades to a cache MISS (generate), never a skip. save_diagnosis
-      // no longer completes the run and get_run_responses is status-agnostic (ADR 0003), so
-      // Generate is repeatable and this rule stands on its own terms: forfeiting on a transient
-      // read failure would silently pin a fallback report, where a MISS just costs one
-      // regeneration. save_prose resolves its own row from church_id + response_hash, so it
-      // needs no run id.
-      let alreadyAi = false
-      if (run) {
-        const { data: rows } = await supabase
-          .from('diagnoses')
-          .select('prose_source')
-          .eq('run_id', run.id)
-          .eq('response_hash', hash)
-        alreadyAi = (rows ?? []).some((r) => r.prose_source === 'ai')
-      }
-      if (!alreadyAi) {
-        // The run's OWN edition, not the current one: `diagnosis` is stamped with it, so prose
-        // written against the current question set would describe items this run never asked.
-        const blocks = await generateProse(diagnosis, derived.effectiveMethodology) // never throws → ReportBlocks | null
-        if (blocks) {
-          await supabase.rpc('save_prose', {
-            p_church_id: churchId,
-            p_response_hash: hash,
-            p_prose: blocks,
-            p_prose_source: 'ai',
-          })
-        }
-      }
-    } catch (err) {
-      // Backstop for the Supabase calls around generateProse (cache-check SELECT,
-      // save_prose RPC) — NOT for generateProse itself, which never throws: its
-      // SDK/network/parse/fact-check failures are already caught and logged inside
-      // lib/ai/prose.ts. Swallow everything here too so the committed diagnosis and the
-      // redirect below are never affected. No secrets, no church/respondent data — reason only.
-      console.warn('[m5b] AI prose persistence failed, falling back to deterministic prose:', err instanceof Error ? err.message : 'unknown error')
-    }
-  }
-
-  // Plan 3: best-effort executive report. A SECOND block, deliberately separate from the M5b
-  // prose block above — the 10-block diagnosis page is still live until plan 4, so both run.
-  // Same proseEnabled() gate, so when prose is off no API call is made and nothing is logged
-  // under [report]. The diagnosis is already committed, so nothing in here may break it or the
-  // redirect.
+  // Plan 3: best-effort executive report. Gated by the shared proseEnabled() helper
+  // (lib/ai/prose-mode.ts: OPENAI_API_KEY present ⇒ on; PROSE_MODE=ai|fallback overrides), the
+  // same function the diagnosis page reads, so the two can never disagree; when prose is off no
+  // API call is made and nothing is logged under [report] (the helper logs its own single
+  // `[prose-mode]` reason line). The diagnosis is already committed above, so this whole block is
+  // wrapped: no SDK/network/RPC failure may break the saved diagnosis or the redirect below.
+  //
+  // (The M5b diagnosis-prose block that used to sit here — generateProse + save_prose, writing
+  // `diagnoses.prose` — was retired in fix/auto-generate-hardening: nothing has rendered that
+  // column since the report redesign, and once key-present meant on it was one paid serial model
+  // call per Generate for dead data.)
   if (proseEnabled()) {
     try {
       // Reflection rows come from `raw`, NOT from `responses`: Response[] deliberately drops

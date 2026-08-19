@@ -23,17 +23,17 @@ describe('regenerateReport wiring', () => {
 
   it('is gated by proseEnabled(), exactly like generation — never by an inline PROSE_MODE read', () => {
     // Occurrence-count equality on the `proseEnabled()` CALL (not the bare identifier, which the
-    // import line also carries). Three call sites: the M5b prose block, the report block, and
-    // regenerateReport's early return. A bare-word count would stay green if the regenerate gate
-    // were deleted; equality on the call catches both a dropped gate and a fourth ungated model
-    // path. Zero inline `process.env.PROSE_MODE` reads: the ONLY reader is lib/ai/prose-mode.ts,
-    // so the four surfaces can never disagree about whether the model is on.
-    // Comments are stripped first: the docblocks name `proseEnabled()` in prose too, and a raw
-    // count would drift every time a comment is edited.
+    // import line also carries). Two call sites since fix/auto-generate-hardening retired the M5b
+    // prose block: the report block, and regenerateReport's early return. A bare-word count would
+    // stay green if the regenerate gate were deleted; equality on the call catches both a dropped
+    // gate and a third ungated model path. Zero inline `process.env.PROSE_MODE` reads: the ONLY
+    // reader is lib/ai/prose-mode.ts, so the surfaces can never disagree about whether the model
+    // is on. Comments are stripped first: the docblocks name `proseEnabled()` in prose too, and a
+    // raw count would drift every time a comment is edited.
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
     expect(code).toContain("import { proseEnabled } from '@/lib/ai/prose-mode'")
-    expect(code.match(/proseEnabled\(\)/g)?.length).toBe(3)
-    expect(code.match(/if \(proseEnabled\(\)\) \{/g)?.length).toBe(2)
+    expect(code.match(/proseEnabled\(\)/g)?.length).toBe(2)
+    expect(code.match(/if \(proseEnabled\(\)\) \{/g)?.length).toBe(1)
     expect(code.match(/process\.env\.PROSE_MODE/g) ?? []).toHaveLength(0)
     expect(code).toContain('if (!proseEnabled()) return')
   })
