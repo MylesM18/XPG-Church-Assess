@@ -138,16 +138,9 @@ function AiFallback({ fallback }: { fallback: SectionBody }) {
 function S2View({ ai, fallback }: AiRendererProps) {
   const parsed = S2Schema.safeParse(ai);
   if (!parsed.success) return <AiFallback fallback={fallback} />;
-  const { summary, what_this_is_not, context_bullets } = parsed.data;
-  return (
-    <>
-      <Text style={s.body}>{summary}</Text>
-      <Text style={s.body}>{what_this_is_not}</Text>
-      {context_bullets.map((bullet) => (
-        <Text key={bullet} style={s.bullet}>{`•  ${bullet}`}</Text>
-      ))}
-    </>
-  );
+  // Summary only (Natalie, 2026-08-19). safeParse STRIPS the removed legacy fields from
+  // pre-change persisted rows, so rendering parsed.data — not `ai` — is load-bearing.
+  return <Text style={s.body}>{parsed.data.summary}</Text>;
 }
 
 function S4View({ ai, fallback }: AiRendererProps) {

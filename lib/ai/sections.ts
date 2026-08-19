@@ -18,10 +18,11 @@ import type { SectionId } from '../methodology/schema';
  * discipline as ReportBlocksSchema in prose.ts and ThemeSchema in themes.ts.
  */
 
+// Summary only since 2026-08-19 (Natalie, on a live report): the "what this is not" line and
+// the context bullets are gone from the executive summary. Legacy persisted rows still carry
+// both fields; safeParse strips unknown keys, so they keep parsing and render summary-only.
 export const S2Schema = z.object({
   summary: z.string(),
-  what_this_is_not: z.string(),
-  context_bullets: z.array(z.string()),
 });
 export const S4Schema = z.object({ thesis_word: z.string(), narrative: z.string() });
 export const S5Schema = z.object({

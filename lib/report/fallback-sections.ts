@@ -415,7 +415,10 @@ function bulletsFor(
     case 's1':
       return [];
     case 's2':
-      return Object.entries(facts.profile).map(([k, v]) => `${PROFILE_LABELS[k] ?? k}: ${v}`);
+      // No bullets since 2026-08-19 (Natalie): the raw profile listing ("attendance_band:
+      // 250_499" and friends) read as debug output on a live report. The executive summary is
+      // the summary paragraph, nothing else.
+      return [];
     case 's3':
       // ONE bullet, not eight. The eight `Name: score — bandRead` lines this used to emit are
       // now the statGridModel chart (lib/report/charts.ts) on both surfaces, with the bar fill

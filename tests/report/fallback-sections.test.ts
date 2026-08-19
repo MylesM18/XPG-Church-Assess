@@ -205,15 +205,12 @@ describe.each([
   });
 });
 
-describe('S2 profile bullets', () => {
-  it('omits gracefully when the profile is empty', () => {
-    const facts = { ...capacityFacts, profile: {} };
-    expect(fallbackSection('s2', { facts, methodology, reflections: [] }).bullets).toEqual([]);
-  });
-
-  it('lists each populated profile field', () => {
-    const facts = { ...capacityFacts, profile: { context: 'suburban' } };
-    expect(fallbackSection('s2', { facts, methodology, reflections: [] }).bullets).toHaveLength(1);
+describe('S2 profile bullets (removed, Natalie 2026-08-19)', () => {
+  it('emits no bullets however populated the profile is', () => {
+    // The executive summary is the summary paragraph, nothing else. The raw profile listing
+    // ("attendance_band: 250_499" and friends) read as debug output on a live report.
+    expect(Object.keys(capacityFacts.profile).length).toBeGreaterThan(0); // guard
+    expect(fallbackSection('s2', { facts: capacityFacts, methodology, reflections: [] }).bullets).toEqual([]);
   });
 });
 

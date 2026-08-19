@@ -251,8 +251,8 @@ describe('composeSection', () => {
   });
 
   it('returns the parsed object on success', async () => {
-    mockParse.mockResolvedValue({ status: 'completed', output_parsed: { summary: 's', what_this_is_not: 'n', context_bullets: [] } });
-    expect(await composeSection('s2', capacityFacts, methodology)).toEqual({ summary: 's', what_this_is_not: 'n', context_bullets: [] });
+    mockParse.mockResolvedValue({ status: 'completed', output_parsed: { summary: 's' } });
+    expect(await composeSection('s2', capacityFacts, methodology)).toEqual({ summary: 's' });
   });
 
   // The budget.test.ts unit tests prove the arithmetic; these two prove the WIRING — that the
