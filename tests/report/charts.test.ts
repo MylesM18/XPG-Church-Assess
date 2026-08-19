@@ -9,7 +9,7 @@ import {
   BAND_TEXT, BAND_NAME, verdictBandFor, textOnBand,
   statGridModel, rankListModel, verdictBlockModel, coverModel, areaIndexFrom,
 } from '@/lib/report/charts';
-import { ALL_FIXTURES, CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
+import { ALL_FIXTURES, CAPACITY_FACTS, MOSTLY_STRONG_FACTS, makeFacts } from '../fixtures/facts';
 
 describe('seam tokens (visual overhaul)', () => {
   it('BAND_TEXT darkens watch and reuses the fill hex elsewhere', () => {
@@ -189,6 +189,45 @@ describe('verdictBlockModel', () => {
     expect(model.stats[1]!.value).toBe(CAPACITY_FACTS.categories.slice(0, 3).length);
     expect(CAPACITY_FACTS.improvement.strongest_areas.map((a) => a.category_id))
       .toEqual(CAPACITY_FACTS.categories.slice(0, 3).map((c) => c.id));
+  });
+
+  /**
+   * ⚠️ OPEN PRODUCT DECISION (Natalie), NOT a passing guard.
+   *
+   * The agreement above holds only because every other fixture sits below 80 in all eight
+   * areas, so `strongestAreas`' top-3 FLOOR is what it returns and the comparison is vacuous.
+   * On a church where five areas clear the standard the two disagree: the tile counts five,
+   * s5 names three.
+   *
+   * It is characterised rather than fixed because every fix is a product change, not a defect
+   * fix: s5's own copy hardcodes the count in all three archetypes ("Three areas are carrying
+   * real weight", methodology/report.yaml:75-77), its length_ceiling of 2200 is costed for
+   * three, and `SECTION_REGISTRY.s5.slice` hands the model `categories.slice(0, 3)` while s6
+   * takes `.slice(3)` — so driving s5 off `improvement.strongest_areas` reworms Natalie's copy,
+   * re-costs an AI ceiling, and repartitions the two AI sections at once. Capping the tile at
+   * three instead would under-report a genuinely healthy church.
+   *
+   * Fixing only the FALLBACK partition is the one option that is definitely wrong: it would put
+   * the contradiction on the live AI path alone, which is precisely how S7's punch list came to
+   * ship to nobody.
+   */
+  it('DIVERGES from s5 when more than three areas clear the standard', () => {
+    const model = verdictBlockModel(MOSTLY_STRONG_FACTS);
+    const named = MOSTLY_STRONG_FACTS.categories.slice(0, 3); // what s5 prints, both paths
+    expect(MOSTLY_STRONG_FACTS.improvement.strongest_areas).toHaveLength(5); // fixture guard
+    expect(model.stats[1]!.value).toBe(5);
+    expect(named).toHaveLength(3);
+    // Named as a fact so a later fix flips this test loudly instead of leaving it green.
+    expect(model.stats[1]!.value).not.toBe(named.length);
+  });
+
+  it('keeps the s5 / s6 fallback partition total and disjoint even on that pack', () => {
+    // Whatever is decided above, these two must still cover all eight areas exactly once —
+    // s5 takes categories.slice(0, 3) and s6 takes .slice(3) (fallback-sections.ts).
+    const top = MOSTLY_STRONG_FACTS.categories.slice(0, 3).map((c) => c.id);
+    const rest = MOSTLY_STRONG_FACTS.categories.slice(3).map((c) => c.id);
+    expect([...top, ...rest].sort()).toEqual(MOSTLY_STRONG_FACTS.categories.map((c) => c.id).sort());
+    expect(top.filter((id) => rest.includes(id))).toEqual([]);
   });
 
   it('lays hero above a 2x2 dashboard inside the viewBox', () => {

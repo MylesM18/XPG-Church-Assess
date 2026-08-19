@@ -485,6 +485,28 @@ const FULL_ITEM_BOTTOM = [...FULL_ITEM_MAP]
   .slice(0, 6);
 export const FULL_ITEM_MAP_FACTS: FactsPack = makeFacts({ bottom_items: FULL_ITEM_BOTTOM }, FULL_ITEM_MAP);
 
+/**
+ * 12. mostly-strong — five of eight areas at or above the 80 standard.
+ *
+ * The shape `strongestAreas` behaves differently on: its top-3 FLOOR stops mattering and it
+ * returns all five. Every other fixture sits below 80 everywhere, so `strongest_areas.length`
+ * is 3 in all of them and any test comparing it against s5's hardcoded `categories.slice(0, 3)`
+ * passes without proving anything (tests/report/charts.test.ts's "agrees with the section that
+ * names the strengths in prose" was exactly that).
+ */
+const MOSTLY_STRONG_SCORES: Record<string, number> = {
+  guest: 91, conn: 88, disc: 85, vol: 83, gen: 80, gov: 62, comm: 58, sys: 54,
+};
+const MOSTLY_STRONG_DERIVED = constraintFrom(MOSTLY_STRONG_SCORES);
+export const MOSTLY_STRONG_FACTS: FactsPack = makeFacts({
+  archetype: archetypeFromDerived(MOSTLY_STRONG_DERIVED),
+  categories: categoriesFrom(MOSTLY_STRONG_SCORES),
+  overall: overallFrom(MOSTLY_STRONG_SCORES),
+  primary_constraint: MOSTLY_STRONG_DERIVED.primary_constraint,
+  gating: MOSTLY_STRONG_DERIVED.gating,
+  dependencies: dependenciesFrom(MOSTLY_STRONG_SCORES),
+});
+
 export const ALL_FIXTURES: ReadonlyArray<{ name: string; facts: FactsPack }> = [
   { name: 'capacity', facts: CAPACITY_FACTS },
   { name: 'constraint', facts: CONSTRAINT_FACTS },
@@ -497,4 +519,5 @@ export const ALL_FIXTURES: ReadonlyArray<{ name: string; facts: FactsPack }> = [
   { name: 'holding', facts: HOLDING_FACTS },
   { name: 'category-watch', facts: CATEGORY_WATCH_FACTS },
   { name: 'full-item-map', facts: FULL_ITEM_MAP_FACTS },
+  { name: 'mostly-strong', facts: MOSTLY_STRONG_FACTS },
 ];
