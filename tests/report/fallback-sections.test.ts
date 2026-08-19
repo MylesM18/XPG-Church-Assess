@@ -3,7 +3,7 @@ import { loadMethodology } from '@/lib/methodology/load';
 import type { Diagnosis, DiagnosisCategory, Response } from '@/lib/engine/types';
 import { buildFacts, type BuildFactsArgs, type ChurchFacts, type FactsPack } from '@/lib/report/facts';
 import { fallbackSection, fallbackSections } from '@/lib/report/fallback-sections';
-import { ALL_FIXTURES, CAPACITY_FACTS } from '../fixtures/facts';
+import { ALL_FIXTURES, CAPACITY_FACTS, makeFacts } from '../fixtures/facts';
 
 // No healthy-church/broken-conn/gates-only fixtures exist anywhere in the repo (recon
 // divergence #1 / controller ruling 1) — built inline here, following the local/unexported
@@ -570,6 +570,92 @@ describe('s3 executive dashboard', () => {
     const s3 = fallbackSection('s3', { facts: CAPACITY_FACTS, methodology, reflections: [] });
     for (const c of CAPACITY_FACTS.categories) {
       expect(s3.bullets.join(' ')).not.toContain(`${c.name}: ${c.score} out of 100`);
+    }
+  });
+});
+
+/**
+ * Step D — S7 carries the areas-needing-work punch list.
+ *
+ * Natalie's ruling: ALL eight sub-80 areas, ranked worst-first, each with its own weak
+ * questions, rendered INSIDE s7 rather than as a thirteenth section.
+ */
+describe('S7 areas needing work (step D)', () => {
+  const facts = CAPACITY_FACTS; // every area 49-72, so all eight are below the 80 standard
+  const s7 = () => fallbackSection('s7', { facts, methodology, reflections: [] });
+
+  it('emits one bullet per area below the standard, worst area first', () => {
+    const expected = facts.improvement.areas_needing_work;
+    expect(expected).toHaveLength(8); // fixture guard: the ruling is "all eight", not a worst-N cap
+    const bullets = s7().bullets;
+    for (const [i, area] of expected.entries()) {
+      expect(bullets[i]).toContain(area.name);
+    }
+    // worst first: the fixture's own ranking is score-ascending
+    expect(expected.map((a) => a.score)).toEqual([...expected.map((a) => a.score)].sort((x, y) => x - y));
+  });
+
+  it('gives each area its score and its gap to the standard', () => {
+    const worst = facts.improvement.areas_needing_work[0]!;
+    const bullet = s7().bullets[0]!;
+    expect(bullet).toContain(`${worst.score} out of 100`);
+    expect(bullet).toContain(`${worst.gap_to_standard} points below the standard of ${facts.improvement.standard}`);
+  });
+
+  it("lists an area's own weak questions inside its own bullet, and no other area's", () => {
+    const areas = facts.improvement.areas_needing_work;
+    const withItems = areas.filter((a) => a.weak_items.length > 0);
+    expect(withItems.length).toBeGreaterThan(1); // guard: otherwise "no other area's" is vacuous
+    const bullets = s7().bullets;
+    for (const [i, area] of areas.entries()) {
+      const bullet = bullets[i]!;
+      for (const item of area.weak_items) {
+        expect(bullet).toContain(item.text);
+        expect(bullet).toContain(`${item.mean} out of 100`);
+      }
+      for (const other of areas) {
+        if (other.category_id === area.category_id) continue;
+        for (const item of other.weak_items) expect(bullet).not.toContain(item.text);
+      }
+    }
+  });
+
+  it('says so plainly when an area is below the standard with no question below it', () => {
+    const bare = facts.improvement.areas_needing_work.filter((a) => a.weak_items.length === 0);
+    expect(bare.length).toBeGreaterThan(0); // fixture guard
+    const bullets = s7().bullets;
+    for (const area of bare) {
+      const bullet = bullets.find((b) => b.startsWith(area.name))!;
+      expect(bullet).toContain('No individual question in this area is below the standard');
+    }
+  });
+
+  it('no longer repeats the six lowest indicators as their own bullets', () => {
+    const bullets = s7().bullets;
+    for (const b of facts.bottom_items) {
+      expect(bullets).not.toContain(`${b.text} — ${b.mean} out of 100 (${b.theme}).`);
+    }
+  });
+
+  it('still lists the six lowest indicators when no area is below the standard', () => {
+    const healthy = makeFacts({
+      categories: CAPACITY_FACTS.categories.map((c) => ({ ...c, score: 85 })),
+    });
+    expect(healthy.improvement.areas_needing_work).toEqual([]); // fixture guard
+    const bullets = fallbackSection('s7', { facts: healthy, methodology, reflections: [] }).bullets;
+    expect(bullets.length).toBeGreaterThan(0);
+    for (const b of healthy.bottom_items) {
+      expect(bullets).toContain(`${b.text} — ${b.mean} out of 100 (${b.theme}).`);
+    }
+  });
+
+  it('keeps the absent-theme pattern lines', () => {
+    const oneTheme = makeFacts({
+      bottom_items: CAPACITY_FACTS.bottom_items.map((b) => ({ ...b, theme: 'systems' as const })),
+    });
+    const bullets = fallbackSection('s7', { facts: oneTheme, methodology, reflections: [] }).bullets;
+    for (const theme of ['culture', 'theology', 'relational']) {
+      expect(bullets).toContain(`None of the six lowest indicators are ${theme}.`);
     }
   });
 });
