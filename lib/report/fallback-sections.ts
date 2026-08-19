@@ -34,7 +34,6 @@ export interface SectionBody {
   bullets: string[];
 }
 
-/** Settings-form labels for the 12 profile keys (app/app/[churchId]/settings/settings-form.tsx). */
 /** Exported for the web phase rail, which keys its opacity ramp off the PHASE rather than
  *  the entry's array position — see roadmapEntries below and lib/report/web-visuals.ts. */
 export type Phase = 'align' | 'build' | 'scale';

@@ -113,15 +113,19 @@ function themeDigest(facts: FactsPack) {
 }
 
 /**
- * bottom_items as a model may see them: PICKED field by field (the head() discipline), and
- * WITHOUT item_id. The ids are engine vocabulary — handed the raw list under "use no name
- * absent from this", the model wrote "COM6 and GEN6 suggest ... D3, SYS3, and SYS6 together
- * suggest a pattern" onto a live report (Natalie, 2026-08-19). With only text, mean, theme and
- * category_id to quote, it can name a question solely by what it asks.
+ * bottom_items as a model may see them: PICKED field by field (the head() discipline), WITHOUT
+ * item_id, and with the AREA NAME in place of the category slug. The ids are engine vocabulary —
+ * handed the raw list under "use no name absent from this", the model wrote "COM6 and GEN6
+ * suggest ... D3, SYS3, and SYS6 together suggest a pattern" onto a live report (Natalie,
+ * 2026-08-19), and 'sys'/'comm' slugs are the same leak one field over. With only text, mean,
+ * theme and a real area name to quote, it can name a question solely by what it asks.
+ * (s5/s6's `categories` keep their ids on purpose: those schemas make the model echo
+ * category_id back, and the coverage gate checks it.)
  */
 function itemsForModel(facts: FactsPack) {
+  const names = new Map(facts.categories.map((c) => [c.id, c.name]));
   return facts.bottom_items.map((b) => ({
-    category_id: b.category_id, mean: b.mean, text: b.text, theme: b.theme,
+    area: names.get(b.category_id) ?? b.category_id, mean: b.mean, text: b.text, theme: b.theme,
   }));
 }
 

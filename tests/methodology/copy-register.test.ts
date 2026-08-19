@@ -55,6 +55,21 @@ describe('copy layer plain language (Natalie, 2026-08-19)', () => {
     expect(m.copy.dependency_reads.both_strong.toLowerCase()).not.toContain('strong');
     expect(m.copy.dependency_reads.both_strong.toLowerCase()).not.toContain('nothing to flag');
   });
+
+  /**
+   * both_strong is a PER-EDGE read (lib/engine/dependencies.ts): a report with one weak area
+   * renders it directly beside an at_risk read about that area. The first rewrite claimed "No
+   * connection between YOUR AREAS is holding another back" — a whole-report claim that
+   * contradicted the at_risk sentence one bullet up on the standard constraint fixture. The
+   * sentence must stay scoped to the pair it reads.
+   */
+  it('scopes the both_strong read to its own pair, never the whole report', async () => {
+    const m = await loadMethodology();
+    const read = m.copy.dependency_reads.both_strong.toLowerCase();
+    expect(read).toContain('pair');
+    expect(read).not.toContain('your areas');
+    expect(read).not.toContain('no connection between');
+  });
 });
 
 describe('copy layer register', () => {

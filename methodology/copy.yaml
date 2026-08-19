@@ -39,7 +39,7 @@ dependency_reads:
   load_bearing: "{fromName} is weak here too, so this dependency is active and part of what it is costing you."
   clear: "{fromName} is doing well, so it is not what is limiting your {toName}."
   at_risk: "{toName} is holding up for now, but {fromName} is weak underneath it, and that will catch up with you if it is not addressed."
-  both_strong: "No connection between your areas is holding another back. The next gains come from raising the areas themselves, not from fixing the links between them."
+  both_strong: "Neither area in this pair is holding the other back. The next gains here come from raising the areas themselves, not from fixing the link between them."
 # One deterministic XPG read per archetype x tier, for S3's Executive Health Dashboard.
 # S3 is not an AI section and never will be — the dashboard is the numbers layer, and it must
 # not degrade to prose when the model is unavailable (spec §3). Tier ids are rules.yaml's

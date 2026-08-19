@@ -5,7 +5,7 @@
 #
 # This version feeds the report cache key (lib/report/report-hash.ts): bumping it regenerates
 # every report without staling any run.
-version: "0.3.0"
+version: "0.4.0"
 
 # The register. Kept word-for-word in sync with SYSTEM_PROMPT in lib/ai/prose.ts — the two
 # instruct the same model about the same copy, and letting them drift is how the AI path and the
@@ -123,7 +123,7 @@ sections:
   s10:
     title: "30/60/90 roadmap"
     templates:
-      capacity: "Ninety days in three phases, starting where your scores are lowest."
+      capacity: "Ninety days in three phases, each with one focus and a concrete first move."
       constraint: "Ninety days in three phases. Align, build, scale, with every phase pointed at {primary_name}."
       foundation: "Ninety days in three phases. Align, build and scale, with the enablers going first."
     length_ceiling: 2400
@@ -173,11 +173,13 @@ banned_phrases:
     - "a question of capacity"
     - "what to build next rather than what to repair"
     - "nothing is capping you"
+    - "no single area is holding the others back"
   foundation:
     - "primary growth constraint"
     - "the area limiting the rest"
     - "every stage is carrying its load"
     - "a question of capacity"
+    - "no single area is holding the others back"
 
 # S10/S11 are fully deterministic in v1 (P4). Selection is keyed by archetype, primary
 # constraint, gated enablers and bottom items; the text is used verbatim.

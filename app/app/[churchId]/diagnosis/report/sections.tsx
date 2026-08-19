@@ -396,10 +396,10 @@ function S10PhaseBody({
 }
 
 /**
- * Renders the 13 report sections as the web mirror of the PDF's content pages (Part B spec):
+ * Renders the 12 report sections as the web mirror of the PDF's content pages (Part B spec):
  * each section opens with editorial chrome — a 3px BAND_FILL[band] tick, an `NN / TOTAL` caps
  * eyebrow, the title, then a 2px ink rule — then its charts, then its content; the booking CTA
- * renders once, immediately after s12, where document.tsx puts it. Page chrome — the toolbar,
+ * renders once, immediately after s11, the report's final section, where document.tsx puts it. Page chrome — the toolbar,
  * the notices, the cover, the shared-view footer — stays on the pages. `band` is the cover's
  * verdict band (`cover.band`): the colour IS the diagnosis, and every opener's tick wears it.
  *

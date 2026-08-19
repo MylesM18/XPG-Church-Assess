@@ -199,11 +199,6 @@ describe('facts slices', () => {
   });
 
   /**
-   * Same report, section 7: "COM6 and GEN6 suggest ... D3, SYS3, and SYS6 together suggest a
-   * pattern". Item ids are engine vocabulary; a reader gets the question text. The ids leave
-   * the s6 and s7 slices entirely, so the model can only name a question by what it asks.
-   */
-  /**
    * The same leak through head(): every slice's shared head taught the model the engine's own
    * vocabulary — overall.capacity / overall.throughput (the s2 narrative on that report read
    * "Capacity at 63 and throughput at 59"), tier ids like healthy_stretched, and the primary
@@ -235,6 +230,11 @@ describe('facts slices', () => {
     expect(payload).not.toContain('"category_id": "conn"');
   });
 
+  /**
+   * Same report, section 7: "COM6 and GEN6 suggest ... D3, SYS3, and SYS6 together suggest a
+   * pattern". Item ids are engine vocabulary; a reader gets the question text. The ids leave
+   * the s6 and s7 slices entirely, so the model can only name a question by what it asks.
+   */
   it('never sends an item id over the wire for s6 or s7', async () => {
     for (const id of ['s6', 's7'] as const) {
       mockParse.mockReset();
@@ -242,8 +242,16 @@ describe('facts slices', () => {
       await composeSection(id, capacityFacts, methodology);
       const payload = String(mockParse.mock.calls[0]![0].input[1].content);
       expect(payload, id).not.toContain('item_id');
+      // The category slug goes the same way: bottom_items carry the area NAME. (Scoped to the
+      // bottom_items shape — s6's categories legitimately carry `id`, which its schema makes
+      // the model echo back for the coverage gate.)
+      const bottomBlock = payload.slice(payload.indexOf('"bottom_items"'));
+      expect(bottomBlock, id).not.toContain('"category_id"');
+      const firstItem = capacityFacts.bottom_items[0]!;
+      const areaName = capacityFacts.categories.find((c) => c.id === firstItem.category_id)!.name;
+      expect(payload, id).toContain(`"area": "${areaName}"`);
       // Non-vacuity: the questions themselves still travel, with their means and themes.
-      expect(payload, id).toContain(capacityFacts.bottom_items[0]!.text);
+      expect(payload, id).toContain(firstItem.text);
       expect(payload, id).toContain('"mean"');
     }
   });

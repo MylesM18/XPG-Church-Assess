@@ -407,6 +407,27 @@ describe('S10 roadmap', () => {
     ]);
   });
 
+  it('splits the quarter between two priority areas: align the worst, build and scale the second', () => {
+    // The only input where Math.min(i, n - 1) picks differently on every phase boundary.
+    const scores: Record<string, number> = {
+      guest: 85, conn: 86, disc: 87, vol: 88, gen: 89, gov: 90, comm: 51, sys: 49,
+    };
+    const facts = makeFacts({
+      categories: CAPACITY_FACTS.categories
+        .map((c) => ({ ...c, score: scores[c.id]! }))
+        .sort((a, b) => b.score - a.score || (a.id < b.id ? -1 : 1)),
+    });
+    expect(facts.improvement.priority_areas.map((a) => a.category_id)).toEqual(['sys', 'comm']); // guard
+    const lib = methodology.report.action_library.categories;
+    const [worst, second] = facts.improvement.priority_areas;
+    const bullets = fallbackSection('s10', { facts, methodology, reflections: [] }).bullets;
+    expect(bullets).toEqual([
+      `30 days — ${worst!.name}, ${worst!.score} out of 100: ${lib.sys!.align}`,
+      `60 days — ${second!.name}, ${second!.score} out of 100: ${lib.comm!.build}`,
+      `90 days — ${second!.name}, ${second!.score} out of 100: ${lib.comm!.scale}`,
+    ]);
+  });
+
   it('keeps the generosity roadmap only when nothing is below the standard', () => {
     const facts = makeFacts({
       categories: CAPACITY_FACTS.categories.map((c) => ({ ...c, score: 85 })),
@@ -422,7 +443,10 @@ describe('S10 roadmap', () => {
   });
 
   it('never throws and never drops the bullet when generosity_mode is null (ruling 6)', () => {
-    // capacityFacts has generosity_mode: null.
+    // capacityFacts has generosity_mode: null — and, since the 2026-08-19 rework, priority
+    // areas, so this runs the priority path; the generosity ?? 'both' fallback keeps its own
+    // positive coverage in 'keeps the generosity roadmap only when nothing is below the
+    // standard' below.
     const s10 = fallbackSection('s10', { facts: capacityFacts, methodology, reflections: [] });
     expect(s10.bullets.filter((b) => /^(30|60|90) days — /.test(b))).toHaveLength(3);
   });

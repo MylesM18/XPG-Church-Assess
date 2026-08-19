@@ -185,7 +185,7 @@ export default async function SharedReportPage({
       {/* The monogram + church name live inside the cover now. Its church name is a <p>, not
           a heading: ReportSections below renders the page's one true <h1> (the first section
           opener) — tests/a11y/shared-report-heading.test.ts pins exactly one <h1> on this
-          public page, and the booking CTA rides inside ReportSections after s12. */}
+          public page, and the booking CTA rides inside ReportSections after s11, the final section. */}
       <ReportCover
         cover={cover}
         churchName={row.church_name}
