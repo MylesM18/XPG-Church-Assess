@@ -26,6 +26,34 @@ function dirWithMissingReportSection(): string {
   return dir;
 }
 
+describe("report.yaml s7 describes what s7 actually renders", () => {
+  const s7 = loadMethodology().report.sections.s7;
+
+  /**
+   * s7 stopped being "the six lowest indicators" on 2026-08-19: it now leads with the
+   * areas-needing-work punch list — EVERY area below the 80 standard, worst first, each with its
+   * own questions (lib/report/blocks.ts) — and keeps the six lowest as its rank-list chart and
+   * its pattern lines. A title naming only the six sat directly above eight area entries.
+   *
+   * These templates are also the model's per-archetype system prompt (composeSection), so they
+   * have to stay true of the AI narrative as well: the model still writes about bottom_items,
+   * which is why the six are asserted to SURVIVE here rather than be replaced.
+   */
+  it('names the areas below the standard in the title, not just the six lowest questions', () => {
+    expect(s7.title.toLowerCase()).toMatch(/standard/);
+  });
+
+  it('still names the six lowest indicators in every archetype template', () => {
+    const missing = ARCHETYPES.filter((a) => !s7.templates[a].toLowerCase().includes('six lowest'));
+    expect(missing).toEqual([]);
+  });
+
+  it('names the areas below the standard in every archetype template too', () => {
+    const missing = ARCHETYPES.filter((a) => !s7.templates[a].toLowerCase().includes('standard'));
+    expect(missing).toEqual([]);
+  });
+});
+
 describe('report.yaml', () => {
   const m = loadMethodology();
 

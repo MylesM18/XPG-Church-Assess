@@ -88,11 +88,11 @@ sections:
     required_mentions: []
 
   s7:
-    title: "Lowest scoring indicators"
+    title: "Areas below the standard"
     templates:
-      capacity: "The six lowest indicators, and what they have in common."
-      constraint: "The six lowest indicators, and what they have in common."
-      foundation: "The six lowest indicators, and what they have in common."
+      capacity: "The six lowest indicators, what they have in common, and every area still below the standard."
+      constraint: "The six lowest indicators, what they have in common, and every area still below the standard."
+      foundation: "The six lowest indicators, what they have in common, and every area still below the standard."
     length_ceiling: 1200
     required_mentions: []
 
