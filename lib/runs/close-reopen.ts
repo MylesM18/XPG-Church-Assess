@@ -39,6 +39,12 @@ export function openNoteText(finished: number, total: number): string {
   return `This assessment is still open — ${finished} of ${total} members have finished. Regenerate after closing to include everyone's answers.`
 }
 
+/** Dashboard "Regenerate diagnosis" inline note while a REOPENED run still has unfinished members
+ *  (finishedMemberCount: finished !== total). Same N/M as closeConfirmText. */
+export function regenerateBlockedText(finished: number, total: number): string {
+  return `${finished} of ${total} members have finished — regenerate once everyone is done`
+}
+
 /** Answer page read-only copy once closed_at is known. The answer page keeps today's sentence
  *  ("This assessment is complete, so your answers are read-only.") inline as the null fallback. */
 export function closedReadOnlyCopy(closedAt: string): string {
