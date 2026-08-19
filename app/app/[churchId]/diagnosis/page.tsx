@@ -31,6 +31,7 @@ import { ShareControl } from './share-control'
 import { regenerateReport } from '../actions'
 import { AutoGenerateReport } from './auto-generate-report'
 import { proseEnabled } from '@/lib/ai/prose-mode'
+import { loadWaitPhrases } from '@/lib/data/wait-phrases'
 
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'
 
@@ -273,6 +274,14 @@ export default async function DiagnosisPage({
   // has run.
   const aiOn = proseEnabled()
 
+  // The reassurance lines the control reveals while the model runs (feat/report-wait-experience).
+  // Read through the seam (lib/data/wait-phrases.ts, which falls back to the shipped defaults when
+  // the table is missing/empty/unreachable) and ONLY when a notice will actually render: on the
+  // common path the report is already fine, no notice mounts, and this select would be pure waste.
+  const waitPhrases = aiOn && (stale || needsGeneration)
+    ? await loadWaitPhrases(supabase)
+    : []
+
   // The cover's date line: the run's completion month in the PDF cover's exact format
   // (document.tsx: toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })).
   // Same "assessed" moment as completedAt above, never a page-load date.
@@ -312,7 +321,14 @@ export default async function DiagnosisPage({
             <ReportNotice>
               <p>This report predates your latest settings change.</p>
               {aiOn ? (
-                <AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} label="Regenerate report" auto={!runIsOpen} />
+                <AutoGenerateReport
+                  churchId={churchId}
+                  inputsHash={inputsHash!}
+                  action={regenerateReport}
+                  label="Regenerate report"
+                  auto={!runIsOpen}
+                  phrases={waitPhrases}
+                />
               ) : (
                 <form action={regenerateReport}>
                   <input type="hidden" name="churchId" value={churchId} />
@@ -329,7 +345,14 @@ export default async function DiagnosisPage({
           {!stale && needsGeneration && aiOn && (
             <ReportNotice>
               <p>This report hasn’t been written by the model yet.</p>
-              <AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} label="Generate report" auto={!runIsOpen} />
+              <AutoGenerateReport
+                churchId={churchId}
+                inputsHash={inputsHash!}
+                action={regenerateReport}
+                label="Generate report"
+                auto={!runIsOpen}
+                phrases={waitPhrases}
+              />
             </ReportNotice>
           )}
           {cover && visuals && (
