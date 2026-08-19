@@ -8,6 +8,7 @@ import type { AreaIndex, BandKey, ChartModel } from '@/lib/report/charts'
 import { bookingCta } from '@/lib/report/cta'
 import type { PhaseRailModel, WebVisuals } from '@/lib/report/web-visuals'
 import { WebChart } from './charts'
+import { WebBlock } from './blocks'
 import {
   WebCapacityBars,
   WebChainRail,
@@ -457,6 +458,9 @@ export function ReportSections({ sections, band, visuals }: { sections: Assemble
             ) : (
               <SectionContent section={section} areaIndex={areaIndex} />
             )}
+            {section.blocks.map((block) => (
+              <WebBlock key={block.kind} model={block} />
+            ))}
             <SectionVisualsBelow section={section} visuals={visuals} />
           </section>
           {section.id === 's12' && (

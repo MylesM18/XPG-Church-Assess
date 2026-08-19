@@ -173,39 +173,34 @@ function s6Bullet(c: CategoryFact, facts: FactsPack, methodology: Methodology): 
 }
 
 /**
- * S7's punch list. Natalie's ruling (2026-08-19): every area below the improvement standard,
- * ranked worst-first with no worst-N cap, each carrying its OWN weak questions — rendered here
- * rather than as a thirteenth section (the 13th slot she closed on 2026-08-16 stays closed).
+ * S7's bullets. The punch list itself — every area below the improvement standard, worst first,
+ * each with its own weak questions — is NOT here: it is a deterministic BLOCK
+ * (lib/report/blocks.ts punchListBlock, attached by compose.ts blocksForSection).
  *
- * The flat six-item list the old body emitted is gone whenever an area needs work, because that
- * same list is already printed twice around it: verbatim by the rank_list chart that renders
- * directly under s7 on BOTH surfaces (charts.ts rankListModel), and again question-by-question
- * inside the area blocks below. Three copies of one list is not emphasis, it is a rendering bug.
- * It survives only on the path where there is nothing else to say — see the fallback below.
+ * ⚠️ It lived here, as bullets, for exactly one session and rendered on no live report. s7 is
+ * one of the seven AI sections and prose is on whenever OPENAI_API_KEY is set, so `S7View` on
+ * both surfaces rendered the model's narrative and dropped `fallback.bullets` entirely. Do not
+ * move computed content back into a bullet on any section listed in AI_SECTION_IDS.
+ *
+ * The flat six-item list the old body emitted is likewise gone whenever an area needs work: that
+ * same list is already printed twice around it — verbatim by the rank_list chart that renders
+ * beside s7 on BOTH surfaces (charts.ts rankListModel), and again question-by-question inside the
+ * punch list. It survives only on the path where there is nothing else to say, below.
  *
  * The pattern lines stay on every path: they describe `bottom_items`, not the areas, and gate 5
  * (tests/ai/section-gates.test.ts) checks the AI's pattern claim against this exact phrasing.
  */
 function s7Bullets(facts: FactsPack): string[] {
-  const { standard, areas_needing_work } = facts.improvement;
-  const areaLines = areas_needing_work.map((a) => {
-    const head = `${a.name} — ${a.score} out of 100, ${a.gap_to_standard} points below the standard of ${standard}.`;
-    // An area can be below the standard with no question below it only when the pack's item map
-    // does not cover it (fixtures); "Weakest questions here:" followed by nothing reads as a bug.
-    if (a.weak_items.length === 0) return `${head} No individual question in this area is below the standard.`;
-    const items = a.weak_items.map((i) => `${i.text} — ${i.mean} out of 100 (${i.theme})`).join('; ');
-    return `${head} Weakest questions here: ${items}.`;
-  });
   const patternLines = Object.entries(facts.pattern_counts)
     .filter(([, count]) => count === 0)
     .map(([theme]) => `None of the six lowest indicators are ${theme}.`);
-  // Nothing below the standard: the areas list is empty, so the six lowest questions are the only
-  // specific evidence s7 has. Without this the section can render with zero bullets.
-  if (areaLines.length === 0) {
+  // Nothing below the standard: the punch-list block is null, so the six lowest questions are the
+  // only specific evidence s7 has. Without this the section can render with zero bullets.
+  if (facts.improvement.areas_needing_work.length === 0) {
     const itemLines = facts.bottom_items.map((b) => `${b.text} — ${b.mean} out of 100 (${b.theme}).`);
     return [...itemLines, ...patternLines];
   }
-  return [...areaLines, ...patternLines];
+  return patternLines;
 }
 
 /**

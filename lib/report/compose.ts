@@ -5,6 +5,7 @@ import { fallbackSections, type FallbackSectionArgs, type SectionBody } from './
 import type { FactsPack } from './facts';
 import type { Methodology, RequiredMention, SectionId } from '../methodology/schema';
 import { statGridModel, rankListModel, verdictBlockModel, type ChartModel } from './charts';
+import { punchListBlock, type SectionBlock } from './blocks';
 
 export type { SectionId } from '../methodology/schema';
 
@@ -210,6 +211,10 @@ export interface AssembledSection {
   fallback: SectionBody;
   /** Derived chart geometry (lib/report/charts.ts). Usually empty. Never source-dependent. */
   charts: ChartModel[];
+  /** Deterministic CONTENT (lib/report/blocks.ts). Usually empty. Never source-dependent —
+   *  which is the whole point: an AI renderer renders the model's own fields and drops
+   *  `fallback.bullets`, so computed content parked in a bullet is invisible on the live path. */
+  blocks: SectionBlock[];
 }
 
 /**
@@ -235,6 +240,23 @@ export function chartsForSection(
 }
 
 /**
+ * Which deterministic content blocks a section carries — the same contract chartsForSection has,
+ * for the same reason: called by BOTH assemblers, and NEVER reads `section.source`.
+ *
+ * s7's punch list is the case that forced this seam to exist. It used to be `fallback.bullets`,
+ * and s7 is one of the seven AI sections, so on every report where the model answered — i.e.
+ * every report, since prose is on whenever OPENAI_API_KEY is set — S7View rendered the model's
+ * narrative and threw the punch list away. A block cannot be thrown away by choosing a branch.
+ */
+export function blocksForSection(id: SectionId, facts: FactsPack): SectionBlock[] {
+  if (id === 's7') {
+    const block = punchListBlock(facts);
+    return block ? [block] : [];
+  }
+  return [];
+}
+
+/**
  * The share page needs the same AssembledSection[] shape as assembleReport without touching
  * the composer's AI path — no persisted row, no hash, no model output. Mapping over the same
  * Object.keys(methodology.report.sections) order keeps section order owned by one place
@@ -245,7 +267,8 @@ export function assembleFallbackOnly(args: FallbackSectionArgs): AssembledSectio
   return (Object.keys(args.methodology.report.sections) as SectionId[]).map((id) => {
     const fallback = fallbacks[id];
     const charts = chartsForSection(id, args.facts, args.methodology);
-    return { id, source: 'fallback' as const, ai: null, fallback, charts };
+    const blocks = blocksForSection(id, args.facts);
+    return { id, source: 'fallback' as const, ai: null, fallback, charts, blocks };
   });
 }
 
@@ -279,14 +302,15 @@ export function assembleReport(args: {
   return (Object.keys(args.methodology.report.sections) as SectionId[]).map((id) => {
     const fallback = fallbacks[id];
     const charts = chartsForSection(id, args.facts, args.methodology);
-    if (!(AI_SECTION_IDS as readonly string[]).includes(id)) return { id, source: 'fallback' as const, ai: null, fallback, charts };
+    const blocks = blocksForSection(id, args.facts);
+    if (!(AI_SECTION_IDS as readonly string[]).includes(id)) return { id, source: 'fallback' as const, ai: null, fallback, charts, blocks };
     const raw = stored[id];
-    if (raw === undefined) return { id, source: 'fallback' as const, ai: null, fallback, charts };
+    if (raw === undefined) return { id, source: 'fallback' as const, ai: null, fallback, charts, blocks };
     // Re-validate. A reports row outlives the code that wrote it and `sections` is untyped
     // jsonb, so a shape mismatch is this section's fallback, never a crash.
     const check = SECTION_REGISTRY[id as AiSectionId].schema.safeParse(raw);
     return check.success
-      ? { id, source: 'ai' as const, ai: check.data, fallback, charts }
-      : { id, source: 'fallback' as const, ai: null, fallback, charts };
+      ? { id, source: 'ai' as const, ai: check.data, fallback, charts, blocks }
+      : { id, source: 'fallback' as const, ai: null, fallback, charts, blocks };
   });
 }

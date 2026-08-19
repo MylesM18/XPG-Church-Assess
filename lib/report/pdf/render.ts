@@ -54,6 +54,11 @@ export function renderReportDocument(props: ReportDocumentProps): Promise<Buffer
       ...section.fallback.bullets,
       ...collectStrings(section.ai),
       ...collectStrings(section.charts),
+      // Blocks walk for exactly the reason charts do: a new string channel that skipped this
+      // loop would make the fail-closed invariant true-except-for-one-shape. Punch-list strings
+      // are category names and methodology question text, never respondent-supplied — the point
+      // is that the guard does not have to know that.
+      ...collectStrings(section.blocks),
     ];
     for (const text of texts) {
       if (containsRespondentLabel(text, props.labels)) {

@@ -643,58 +643,20 @@ describe('s3 executive dashboard', () => {
 });
 
 /**
- * Step D — S7 carries the areas-needing-work punch list.
- *
- * Natalie's ruling: ALL eight sub-80 areas, ranked worst-first, each with its own weak
- * questions, rendered INSIDE s7 rather than as a thirteenth section.
+ * Step D, relocated — S7's punch list is a deterministic BLOCK (lib/report/blocks.ts), not a
+ * bullet, because s7 is an AI section and every AI renderer drops `fallback.bullets`. The area
+ * assertions moved with it to tests/report/blocks.test.ts; what stays here is s7's BULLETS.
  */
-describe('S7 areas needing work (step D)', () => {
+describe('S7 bullets (step D, after the punch list moved to a block)', () => {
   const facts = CAPACITY_FACTS; // every area 49-72, so all eight are below the 80 standard
   const s7 = () => fallbackSection('s7', { facts, methodology, reflections: [] });
 
-  it('emits one bullet per area below the standard, worst area first', () => {
-    const expected = facts.improvement.areas_needing_work;
-    expect(expected).toHaveLength(8); // fixture guard: the ruling is "all eight", not a worst-N cap
+  it('carries no area line at all — the punch list is a block now, and a bullet would double it', () => {
+    expect(facts.improvement.areas_needing_work).toHaveLength(8); // fixture guard
     const bullets = s7().bullets;
-    for (const [i, area] of expected.entries()) {
-      expect(bullets[i]).toContain(area.name);
-    }
-    // worst first: the fixture's own ranking is score-ascending
-    expect(expected.map((a) => a.score)).toEqual([...expected.map((a) => a.score)].sort((x, y) => x - y));
-  });
-
-  it('gives each area its score and its gap to the standard', () => {
-    const worst = facts.improvement.areas_needing_work[0]!;
-    const bullet = s7().bullets[0]!;
-    expect(bullet).toContain(`${worst.score} out of 100`);
-    expect(bullet).toContain(`${worst.gap_to_standard} points below the standard of ${facts.improvement.standard}`);
-  });
-
-  it("lists an area's own weak questions inside its own bullet, and no other area's", () => {
-    const areas = facts.improvement.areas_needing_work;
-    const withItems = areas.filter((a) => a.weak_items.length > 0);
-    expect(withItems.length).toBeGreaterThan(1); // guard: otherwise "no other area's" is vacuous
-    const bullets = s7().bullets;
-    for (const [i, area] of areas.entries()) {
-      const bullet = bullets[i]!;
-      for (const item of area.weak_items) {
-        expect(bullet).toContain(item.text);
-        expect(bullet).toContain(`${item.mean} out of 100`);
-      }
-      for (const other of areas) {
-        if (other.category_id === area.category_id) continue;
-        for (const item of other.weak_items) expect(bullet).not.toContain(item.text);
-      }
-    }
-  });
-
-  it('says so plainly when an area is below the standard with no question below it', () => {
-    const bare = facts.improvement.areas_needing_work.filter((a) => a.weak_items.length === 0);
-    expect(bare.length).toBeGreaterThan(0); // fixture guard
-    const bullets = s7().bullets;
-    for (const area of bare) {
-      const bullet = bullets.find((b) => b.startsWith(area.name))!;
-      expect(bullet).toContain('No individual question in this area is below the standard');
+    for (const area of facts.improvement.areas_needing_work) {
+      expect(bullets.join(' ')).not.toContain(area.name);
+      expect(bullets.join(' ')).not.toContain(`${area.gap_to_standard} points below the standard`);
     }
   });
 

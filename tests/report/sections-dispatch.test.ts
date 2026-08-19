@@ -53,6 +53,7 @@ const fallbackSection = (id: string, title: string): AssembledSection => ({
   ai: null,
   fallback: { title, body: `body of ${id}`, bullets: [`bullet a ${id}`, `bullet b ${id}`] },
   charts: [],
+  blocks: [],
 })
 
 describe('SectionBodyView', () => {
@@ -127,6 +128,7 @@ const aiSection = (id: string, title: string, ai: unknown): AssembledSection => 
   ai,
   fallback: { title, body: `FALLBACK BODY ${id}`, bullets: [`FALLBACK BULLET ${id}`] },
   charts: [],
+  blocks: [],
 })
 
 const VALID_AI: Record<string, unknown> = {

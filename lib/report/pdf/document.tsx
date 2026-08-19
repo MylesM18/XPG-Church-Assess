@@ -6,6 +6,7 @@ import type { SectionBody } from '../fallback-sections';
 import { bookingCta } from '../cta';
 import { registerReportFonts, FONT_DISPLAY, FONT_BODY } from './fonts';
 import { PdfChart } from './charts';
+import { PdfBlock } from './blocks';
 import { BAND_FILL, BAND_TEXT, BAND_NAME, textOnBand, areaIndexFrom, type AreaIndex, type CoverModel } from '../charts';
 
 // Re-exported so existing PDF-side imports and tests (tests/report/pdf-document.test.ts) keep
@@ -395,6 +396,9 @@ export function ReportDocument({
                 </View>
               ))}
               <SectionContent section={section} areaIndex={areaIndex} />
+              {section.blocks.map((block) => (
+                <PdfBlock key={block.kind} model={block} />
+              ))}
             </View>
           ))}
 

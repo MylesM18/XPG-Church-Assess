@@ -346,6 +346,7 @@ describe('areaIndexFrom', () => {
         source: 'fallback' as const,
         ai: null,
         fallback: { title: 'Health dashboard', body: '', bullets: [] },
+        blocks: [],
         charts: [grid],
       },
     ];

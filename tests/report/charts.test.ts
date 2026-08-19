@@ -274,6 +274,7 @@ describe('areaIndexFrom (shared seam, moved from lib/report/pdf/document.tsx)', 
         source: 'fallback',
         ai: null,
         fallback: { title: 'Health dashboard', body: '', bullets: [] },
+        blocks: [],
         charts: [grid],
       },
     ];

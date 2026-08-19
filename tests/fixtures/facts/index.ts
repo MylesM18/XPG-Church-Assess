@@ -218,7 +218,18 @@ const DEFAULT_SCORES: Record<string, number> = {
 };
 const DEFAULT_CONSTRAINT = constraintFrom(DEFAULT_SCORES);
 
-export function makeFacts(over: Partial<FactsPack> = {}): FactsPack {
+/**
+ * `allItems` is the pack's FULL per-item mean map — what `buildFacts` actually hands
+ * `buildImprovementFacts` in production. Omitted, it defaults to `bottom_items`, which is what
+ * every pre-existing fixture does and why none of them could ever surface more than a couple of
+ * weak questions per area: `bottom_items` is capped at six REPORT-WIDE. A fixture that wants
+ * production's real volume (a 50s-60s church puts nearly every one of the instrument's 50
+ * questions below the 80 standard) passes the whole map here — see FULL_ITEM_MAP_FACTS.
+ */
+export function makeFacts(
+  over: Partial<FactsPack> = {},
+  allItems?: readonly BottomItemFact[],
+): FactsPack {
   const categories = over.categories ?? categoriesFrom(DEFAULT_SCORES);
   const bottomItems = over.bottom_items ?? [
     item('S2', 'sys', 42, 'systems', 'We have a written process for onboarding a new volunteer.'),
@@ -238,7 +249,7 @@ export function makeFacts(over: Partial<FactsPack> = {}): FactsPack {
     // Derived, never hand-typed — the SAME lib/report/facts.ts helper buildFacts calls, over
     // this fixture's own categories and items. A fixture's item universe IS its bottom_items
     // (no fixture carries a full per-item map), so weak_items here are drawn from those.
-    improvement: buildImprovementFacts(categories, bottomItems),
+    improvement: buildImprovementFacts(categories, allItems ?? bottomItems),
     themes: [],
     profile: { context: 'suburban', attendance_band: '250_499', growth_trajectory: 'growing_steadily' },
     blind_spots: [],
@@ -443,6 +454,37 @@ export const CATEGORY_WATCH_FACTS: FactsPack = makeFacts({
   dependencies: dependenciesFrom(CATEGORY_WATCH_SCORES),
 });
 
+/**
+ * 11. full-item-map — the missing rung between facts.test.ts (which tests `buildImprovementFacts`
+ * over a full map directly) and every RENDERING test (which sees at most a couple of weak
+ * questions per area because their pack's item universe IS its six `bottom_items`).
+ *
+ * This is the church the recalibration exists for: DEFAULT_SCORES (49-72) answering all 50
+ * questions of the real instrument, so nearly every question lands below the 80 standard and
+ * `improvement.areas_needing_work` carries production's real volume. Item means are spread
+ * +/-14 around the area's own score so that some questions in the strongest area DO clear 80 —
+ * without that, "only sub-standard questions appear" would be vacuously true.
+ *
+ * `bottom_items` is derived from the same map exactly as buildFacts derives it (mean ascending,
+ * ties by item id, first six), never hand-typed.
+ */
+const FULL_ITEM_SPREAD = [-14, -7, 0, 7, 14];
+const FULL_ITEM_MAP: BottomItemFact[] = questions.categories.flatMap((c) =>
+  c.items.map((it, i) =>
+    item(
+      it.id,
+      c.id,
+      Math.min(95, Math.max(15, DEFAULT_SCORES[c.id]! + FULL_ITEM_SPREAD[i % FULL_ITEM_SPREAD.length]!)),
+      it.theme,
+      it.text,
+    ),
+  ),
+);
+const FULL_ITEM_BOTTOM = [...FULL_ITEM_MAP]
+  .sort((a, b) => a.mean - b.mean || (a.item_id < b.item_id ? -1 : a.item_id > b.item_id ? 1 : 0))
+  .slice(0, 6);
+export const FULL_ITEM_MAP_FACTS: FactsPack = makeFacts({ bottom_items: FULL_ITEM_BOTTOM }, FULL_ITEM_MAP);
+
 export const ALL_FIXTURES: ReadonlyArray<{ name: string; facts: FactsPack }> = [
   { name: 'capacity', facts: CAPACITY_FACTS },
   { name: 'constraint', facts: CONSTRAINT_FACTS },
@@ -454,4 +496,5 @@ export const ALL_FIXTURES: ReadonlyArray<{ name: string; facts: FactsPack }> = [
   { name: 'watch', facts: WATCH_FACTS },
   { name: 'holding', facts: HOLDING_FACTS },
   { name: 'category-watch', facts: CATEGORY_WATCH_FACTS },
+  { name: 'full-item-map', facts: FULL_ITEM_MAP_FACTS },
 ];
