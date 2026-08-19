@@ -123,7 +123,7 @@ sections:
   s10:
     title: "30/60/90 roadmap"
     templates:
-      capacity: "Ninety days, in three phases: align, build, scale."
+      capacity: "Ninety days in three phases, starting where your scores are lowest."
       constraint: "Ninety days in three phases. Align, build, scale, with every phase pointed at {primary_name}."
       foundation: "Ninety days in three phases. Align, build and scale, with the enablers going first."
     length_ceiling: 2400

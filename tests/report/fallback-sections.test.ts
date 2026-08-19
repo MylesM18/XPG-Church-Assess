@@ -370,6 +370,60 @@ describe('S10 roadmap', () => {
     expect(no.bullets.some((b) => b.startsWith('Do not work on yet:'))).toBe(false);
   });
 
+  /**
+   * Natalie, 2026-08-19, on a rendered Test Church report: the capacity-archetype roadmap read
+   * as "a generic templated response" — three generosity lines whatever the church's own data
+   * said. It now walks the church's OWN priority areas (improvement.priority_areas, worst
+   * first): 30 days aligns the weakest area, 60 builds the second, 90 scales the third, each
+   * line naming the area and its score and carrying that area's phase-matched action from
+   * Natalie's own action_library.
+   */
+  it('walks the priority areas worst-first on the capacity path, each with its own action', () => {
+    const priorities = CAPACITY_FACTS.improvement.priority_areas;
+    expect(priorities.map((a) => a.category_id)).toEqual(['sys', 'comm', 'gov']); // fixture guard
+    const lib = methodology.report.action_library.categories;
+    const bullets = fallbackSection('s10', { facts: CAPACITY_FACTS, methodology, reflections: [] }).bullets;
+    expect(bullets).toEqual([
+      `30 days — ${priorities[0]!.name}, ${priorities[0]!.score} out of 100: ${lib.sys!.align}`,
+      `60 days — ${priorities[1]!.name}, ${priorities[1]!.score} out of 100: ${lib.comm!.build}`,
+      `90 days — ${priorities[2]!.name}, ${priorities[2]!.score} out of 100: ${lib.gov!.scale}`,
+    ]);
+  });
+
+  it('gives a single priority area the whole quarter: align, then build, then scale', () => {
+    const scores: Record<string, number> = {
+      guest: 85, conn: 86, disc: 87, vol: 88, gen: 89, gov: 90, comm: 91, sys: 49,
+    };
+    const facts = makeFacts({
+      categories: CAPACITY_FACTS.categories
+        .map((c) => ({ ...c, score: scores[c.id]! }))
+        .sort((a, b) => b.score - a.score || (a.id < b.id ? -1 : 1)),
+    });
+    expect(facts.improvement.priority_areas.map((a) => a.category_id)).toEqual(['sys']); // guard
+    const lib = methodology.report.action_library.categories.sys!;
+    const bullets = fallbackSection('s10', { facts, methodology, reflections: [] }).bullets;
+    const name = facts.improvement.priority_areas[0]!.name;
+    expect(bullets).toEqual([
+      `30 days — ${name}, 49 out of 100: ${lib.align}`,
+      `60 days — ${name}, 49 out of 100: ${lib.build}`,
+      `90 days — ${name}, 49 out of 100: ${lib.scale}`,
+    ]);
+  });
+
+  it('keeps the generosity roadmap only when nothing is below the standard', () => {
+    const facts = makeFacts({
+      categories: CAPACITY_FACTS.categories.map((c) => ({ ...c, score: 85 })),
+    });
+    expect(facts.improvement.priority_areas).toEqual([]); // fixture guard
+    const set = methodology.report.action_library.generosity.both;
+    const bullets = fallbackSection('s10', { facts, methodology, reflections: [] }).bullets;
+    expect(bullets).toEqual([
+      `30 days — ${set.align}`,
+      `60 days — ${set.build}`,
+      `90 days — ${set.scale}`,
+    ]);
+  });
+
   it('never throws and never drops the bullet when generosity_mode is null (ruling 6)', () => {
     // capacityFacts has generosity_mode: null.
     const s10 = fallbackSection('s10', { facts: capacityFacts, methodology, reflections: [] });
@@ -548,10 +602,14 @@ describe('S10 action_library path (Natalie/controller ruling 7)', () => {
     expect(s10.bullets.some((b) => b.includes(categoriesSysAlign))).toBe(false);
   });
 
-  it('capacity archetype reads action_library.generosity[mode], falling back to both when null', () => {
+  it('capacity archetype with priority areas never reads generosity (2026-08-19 rework)', () => {
+    // Ruling 6's generosity fallback survives, but only for a church with NOTHING below the
+    // standard — see 'keeps the generosity roadmap only when nothing is below the standard'
+    // above. A capacity church with real priority areas gets ITS areas' actions instead.
+    expect(capacityFacts.improvement.priority_areas.length).toBeGreaterThan(0); // guard
     const s10 = fallbackSection('s10', { facts: capacityFacts, methodology, reflections: [] });
     const bothAlign = methodology.report.action_library.generosity.both.align;
-    expect(s10.bullets.some((b) => b.includes(bothAlign))).toBe(true);
+    expect(s10.bullets.some((b) => b.includes(bothAlign))).toBe(false);
   });
 });
 

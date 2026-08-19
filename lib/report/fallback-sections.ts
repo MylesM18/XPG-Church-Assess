@@ -307,10 +307,30 @@ export function roadmapEntries(
         if (text) entries.push({ phase, dayLabel: DAY_LABELS[phase], text });
       }
     }
+  } else if (facts.improvement.priority_areas.length > 0) {
+    // Capacity path with real work to do (Natalie, 2026-08-19): the old generosity-only roadmap
+    // read as generic template copy, because it WAS — the same three lines whatever the church's
+    // own data said. The quarter now walks the church's own priority areas
+    // (improvement.priority_areas, worst first): 30 days aligns the weakest, 60 builds the
+    // second, 90 scales the third, each carrying that area's phase-matched action from
+    // action_library.categories. Fewer than three priorities and the LAST one keeps the later
+    // phases (one area ⇒ it gets the whole align/build/scale arc, the constraint treatment).
+    const priorities = facts.improvement.priority_areas;
+    PHASES.forEach((phase, i) => {
+      const area = priorities[Math.min(i, priorities.length - 1)]!;
+      const text = lib.categories[area.category_id]?.[phase];
+      if (text) {
+        entries.push({
+          phase,
+          dayLabel: DAY_LABELS[phase],
+          text: `${area.name}, ${area.score} out of 100: ${text}`,
+        });
+      }
+    });
   } else {
-    // Capacity path (and, structurally, any archetype that reaches here with no primary and no
-    // gating): the generosity entry, keyed by facts.generosity_mode, falling back to 'both'
-    // when null (Natalie's ruling 6) — never drop the bullet.
+    // Nothing below the standard (and no primary, no gating): the generosity entry, keyed by
+    // facts.generosity_mode, falling back to 'both' when null (Natalie's ruling 6) — never drop
+    // the bullet.
     const mode = facts.generosity_mode ?? 'both';
     const set = lib.generosity[mode];
     for (const phase of PHASES) {
