@@ -263,11 +263,19 @@ export type VerdictBlockModel = {
  */
 export function verdictBlockModel(facts: FactsPack): VerdictBlockModel {
   const { improvement } = facts;
+  // ⚠️ NO TILE MAY BORROW A BAND NAME (Natalie, 2026-08-19). These four count against
+  // IMPROVEMENT_STANDARD (80); the stat grid immediately beneath them bands by
+  // methodology/rules.yaml's own thresholds, where `strong` is 70. Both bars stay — 70 drives
+  // CategoryState and every colour in the engine, and re-banding on 80 would repaint a 72 area
+  // everywhere — so the tiles stop using the grid's words instead. "Strongest areas — 3" sat
+  // above a grid labelling a 72 area "· STRENGTH", and "Priority areas — 3" above a grid where
+  // NO area carries the Priority band, which reads as a dashboard contradicting itself rather
+  // than as two different bars. tests/report/charts.test.ts pins the separation.
   const entries: Array<[string, number]> = [
     ['Areas assessed', facts.categories.length],
-    ['Strongest areas', improvement.strongest_areas.length],
-    ['Areas needing work', improvement.areas_needing_work.length],
-    ['Priority areas', improvement.priority_areas.length],
+    ['Highest scoring', improvement.strongest_areas.length],
+    ['Below the 80 standard', improvement.areas_needing_work.length],
+    ['Focus first', improvement.priority_areas.length],
   ];
   const cellW = CHART_W / 2;
   const stats = entries.map(([label, value], i): VerdictStat => ({

@@ -78,6 +78,22 @@ describe('public methodology page — section 04 uses the report\'s own words (s
     },
   )
 
+  /**
+   * Minor 6, unblocked by Natalie's 2026-08-19 ruling on the tiles. Section 7 prints "... points
+   * below the standard of 80" and four dashboard tiles count against that standard, but no
+   * public page said what it was — and the grid under those tiles bands on a DIFFERENT, lower
+   * bar, so a reader could meet a 72 area labelled "Strength" and counted "below the standard"
+   * on the same screen with nothing to explain it.
+   */
+  it.each(['80', 'standard'])('documents the improvement standard: "%s"', (phrase) => {
+    expect(S04.toLowerCase()).toContain(phrase);
+  })
+
+  it('explains why an area can read as a strength and still sit below the standard', () => {
+    expect(S04.toLowerCase()).toContain('colour')
+    expect(S04.toLowerCase()).toContain('below the standard')
+  })
+
   it.each(['weakest stage', 'wide gap', 'narrow gap'])(
     'keeps the substance — "%s" — while the names change',
     (substance) => {

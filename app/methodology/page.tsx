@@ -183,6 +183,20 @@ export default function MethodologyPage() {
               into end-to-end flow: hidden drag. A narrow gap means what you&rsquo;ve built is
               actually carrying people through.
             </p>
+            <p>
+              Each of your eight areas is then read against a single bar we call the{' '}
+              <strong className="text-ink">standard: 80 out of 100</strong>. Anything below it is
+              real room to improve, and the dashboard counts against that bar &mdash; how many
+              areas sit below the standard, and which three to work on first.
+            </p>
+            <p>
+              The{' '}
+              <strong className="text-ink">colour</strong>{' '}on each area is a separate reading, and
+              a deliberately gentler one: it describes how an area is holding up in its own right,
+              not how far it is from the standard. So an area can be coloured as a strength and
+              still be below the standard &mdash; that is not a contradiction. It is doing well
+              compared with where churches usually are, and it still has room to grow.
+            </p>
           </Section>
 
           <Section n="05" title="The chain and its dependencies">

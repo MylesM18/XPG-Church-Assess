@@ -153,11 +153,31 @@ describe('verdictBlockModel', () => {
       expect(model.hero.band).toBe(verdictBandFor(facts.overall.tier.id));
       expect(model.stats.map((s) => s.label)).toEqual([
         'Areas assessed',
-        'Strongest areas',
-        'Areas needing work',
-        'Priority areas',
+        'Highest scoring',
+        'Below the 80 standard',
+        'Focus first',
       ]);
     }
+  });
+
+  /**
+   * Natalie's ruling, 2026-08-19: keep `rules.yaml`'s `strong: 70` — it drives CategoryState and
+   * every band colour in the engine — and stop the TILES borrowing band names.
+   *
+   * The tiles count against IMPROVEMENT_STANDARD (80); the grid directly beneath them bands at
+   * 70. "Strongest areas — 3" and "Priority areas — 3" therefore sat above a grid where a 72
+   * area is labelled "· STRENGTH" and NO area carries the "Priority" band at all, which reads as
+   * the dashboard contradicting itself rather than as two different bars.
+   */
+  it('never borrows a band name for a tile label', () => {
+    const bandNames = Object.values(BAND_NAME).map((n) => n.toLowerCase());
+    const offenders: string[] = [];
+    for (const { name, facts } of ALL_FIXTURES) {
+      for (const stat of verdictBlockModel(facts).stats) {
+        if (bandNames.some((b) => stat.label.toLowerCase().includes(b))) offenders.push(`${name}:${stat.label}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('computes every stat value from the improvement facts', () => {
