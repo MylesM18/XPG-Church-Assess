@@ -78,7 +78,7 @@ describe('knownLabels', () => {
   });
 });
 
-describe('s8 fallback path enforces a k threshold', () => {
+describe('s8 verbatim gating (k on themes and the share page; audience on the verbatims)', () => {
   const methodology = loadMethodology();
   // CONCERN (deviates from the brief's literal Step 1 code — see task-10-report.md): the brief
   // used item_id 'G1', but 'G1' (category guest) carries no `reflection:` field in production
@@ -96,15 +96,25 @@ describe('s8 fallback path enforces a k threshold', () => {
   const s8 = (facts: ReturnType<typeof makeFacts>, reflections = REFLECTIONS) =>
     fallbackSection('s8', { facts, methodology, reflections, audience: 'pdf' }).bullets;
 
-  it('suppresses verbatim reflections below the threshold', () => {
+  /**
+   * REVERSED 2026-08-19 (Natalie, on a live 2-respondent report): the PRIVATE report shows the
+   * responses whatever the respondent count — "just not show the names". The k-threshold's home
+   * is the theme clusterer and the share page, where a link anyone can forward makes a low-n
+   * verbatim attributable; the private report is the leadership team reading its own words.
+   */
+  it('shows verbatim reflections on the private report even below the old threshold', () => {
     const tooFew = makeFacts({ cover: { church_name: 'T', completed_at: null, respondent_count: MIN_SUPPORT - 1 } });
     const bullets = s8(tooFew);
-    for (const r of REFLECTIONS) expect(bullets.join(' ')).not.toContain(r.reflection);
+    for (const r of REFLECTIONS) expect(bullets.join(' ')).toContain(r.reflection);
   });
 
-  it('emits the neutral copy line instead of nothing at all', () => {
-    const tooFew = makeFacts({ cover: { church_name: 'T', completed_at: null, respondent_count: 1 } });
-    expect(s8(tooFew)).toEqual([methodology.copy.s8_below_threshold]);
+  it('still withholds every verbatim from the share page, at any respondent count', () => {
+    for (const count of [1, MIN_SUPPORT, 9]) {
+      const facts = makeFacts({ cover: { church_name: 'T', completed_at: null, respondent_count: count } });
+      const bullets = fallbackSection('s8', { facts, methodology, reflections: REFLECTIONS, audience: 'shared' }).bullets;
+      for (const r of REFLECTIONS) expect(bullets.join(' '), String(count)).not.toContain(r.reflection);
+      expect(bullets, String(count)).toEqual([methodology.copy.s8_below_threshold]);
+    }
   });
 
   it('still prints reflections at or above the threshold', () => {
@@ -119,8 +129,10 @@ describe('s8 fallback path enforces a k threshold', () => {
     expect(bullets).not.toEqual([methodology.copy.s8_below_threshold]);
   });
 
-  it('emits the neutral line, not an empty section, when there are no reflections at all', () => {
+  it('says nothing was written, not an empty section, when there are no reflections at all', () => {
+    // "Not shown to protect respondent anonymity" would be untrue here — nothing exists to
+    // protect. The private report states what actually happened.
     const enough = makeFacts({ cover: { church_name: 'T', completed_at: null, respondent_count: 9 } });
-    expect(s8(enough, [])).toEqual([methodology.copy.s8_below_threshold]);
+    expect(s8(enough, [])).toEqual([methodology.copy.s8_no_reflections]);
   });
 });

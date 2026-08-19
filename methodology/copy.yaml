@@ -93,3 +93,4 @@ beats:
 # for a quote to be unattributable — including on the public share page, which renders the
 # fallback path permanently.
 s8_below_threshold: "Individual reflections are not shown in this report to protect respondent anonymity."
+s8_no_reflections: "No written reflections were submitted with this assessment."

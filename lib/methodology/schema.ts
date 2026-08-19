@@ -210,6 +210,7 @@ export const CopySchema = z.object({
   xpg_read: XpgReadSchema,
   beats: BeatsSchema,
   s8_below_threshold: z.string().min(1),
+  s8_no_reflections: z.string().min(1),
 });
 
 // Named keys, not z.record — the same rationale as DossierReadingBandSchema above. The three

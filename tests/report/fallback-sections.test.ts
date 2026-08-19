@@ -342,15 +342,42 @@ describe('S8 audience gate (step E)', () => {
     expect(s8.bullets).not.toEqual([withheld]);
   });
 
-  it('keeps the MIN_SUPPORT threshold on the private report', () => {
-    // Orthogonal to audience: Natalie asked to drop names, not the k-threshold. Two respondents
-    // is below MIN_SUPPORT (3), so even the screen report withholds.
+  /**
+   * REVERSED (Natalie, 2026-08-19, on a live 2-respondent report): "this section still does not
+   * show the responses from the questions and it should. Just not show the names." The private
+   * report shows what leaders wrote, whatever the respondent count; names were never printed
+   * (the reflections array is keyless and the PDF's fail-closed label guard still stands). The
+   * SHARE page keeps withholding — that gate is audience, not count, and is pinned above.
+   */
+  it('shows the responses on the private report even below MIN_SUPPORT', () => {
     const facts = {
       ...themeless,
       cover: { ...CAPACITY_FACTS.cover, respondent_count: 2 },
     };
+    for (const audience of ['screen', 'pdf'] as const) {
+      const s8 = fallbackSection('s8', { facts, methodology, reflections, audience });
+      expect(s8.bullets.some((b) => b.includes('greeters are great')), audience).toBe(true);
+      expect(s8.bullets, audience).not.toEqual([withheld]);
+    }
+  });
+
+  it('shows the themes AND the responses together on the private report', () => {
+    // Themes are the summary layer, the responses are the substance — the private reader gets
+    // both, themes first. The share page keeps its themes-only behaviour (pinned above).
+    const facts = {
+      ...CAPACITY_FACTS,
+      themes: [{ label: 'Follow-up', gloss: 'People are lost after week two.', support_count: 4, item_ids: ['conn_2'], verbatims: [] }],
+    };
     const s8 = fallbackSection('s8', { facts, methodology, reflections, audience: 'screen' });
-    expect(s8.bullets).toEqual([withheld]);
+    expect(s8.bullets[0]).toContain('Follow-up');
+    expect(s8.bullets.some((b) => b.includes('greeters are great'))).toBe(true);
+  });
+
+  it('says plainly when nothing was written, instead of claiming anonymity withheld it', () => {
+    // With no reflections at all, "not shown to protect respondent anonymity" is untrue — there
+    // is nothing being protected. The private report says what actually happened.
+    const s8 = fallbackSection('s8', { facts: themeless, methodology, reflections: [], audience: 'screen' });
+    expect(s8.bullets).toEqual([methodology.copy.s8_no_reflections]);
   });
 });
 
