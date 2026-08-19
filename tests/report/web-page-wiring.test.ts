@@ -160,7 +160,7 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
     })
 
     it('auto-fires only when `auto`, inside a transition, latched on a sessionStorage key namespaced by (church, inputsHash) — and never refreshes the router itself', () => {
-      expect(component).toContain("import { useEffect, useTransition } from 'react'")
+      expect(component).toContain("import { useEffect, useState, useTransition } from 'react'")
       expect(component).not.toContain("from 'next/navigation'")
       expect(count(component, /router\.refresh\(\)/g)).toBe(0)
       // The effect bails FIRST on !auto (an open / reopened run must not auto-spend), then reads
@@ -199,16 +199,79 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
       expect(component).toMatch(/if \(auto\) fd\.set\('auto', '1'\)/)
     })
 
-    it('owns the button: type="button", aria-disabled while pending with an `if (pending) return` guard, text from `label`, no <form>', () => {
+    it('owns the button: type="button", aria-disabled while pending with an `if (pending) return` guard, label swaps while writing, no <form>', () => {
       // a11y pending-controls contract (tests/a11y/pending-controls.test.ts): aria-disabled, never
-      // native disabled; the guard is what stops a second activation.
+      // native disabled; the guard is what stops a second activation. The label swap follows the
+      // house precedent (regenerate-diagnosis-button.tsx's `{pending ? 'Regenerating…' : …}`).
       expect(count(component, /<button/g)).toBe(1)
       expect(component).toContain('type="button"')
       expect(component).toContain('aria-disabled={pending}')
       expect(component).toMatch(/if \(pending\) return/)
-      expect(component).toMatch(/>\s*\{label\}\s*<\/button>/)
+      expect(component).toMatch(/\{pending \? 'Writing…' : label\}/)
       expect(component).not.toContain('<form')
       expect(component).not.toMatch(/(?<!aria-)disabled=\{/)
+    })
+
+    // feat/report-wait-experience: generation runs ~45-60 s (worst ~3.5 min), long enough that a
+    // disabled button on its own reads as a hung page. The button grows a spinner and a rotating
+    // line of reassurance appears beneath it, revealed word by word.
+    //
+    // The whole visual layer is DECORATIVE and must be aria-hidden. A screen reader already hears
+    // the one stable "Writing your report with the model…" from <LiveStatus>; piping a rotating,
+    // per-word-changing string into a live region would re-announce on every tick — chattier than
+    // silence and worse than the problem it solves. That separation is the point of these pins.
+    it('shows a spinner while pending, marked decorative, that stops under reduced motion via the global CSS rule', () => {
+      // app/globals.css kills `animation-*` under prefers-reduced-motion for every element, so a
+      // CSS-animated spinner needs no JS branch of its own.
+      expect(count(component, /animate-spin/g)).toBe(1)
+      expect(component).toMatch(/const SPINNER =[\s\S]{0,200}animate-spin/)
+      // Inside the button — "next to it" — not floating elsewhere in the notice, mounted only
+      // while pending, and decorative.
+      const button = component.slice(component.indexOf('<button'), component.indexOf('</button>'))
+      expect(button).toContain('className={SPINNER}')
+      expect(button).toContain('aria-hidden="true"')
+      expect(button).toMatch(/\{pending && <span/)
+    })
+
+    it('reveals the wait phrases word by word through the pure state machine, never re-implementing the arithmetic inline', () => {
+      expect(component).toMatch(/from '@\/lib\/report\/wait-phrases'/)
+      for (const fn of ['initialWaitState', 'stepWaitState', 'waitDelayMs', 'revealWords']) {
+        expect(component, `${fn} must come from the tested module`).toContain(fn)
+      }
+      // The tick is a self-rescheduling timeout that is always cleaned up — a leaked timer would
+      // keep ticking after the report arrives and the notice unmounts.
+      expect(count(component, /setTimeout\(/g)).toBe(1)
+      expect(count(component, /clearTimeout\(/g)).toBe(1)
+      // Reduced motion is a JS decision here (the CSS rule cannot stop a setTimeout chain).
+      expect(component).toContain("matchMedia('(prefers-reduced-motion: reduce)')")
+      // The reveal restarts with each run rather than resuming mid-sentence from the last one.
+      expect(component).toContain('initialWaitState(phrases, reduced)')
+    })
+
+    it('keeps the rotating line OUT of the live region: it is aria-hidden, and LiveStatus keeps its one stable message', () => {
+      // The single most important a11y property of this feature.
+      expect(component).toContain("message={pending ? 'Writing your report with the model…' : null}")
+      expect(count(component, /Writing your report with the model…/g)).toBe(1)
+      // The element that actually carries the rotating text must be decorative...
+      const revealIdx = component.indexOf('revealWords(')
+      const pOpenTag = component.slice(component.lastIndexOf('<p', revealIdx), component.indexOf('>', component.lastIndexOf('<p', revealIdx)))
+      expect(pOpenTag).toContain('aria-hidden="true"')
+      // ...and the live region must never be handed it.
+      const liveStatusIdx = component.indexOf('<LiveStatus')
+      const liveStatusJsx = component.slice(liveStatusIdx, component.indexOf('/>', liveStatusIdx))
+      expect(liveStatusJsx).not.toContain('revealWords')
+      expect(liveStatusJsx).not.toContain('phrases')
+      // No second live region, and the phrase never becomes LiveStatus's message.
+      expect(count(component, /<LiveStatus\b/g)).toBe(1)
+      expect(component).not.toMatch(/message=\{[^}]*revealWords/)
+      expect(component).not.toContain('role="status"')
+      expect(component).not.toContain('aria-live')
+    })
+
+    it('takes the phrases as a prop — the client never reads the table itself', () => {
+      expect(component).toMatch(/phrases: readonly string\[\]/)
+      expect(component).not.toContain('report_wait_phrases')
+      expect(component).not.toContain('supabase')
     })
 
     it('announces the pending state through LiveStatus (always mounted, tone="status" ⇒ aria-live polite), with the agreed copy', () => {
@@ -233,18 +296,32 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
       expect(page).toContain('inputsHash = resolved.inputsHash')
     })
 
-    it('page.tsx imports it once and renders it exactly twice — each with inputsHash={inputsHash!}, action={regenerateReport}, auto={!runIsOpen}, and a distinct label', () => {
+    it('page.tsx imports it once and renders it exactly twice — each with inputsHash={inputsHash!}, action={regenerateReport}, auto={!runIsOpen}, phrases, and a distinct label', () => {
+      // JSX prop lists wrap across lines; collapse whitespace so a reformat cannot false-fail.
+      const flat = page.replace(/\s+/g, ' ')
       expect(count(page, /import \{ AutoGenerateReport \} from '\.\/auto-generate-report'/g)).toBe(1)
       expect(count(page, /import \{ regenerateReport \} from '\.\.\/actions'/g)).toBe(1)
       expect(count(page, /<AutoGenerateReport\b/g)).toBe(2)
-      // Occurrence-count equality: both mounts carry the hash, the action, and the run-status
-      // gate; the labels differ; the trigger prop is gone everywhere.
-      expect(count(page, /<AutoGenerateReport churchId=\{churchId\} inputsHash=\{inputsHash!\} action=\{regenerateReport\} label="Regenerate report" auto=\{!runIsOpen\} \/>/g)).toBe(1)
-      expect(count(page, /<AutoGenerateReport churchId=\{churchId\} inputsHash=\{inputsHash!\} action=\{regenerateReport\} label="Generate report" auto=\{!runIsOpen\} \/>/g)).toBe(1)
+      // Occurrence-count equality: both mounts carry the hash, the action, the run-status gate and
+      // the phrases; the labels differ; the trigger prop is gone everywhere.
+      expect(count(flat, /<AutoGenerateReport churchId=\{churchId\} inputsHash=\{inputsHash!\} action=\{regenerateReport\} label="Regenerate report" auto=\{!runIsOpen\} phrases=\{waitPhrases\} \/>/g)).toBe(1)
+      expect(count(flat, /<AutoGenerateReport churchId=\{churchId\} inputsHash=\{inputsHash!\} action=\{regenerateReport\} label="Generate report" auto=\{!runIsOpen\} phrases=\{waitPhrases\} \/>/g)).toBe(1)
       expect(count(page, /auto=\{!runIsOpen\}/g)).toBe(2)
+      expect(count(page, /phrases=\{waitPhrases\}/g)).toBe(2)
       expect(count(page, /trigger=/g)).toBe(0)
       // `runIsOpen` is the page's existing run-status derivation (ADR 0003), computed once.
       expect(count(page, /const runIsOpen = run!\.status === 'in_progress'/g)).toBe(1)
+    })
+
+    it('page.tsx loads the phrases through the data seam, and ONLY when a notice will actually render', () => {
+      // ADR 0002: the table string lives in lib/data/* (pinned exhaustively in
+      // tests/report/wait-phrases-seed.test.ts). The read is one small select, but it is pure
+      // waste on the common path where the report is already fine and no notice renders — so it
+      // is gated on the same condition the notices are.
+      expect(page).toContain("import { loadWaitPhrases } from '@/lib/data/wait-phrases'")
+      expect(page).not.toContain('report_wait_phrases')
+      expect(count(page, /loadWaitPhrases\(/g)).toBe(1)
+      expect(page).toMatch(/const waitPhrases = aiOn && \(stale \|\| needsGeneration\)\s*\? await loadWaitPhrases\(supabase\)\s*: \[\]/)
     })
 
     it('the stale notice renders AutoGenerateReport when prose is on and the plain form otherwise; the generate notice renders only AutoGenerateReport', () => {
@@ -253,11 +330,15 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
       // Ternary on aiOn: the client-owned button (which can go aria-disabled while its own
       // auto-run is in flight) when the model can run; the pre-existing plain form when it cannot
       // (regenerate would silently no-op — deliberately unchanged, see finding 15).
-      expect(staleBlock).toMatch(/\{aiOn \? \(\s*<AutoGenerateReport churchId=\{churchId\} inputsHash=\{inputsHash!\} action=\{regenerateReport\} label="Regenerate report" auto=\{!runIsOpen\} \/>\s*\) : \(\s*<form action=\{regenerateReport\}>/)
+      expect(staleBlock.replace(/\s+/g, ' ')).toContain(
+        '{aiOn ? ( <AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} label="Regenerate report" auto={!runIsOpen} phrases={waitPhrases} /> ) : ( <form action={regenerateReport}>',
+      )
       expect(count(staleBlock, /<form action=\{regenerateReport\}>/g)).toBe(1)
 
       const genBlock = page.match(/\{!stale\s*&&\s*needsGeneration\s*&&\s*aiOn\s*&&\s*\(\s*<ReportNotice>([\s\S]*?)<\/ReportNotice>/)![1]!
-      expect(genBlock).toContain('<AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} label="Generate report" auto={!runIsOpen} />')
+      expect(genBlock.replace(/\s+/g, ' ')).toContain(
+        '<AutoGenerateReport churchId={churchId} inputsHash={inputsHash!} action={regenerateReport} label="Generate report" auto={!runIsOpen} phrases={waitPhrases} />',
+      )
       expect(genBlock).not.toContain('<form')
     })
   })
