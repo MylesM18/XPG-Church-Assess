@@ -56,13 +56,16 @@ describe('the report generation block', () => {
     expect(saveIdx).toBeLessThan(composeIdx);
   });
 
-  it('is gated by PROSE_MODE, the same gate as the prose block', () => {
-    // R2: count EQUALITY on the gate expression itself, not a loose >= presence check on the
-    // bare string 'PROSE_MODE' — the unmodified file already contains that string twice (an
-    // M5b comment plus the M5b `if`), so a >=2 threshold would already be satisfied before this
-    // task writes a line. Counting the full gate `if` line is non-vacuous in both directions.
-    const gates = src.match(/if \(\(process\.env\.PROSE_MODE \?\? 'fallback'\) !== 'fallback'\) \{/g);
+  it('is gated by proseEnabled(), the same gate as the prose block', () => {
+    // R2: count EQUALITY on the gate `if` line itself, not a loose >= presence check on the bare
+    // identifier — the import line and comments carry `proseEnabled` too. Counting the full gate
+    // line is non-vacuous in both directions: deleting either gate fails, and a third ungated
+    // block fails too. Since fix/prose-auto-generate-on-view the gate is `proseEnabled()`
+    // (lib/ai/prose-mode.ts: key-present ⇒ on, PROSE_MODE optional override), never an inline
+    // `process.env.PROSE_MODE` read.
+    const gates = src.match(/if \(proseEnabled\(\)\) \{/g);
     expect(gates?.length).toBe(2); // the M5b prose block, and this task's report block
+    expect(src.match(/process\.env\.PROSE_MODE/g) ?? []).toHaveLength(0);
   });
 
   it('is wrapped in its own try/catch, separate from the prose block', () => {

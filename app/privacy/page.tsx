@@ -13,7 +13,8 @@ export const metadata: Metadata = {
 // identity (profiles trigger writes id+email; full_name never written), admin/viewer roles
 // (schema.sql), respondent anonymity (lib/report/view.ts strips + lib/report/pdf/render.ts:28
 // fail-closed guard), Supabase session cookies only (no analytics — audited zero hits), Resend
-// invitation/reminder emails, Vercel cron, optional OpenAI prose (PROSE_MODE, default off),
+// invitation/reminder emails, Vercel cron, optional OpenAI prose (on iff OPENAI_API_KEY is set;
+// PROSE_MODE=fallback opts out — lib/ai/prose-mode.ts),
 // no payments. If a feature changes any of these, this document must change in the same PR.
 function Section({ n, title, children }: { n: string; title: string; children: ReactNode }) {
   return (

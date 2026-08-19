@@ -54,20 +54,21 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
   // `reports` row (H7-A) or a 100 %-fallback row at the live hash (H7-B) — is NOT stale, so the
   // only regenerate affordance never rendered and the model could never be invoked, whatever the
   // env was later set to. The page now offers the SAME `regenerateReport` form under a second,
-  // distinct notice when the resolver reports `needsGeneration` and prose is enabled (mirroring
-  // the action's own PROSE_MODE gate form exactly, so the button never renders when the action
-  // would silently return).
+  // distinct notice when the resolver reports `needsGeneration` and prose is enabled. Since
+  // fix/prose-auto-generate-on-view the gate is the shared `proseEnabled()` helper
+  // (lib/ai/prose-mode.ts) — the very function the action reads — so the button never renders
+  // when the action would silently return, and no page-side inline env read can drift from it.
   describe('generate affordance when no AI section is usable (H7-A / H7-B)', () => {
     it('reads needsGeneration off the resolver into a `let`, like `stale`', () => {
       expect(page).toContain('let needsGeneration = false')
       expect(page).toContain('needsGeneration = resolved.needsGeneration')
     })
 
-    it("mirrors regenerateReport's PROSE_MODE gate form exactly, once", () => {
-      // The action returns early when `(process.env.PROSE_MODE ?? 'fallback') === 'fallback'`;
-      // the page must key the button on the same expression so the two can never disagree.
-      expect(count(page, /\(process\.env\.PROSE_MODE \?\? 'fallback'\) !== 'fallback'/g)).toBe(1)
-      expect(page).toContain("const proseEnabled = (process.env.PROSE_MODE ?? 'fallback') !== 'fallback'")
+    it("keys the button on the action's own gate: proseEnabled() from lib/ai/prose-mode, called once, no inline PROSE_MODE read", () => {
+      expect(page).toContain("import { proseEnabled } from '@/lib/ai/prose-mode'")
+      expect(count(page, /proseEnabled\(\)/g)).toBe(1)
+      expect(page).toContain('const aiOn = proseEnabled()')
+      expect(count(page, /process\.env\.PROSE_MODE/g)).toBe(0)
     })
 
     it('renders the regenerateReport form exactly twice — the stale block AND the generate block, each with the hidden churchId', () => {
@@ -77,8 +78,8 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
       expect(count(page, /<input type="hidden" name="churchId" value=\{churchId\} \/>/g)).toBe(2)
     })
 
-    it('gates the generate block on !stale && needsGeneration && proseEnabled, wrapped in ReportNotice, with its own copy', () => {
-      const m = page.match(/\{!stale\s*&&\s*needsGeneration\s*&&\s*proseEnabled\s*&&\s*\(\s*<ReportNotice>([\s\S]*?)<\/ReportNotice>/)
+    it('gates the generate block on !stale && needsGeneration && aiOn, wrapped in ReportNotice, with its own copy', () => {
+      const m = page.match(/\{!stale\s*&&\s*needsGeneration\s*&&\s*aiOn\s*&&\s*\(\s*<ReportNotice>([\s\S]*?)<\/ReportNotice>/)
       expect(m).not.toBeNull()
       const block = m![1]!
       expect(block).toContain('<form action={regenerateReport}>')
@@ -100,10 +101,86 @@ describe('diagnosis page: toolbar, notices, cover, sections (Part B wiring)', ()
 
     it('places the generate block after the stale block and before the cover', () => {
       const stale = page.indexOf('{stale &&')
-      const gen = page.indexOf('{!stale && needsGeneration && proseEnabled &&')
+      const gen = page.indexOf('{!stale && needsGeneration && aiOn &&')
       const cover = page.indexOf('<ReportCover')
       expect(gen).toBeGreaterThan(stale)
       expect(gen).toBeLessThan(cover)
+    })
+  })
+
+  // fix/prose-auto-generate-on-view (2026-08-19): the owner wants the model to run WHEN AN ADMIN
+  // VIEWS the diagnosis, not only when they find and click the Generate / Regenerate button. The
+  // page therefore mounts a small client component in BOTH notice blocks that fires the same
+  // `regenerateReport` server action once per browser session per (church, trigger) and then
+  // router.refresh()es. The forms stay exactly as they were: they are the retry path.
+  describe('auto-generate on admin view (AutoGenerateReport)', () => {
+    const component = read('app', 'app', '[churchId]', 'diagnosis', 'auto-generate-report.tsx')
+    const rawComponent = fs.readFileSync(
+      path.join(ROOT, 'app', 'app', '[churchId]', 'diagnosis', 'auto-generate-report.tsx'),
+      'utf8',
+    )
+
+    it('is a client component that receives the server action as a prop and never imports ../actions itself', () => {
+      // The action is passed DOWN from the Server Component so page.tsx keeps its single import of
+      // regenerateReport (pinned below); the client file must not grow its own import path to it.
+      expect(rawComponent.trimStart().startsWith("'use client'")).toBe(true)
+      expect(component).not.toContain("from '../actions'")
+      expect(component).not.toContain("from './actions'")
+      expect(component).toMatch(/action: \(formData: FormData\) => Promise<void>/)
+      expect(component).toMatch(/trigger: 'generate' \| 'stale'/)
+    })
+
+    it('fires inside a transition, refreshes the router afterwards, and latches on a namespaced sessionStorage key', () => {
+      expect(component).toContain("import { useEffect, useTransition } from 'react'")
+      expect(component).toContain("import { useRouter } from 'next/navigation'")
+      expect(count(component, /startTransition\(/g)).toBe(1)
+      expect(count(component, /router\.refresh\(\)/g)).toBe(1)
+      // The latch is SET before the action is awaited (survives strict-mode double effects and
+      // any later refresh), and read first so a second mount with the key present does nothing.
+      expect(component).toContain('`xpg:autogen:${churchId}:${trigger}`')
+      expect(count(component, /sessionStorage\.getItem\(/g)).toBe(1)
+      expect(count(component, /sessionStorage\.setItem\(/g)).toBe(1)
+      expect(component.indexOf('sessionStorage.getItem(')).toBeLessThan(component.indexOf('sessionStorage.setItem('))
+      expect(component.indexOf('sessionStorage.setItem(')).toBeLessThan(component.indexOf('startTransition('))
+      expect(component.indexOf('await action(fd)')).toBeLessThan(component.indexOf('router.refresh()'))
+      // The FormData carries churchId under the exact name the action reads.
+      expect(component).toContain("fd.set('churchId', churchId)")
+    })
+
+    it('announces the pending state through LiveStatus (always mounted, tone="status" ⇒ aria-live polite), with the agreed copy', () => {
+      // tests/a11y/live-regions-applied.test.ts forbids a conditionally mounted role="status" /
+      // aria-live element and requires every status message to route through <LiveStatus>, whose
+      // role="status" implies aria-live="polite". So the copy is bound to LiveStatus's message
+      // prop, and the region itself is never behind `pending &&`.
+      expect(component).toContain("import { LiveStatus } from '@/components/live-status'")
+      expect(count(component, /<LiveStatus\b/g)).toBe(1)
+      expect(component).toMatch(/<LiveStatus[\s\S]*?tone="status"/)
+      expect(component).toContain("message={pending ? 'Writing your report with the model…' : null}")
+      expect(count(component, /Writing your report with the model…/g)).toBe(1)
+      expect(component).not.toMatch(/&&\s*\(?\s*<LiveStatus/)
+      expect(component).not.toContain('role="status"')
+      expect(component).not.toContain('aria-live')
+    })
+
+    it('page.tsx imports it once and renders it exactly twice — trigger="stale" and trigger="generate" — each with action={regenerateReport}', () => {
+      expect(count(page, /import \{ AutoGenerateReport \} from '\.\/auto-generate-report'/g)).toBe(1)
+      expect(count(page, /import \{ regenerateReport \} from '\.\.\/actions'/g)).toBe(1)
+      expect(count(page, /<AutoGenerateReport\b/g)).toBe(2)
+      expect(count(page, /<AutoGenerateReport churchId=\{churchId\} trigger="stale" action=\{regenerateReport\} \/>/g)).toBe(1)
+      expect(count(page, /<AutoGenerateReport churchId=\{churchId\} trigger="generate" action=\{regenerateReport\} \/>/g)).toBe(1)
+    })
+
+    it('places the stale trigger inside the stale notice (gated on aiOn, above its form) and the generate trigger inside the generate notice', () => {
+      const staleBlock = page.match(/\{stale\s*&&\s*\(\s*<ReportNotice>([\s\S]*?)<\/ReportNotice>/)![1]!
+      // The stale notice + form still render when prose is off (regenerate would silently no-op),
+      // exactly as before — only the auto-trigger is additionally gated on aiOn.
+      expect(staleBlock).toContain('This report predates your latest settings change.')
+      expect(staleBlock).toMatch(/\{aiOn && <AutoGenerateReport churchId=\{churchId\} trigger="stale" action=\{regenerateReport\} \/>\}/)
+      expect(staleBlock.indexOf('<AutoGenerateReport')).toBeLessThan(staleBlock.indexOf('<form action={regenerateReport}>'))
+
+      const genBlock = page.match(/\{!stale\s*&&\s*needsGeneration\s*&&\s*aiOn\s*&&\s*\(\s*<ReportNotice>([\s\S]*?)<\/ReportNotice>/)![1]!
+      expect(genBlock).toContain('<AutoGenerateReport churchId={churchId} trigger="generate" action={regenerateReport} />')
+      expect(genBlock.indexOf('<AutoGenerateReport')).toBeLessThan(genBlock.indexOf('<form action={regenerateReport}>'))
     })
   })
 

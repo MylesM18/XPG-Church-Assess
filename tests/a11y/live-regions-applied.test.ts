@@ -38,8 +38,10 @@ const FILES = SCAN_DIRS.flatMap(tsxFilesUnder).map((file) => ({
   source: stripComments(fs.readFileSync(file, 'utf8')),
 }))
 
-// The eleven files that render a status message. All five success announcements land in files already
-// on this list, so it is also the complete set of LiveStatus consumers.
+// The twelve files that render a status message. All five success announcements land in files already
+// on this list, so it is also the complete set of LiveStatus consumers. The twelfth
+// (diagnosis/auto-generate-report.tsx, fix/prose-auto-generate-on-view) has no control at all: it
+// announces only its own pending "Writing your report with the model…" state.
 const EXPECTED_CONSUMERS = [
   path.join('components', 'answer-form.tsx'),
   path.join('components', 'auth', 'passwordless-entry.tsx'),
@@ -52,6 +54,7 @@ const EXPECTED_CONSUMERS = [
   path.join('app', 'app', '[churchId]', 'access', 'revoke-invite-button.tsx'),
   path.join('app', 'accept', '[token]', 'accept-button.tsx'),
   path.join('app', 'app', '[churchId]', 'diagnosis', 'share-control.tsx'),
+  path.join('app', 'app', '[churchId]', 'diagnosis', 'auto-generate-report.tsx'),
 ]
 
 describe('live-region application', () => {

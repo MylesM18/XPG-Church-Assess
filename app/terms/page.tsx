@@ -12,7 +12,8 @@ export const metadata: Metadata = {
 // Every operative claim on this page is grounded in the codebase: passwordless auth
 // (app/sign-in/page.tsx), admin/viewer roles (schema.sql church_members), respondent anonymity
 // (lib/report/view.ts + lib/report/pdf/render.ts guard), optional AI prose (lib/ai/prose.ts,
-// PROSE_MODE gate), no payments and no analytics (audited: zero hits). Keep it that way — if the
+// gated by lib/ai/prose-mode.ts proseEnabled(): on iff OPENAI_API_KEY is set, PROSE_MODE=fallback
+// opts out), no payments and no analytics (audited: zero hits). Keep it that way — if the
 // product gains payments, analytics, or new data flows, this document must change in the same PR.
 function Section({ n, title, children }: { n: string; title: string; children: ReactNode }) {
   return (

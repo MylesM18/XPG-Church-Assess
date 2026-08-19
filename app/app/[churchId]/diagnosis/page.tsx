@@ -29,6 +29,8 @@ import { ReportToolbar, ReportNotice } from './report/toolbar'
 import { EmptyState, StaleMethodologyNotice } from './report/shared'
 import { ShareControl } from './share-control'
 import { regenerateReport } from '../actions'
+import { AutoGenerateReport } from './auto-generate-report'
+import { proseEnabled } from '@/lib/ai/prose-mode'
 
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'
 
@@ -250,12 +252,16 @@ export default async function DiagnosisPage({
   }
 
   // H7: a completed run with NO usable AI section — no `reports` row at all (diagnosis finished
-  // while PROSE_MODE was unset), or a live-hash row that is 100 % fallback (generation persists
-  // those; the first-generation self-heal cannot re-run) — is not `stale`, so until now the page
-  // offered no way to invoke the model and a later env fix changed nothing. Offer the same
-  // `regenerateReport` action under its own copy. The gate is the action's own PROSE_MODE gate
-  // form, verbatim: when the action would silently return, the button must not render.
-  const proseEnabled = (process.env.PROSE_MODE ?? 'fallback') !== 'fallback'
+  // while prose was off), or a live-hash row that is 100 % fallback (generation persists those;
+  // the first-generation self-heal cannot re-run) — is not `stale`, so until now the page offered
+  // no way to invoke the model and a later env fix changed nothing. Offer the same
+  // `regenerateReport` action under its own copy. The gate is the action's own gate FUNCTION,
+  // proseEnabled() (lib/ai/prose-mode.ts: OPENAI_API_KEY present ⇒ on; PROSE_MODE=ai|fallback
+  // overrides): when the action would silently return, neither the button nor the auto-trigger
+  // renders. Since fix/prose-auto-generate-on-view both notice blocks also mount
+  // <AutoGenerateReport>, which fires regenerateReport once per session on admin view; the forms
+  // stay as the retry path.
+  const aiOn = proseEnabled()
 
   // The cover's date line: the run's completion month in the PDF cover's exact format
   // (document.tsx: toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })).
@@ -295,6 +301,7 @@ export default async function DiagnosisPage({
           {stale && (
             <ReportNotice>
               <p>This report predates your latest settings change.</p>
+              {aiOn && <AutoGenerateReport churchId={churchId} trigger="stale" action={regenerateReport} />}
               <form action={regenerateReport}>
                 <input type="hidden" name="churchId" value={churchId} />
                 <button
@@ -306,9 +313,10 @@ export default async function DiagnosisPage({
               </form>
             </ReportNotice>
           )}
-          {!stale && needsGeneration && proseEnabled && (
+          {!stale && needsGeneration && aiOn && (
             <ReportNotice>
               <p>This report hasn’t been written by the model yet.</p>
+              <AutoGenerateReport churchId={churchId} trigger="generate" action={regenerateReport} />
               <form action={regenerateReport}>
                 <input type="hidden" name="churchId" value={churchId} />
                 <button

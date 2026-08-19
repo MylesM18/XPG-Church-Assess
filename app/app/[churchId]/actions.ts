@@ -16,6 +16,7 @@ import { loadChurchProfile } from '@/lib/data/churches'
 import type { ChurchProfile } from '@/lib/data/churches'
 import { churchFactsFrom, reflectionRowsFor, reportInputs } from '@/lib/report/inputs-hash'
 import { requireChurchAdmin } from '@/lib/auth/require-church-admin'
+import { proseEnabled } from '@/lib/ai/prose-mode'
 
 // Raw shape of one get_run_responses row (supabase.rpc returns it untyped). respondent_user_id
 // is null for a row predating the 20260728000100 migration or a submission the RPC never
@@ -129,11 +130,13 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
   })
   if (saveError) return { ok: false, error: saveError.message }
 
-  // M5b: best-effort AI prose. Gated by PROSE_MODE to match the report page's read gate
-  // exactly (diagnosis/page.tsx), so an unset mode makes no API call. The diagnosis is
-  // already committed above, so this whole block is wrapped: no SDK/network/RPC failure
-  // may break the saved diagnosis or the redirect below.
-  if ((process.env.PROSE_MODE ?? 'fallback') !== 'fallback') {
+  // M5b: best-effort AI prose. Gated by the shared proseEnabled() helper (lib/ai/prose-mode.ts:
+  // OPENAI_API_KEY present ⇒ on; PROSE_MODE=ai|fallback overrides), the same function the report
+  // page reads (diagnosis/page.tsx), so the two can never disagree; when it is off no API call is
+  // made and the helper itself logs the single reason line. The diagnosis is already committed
+  // above, so this whole block is wrapped: no SDK/network/RPC failure may break the saved
+  // diagnosis or the redirect below.
+  if (proseEnabled()) {
     try {
       // Cache-check: array-tolerant SELECT (RLS permits member SELECT on diagnoses).
       // Regenerate only when no 'ai' row exists for this hash; the hash changes iff the
@@ -189,9 +192,10 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
 
   // Plan 3: best-effort executive report. A SECOND block, deliberately separate from the M5b
   // prose block above — the 10-block diagnosis page is still live until plan 4, so both run.
-  // Same PROSE_MODE gate, so an unset mode makes no API call and logs nothing at all. The
-  // diagnosis is already committed, so nothing in here may break it or the redirect.
-  if ((process.env.PROSE_MODE ?? 'fallback') !== 'fallback') {
+  // Same proseEnabled() gate, so when prose is off no API call is made and nothing is logged
+  // under [report]. The diagnosis is already committed, so nothing in here may break it or the
+  // redirect.
+  if (proseEnabled()) {
     try {
       // Reflection rows come from `raw`, NOT from `responses`: Response[] deliberately drops
       // `.reflection` and tests/outreach/ai-exclusion.test.ts pins that it stays dropped.
@@ -291,8 +295,20 @@ export async function generateDiagnosis(churchId: string): Promise<{ ok: boolean
  * to fallback with no way back. Since H7 (2026-08-18) the diagnosis page also offers it as
  * "Generate report" when NO AI section is usable for the live inputs — no `reports` row at all,
  * or a live-hash row that is 100 % fallback — because a completed run cannot re-enter first
- * generation and would otherwise never call the model, whatever PROSE_MODE is later set to.
+ * generation and would otherwise never call the model, whatever the env is later set to.
  * It is still not a general "regenerate" button: both triggers are "no usable AI prose".
+ *
+ * Since fix/prose-auto-generate-on-view the diagnosis page ALSO invokes this action AUTOMATICALLY
+ * when an admin views the page and `needsGeneration || stale` holds while prose is enabled: it
+ * passes `regenerateReport` as the `action` prop of the client component
+ * app/app/[churchId]/diagnosis/auto-generate-report.tsx, which fires it once per browser session
+ * per (church, trigger) — a sessionStorage latch — and then router.refresh()es to show the model's
+ * output. The manual Generate / Regenerate forms remain as the fallback and retry path (a failed
+ * auto-run leaves the latch set, so the admin's next resort is the button, not a loop). Auto or
+ * manual, the same admin gate below applies; an invitee viewing the page renders neither.
+ *
+ * Gate: `proseEnabled()` (lib/ai/prose-mode.ts) — OPENAI_API_KEY present ⇒ on, PROSE_MODE=ai
+ * forces on, PROSE_MODE=fallback forces off. The page's affordances read the same function.
  *
  * Reads through get_completed_run_responses, kept for the report path per spec. Since ADR 0003
  * (migration 20260818000100) get_run_responses no longer filters status either — both RPCs are
@@ -312,7 +328,7 @@ export async function regenerateReport(formData: FormData): Promise<void> {
   const churchId = String(formData.get('churchId') ?? '')
   if (!churchId) return
 
-  if ((process.env.PROSE_MODE ?? 'fallback') === 'fallback') return
+  if (!proseEnabled()) return
 
   try {
     const { supabase, error: authErr } = await requireChurchAdmin(churchId)
