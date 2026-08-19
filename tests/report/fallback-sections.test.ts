@@ -271,10 +271,15 @@ describe('S8 fallback', () => {
   });
 
   it('falls back to the per-area voices lists when there are no themes', () => {
+    // Declares a private audience since step E: the voices path is what the audience gate
+    // protects, so this test now has to say which surface it is. The behaviour it pins —
+    // reflections becoming per-area voice lines — is unchanged on that surface. The
+    // withheld-on-shared half lives in 'S8 audience gate (step E)' below.
     const s8 = fallbackSection('s8', {
       facts: { ...capacityFacts, themes: [] },
       methodology,
       reflections: [{ item_id: reflectionItemId, reflection: 'greeters are great' }],
+      audience: 'screen',
     });
     expect(s8.bullets.some((b) => b.includes('greeters are great'))).toBe(true);
   });
@@ -286,6 +291,69 @@ describe('S8 fallback', () => {
     };
     const s8 = fallbackSection('s8', { facts, methodology, reflections: [] });
     expect(s8.bullets.join(' ')).not.toContain('SENTINEL QUOTE');
+  });
+});
+
+/**
+ * Step E — Natalie's D2: the verbatim reflections are PRIVATE. They render on the two
+ * private surfaces (screen, pdf) and never on the share page.
+ *
+ * The gate is an ALLOW-list, not the deny-list buildReportView uses (lib/report/view.ts:442),
+ * and `audience` is OPTIONAL on FallbackSectionArgs — so a call site that forgets to declare
+ * itself WITHHOLDS rather than leaks. That direction is the whole point; the "absent" test
+ * below is what pins it.
+ */
+describe('S8 audience gate (step E)', () => {
+  const themeless = { ...CAPACITY_FACTS, themes: [] };
+  const reflections = [{ item_id: reflectionItemId, reflection: 'greeters are great' }];
+  const withheld = methodology.copy.s8_below_threshold;
+
+  it('renders the verbatim reflections on the screen report', () => {
+    const s8 = fallbackSection('s8', { facts: themeless, methodology, reflections, audience: 'screen' });
+    expect(s8.bullets.some((b) => b.includes('greeters are great'))).toBe(true);
+  });
+
+  it('renders the verbatim reflections on the pdf report', () => {
+    const s8 = fallbackSection('s8', { facts: themeless, methodology, reflections, audience: 'pdf' });
+    expect(s8.bullets.some((b) => b.includes('greeters are great'))).toBe(true);
+  });
+
+  it('withholds the verbatim reflections on the shared report', () => {
+    const s8 = fallbackSection('s8', { facts: themeless, methodology, reflections, audience: 'shared' });
+    expect(s8.bullets.join(' ')).not.toContain('greeters are great');
+    expect(s8.bullets).toEqual([withheld]);
+  });
+
+  it('withholds the verbatim reflections when no audience is declared', () => {
+    // Fail closed. An allow-list means a forgotten call site loses content; a deny-list would
+    // have leaked it. Deleting `audience` from the args must NOT print the reflection.
+    const s8 = fallbackSection('s8', { facts: themeless, methodology, reflections });
+    expect(s8.bullets.join(' ')).not.toContain('greeters are great');
+    expect(s8.bullets).toEqual([withheld]);
+  });
+
+  it('still renders the k-gated themes on the shared report', () => {
+    // Themes are aggregates that already ship on the share page. Gating them too would be a
+    // silent content regression — this is the test that would catch a gate placed at the top
+    // of s8Bullets instead of after the themes branch.
+    const facts = {
+      ...CAPACITY_FACTS,
+      themes: [{ label: 'Follow-up', gloss: 'People are lost after week two.', support_count: 4, item_ids: ['conn_2'], verbatims: [] }],
+    };
+    const s8 = fallbackSection('s8', { facts, methodology, reflections, audience: 'shared' });
+    expect(s8.bullets[0]).toContain('Follow-up');
+    expect(s8.bullets).not.toEqual([withheld]);
+  });
+
+  it('keeps the MIN_SUPPORT threshold on the private report', () => {
+    // Orthogonal to audience: Natalie asked to drop names, not the k-threshold. Two respondents
+    // is below MIN_SUPPORT (3), so even the screen report withholds.
+    const facts = {
+      ...themeless,
+      cover: { ...CAPACITY_FACTS.cover, respondent_count: 2 },
+    };
+    const s8 = fallbackSection('s8', { facts, methodology, reflections, audience: 'screen' });
+    expect(s8.bullets).toEqual([withheld]);
   });
 });
 

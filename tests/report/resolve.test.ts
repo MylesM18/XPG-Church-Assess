@@ -111,6 +111,7 @@ describe('resolveReportSections', () => {
     responseHash: 'rh-1',
     reflections: [],
     hashReflections: [],
+    audience: 'screen' as const,
   })
 
   it('calls readPersisted with the LIVE inputs hash (pins D-P5-5)', async () => {

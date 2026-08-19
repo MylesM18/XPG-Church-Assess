@@ -243,6 +243,7 @@ export default async function DiagnosisPage({
       responseHash: hash,
       reflections, // the KEYLESS array
       hashReflections, // the KEYED array — reportInputs only
+      audience: 'screen', // this surface is private — respondents' verbatim reflections render here
       readPersisted: (inputsHash) => readPersistedReport(supabase, run!.id, inputsHash),
     })
 

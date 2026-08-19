@@ -90,8 +90,11 @@ describe('s8 fallback path enforces a k threshold', () => {
     { item_id: 'G6', reflection: 'I greeted the guest and walked them to the coffee table.' },
     { item_id: 'G6', reflection: 'Nobody followed up with the family who visited in June.' },
   ];
+  // `audience: 'pdf'` since step E — this suite is about the k-threshold and the label guard on
+  // a PRIVATE surface. Without it the audience gate would suppress these bullets first and the
+  // suppression test below would pass for the wrong reason.
   const s8 = (facts: ReturnType<typeof makeFacts>, reflections = REFLECTIONS) =>
-    fallbackSection('s8', { facts, methodology, reflections }).bullets;
+    fallbackSection('s8', { facts, methodology, reflections, audience: 'pdf' }).bullets;
 
   it('suppresses verbatim reflections below the threshold', () => {
     const tooFew = makeFacts({ cover: { church_name: 'T', completed_at: null, respondent_count: MIN_SUPPORT - 1 } });

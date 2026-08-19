@@ -1,5 +1,6 @@
 import { composeSection, SECTION_REGISTRY, AI_SECTION_IDS, FAN_OUT, unitCeiling, type AiSectionId } from '../ai/sections';
 import { gateSection, correctiveInstruction, sliceCategoryIds, resolveRequiredMention, type GateFailure, type GateUnit } from '../ai/section-gates';
+import type { ReportAudience } from './view';
 import { fallbackSections, type FallbackSectionArgs, type SectionBody } from './fallback-sections';
 import type { FactsPack } from './facts';
 import type { Methodology, RequiredMention, SectionId } from '../methodology/schema';
@@ -254,8 +255,19 @@ export function assembleReport(args: {
   reflections: ReadonlyArray<{ item_id: string; reflection: string | null }>;
   persisted: { inputs_hash: string; sections: unknown } | null;
   liveInputsHash: string;
+  /** REQUIRED here, unlike on FallbackSectionArgs: this function builds its OWN literal for
+   *  fallbackSections below rather than forwarding a FallbackSectionArgs, so an optional field
+   *  would be dropped silently on every call. Making it required means tsc names the drop. */
+  audience: ReportAudience;
 }): AssembledSection[] {
-  const fallbacks = fallbackSections({ facts: args.facts, methodology: args.methodology, reflections: args.reflections });
+  // ⚠️ Threaded EXPLICITLY. This literal is not `args` — a field added to FallbackSectionArgs
+  // does not arrive here on its own.
+  const fallbacks = fallbackSections({
+    facts: args.facts,
+    methodology: args.methodology,
+    reflections: args.reflections,
+    audience: args.audience,
+  });
   // A stale or absent hash means fallback, never a stale AI section. Deterministic sections are
   // always computed live, exactly as fallbackProse is today.
   const fresh = args.persisted !== null && args.persisted.inputs_hash === args.liveInputsHash;

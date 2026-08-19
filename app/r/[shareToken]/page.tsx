@@ -166,6 +166,10 @@ export default async function SharedReportPage({
     facts,
     methodology: reportMethodology,
     reflections: [],
+    // Defence in depth BESIDE the empty literal above, never instead of it. The empty array is
+    // the structural exclusion (the data never enters); this declares the surface so that even a
+    // future caller who did thread reflections in would still be refused by s8's allow-list.
+    audience: 'shared',
   })
 
   const visuals = webVisuals(facts, reportMethodology)

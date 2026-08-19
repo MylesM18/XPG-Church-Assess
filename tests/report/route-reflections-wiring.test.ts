@@ -163,3 +163,42 @@ describe('report routes wire reflections into the resolver seam only on the auth
     ).toBe(false)
   })
 })
+
+/**
+ * Step E — each surface must DECLARE its own audience at its own call site.
+ *
+ * `audience` is required on ResolveReportSectionsArgs so tsc forces both private routes to
+ * declare themselves, but tsc cannot tell 'screen' from 'pdf' — a copy-paste that gave the PDF
+ * route the screen's literal would typecheck and pass every behavioural test (both are private).
+ * Only a source read distinguishes them. The share page's `audience: 'shared'` is the one that
+ * matters for anonymity, and it is defence-in-depth BESIDE `reflections: []`, never instead of
+ * it — the check below pins that both are present.
+ */
+describe('each report surface declares its own audience (step E)', () => {
+  it('the screen route declares audience screen inside its resolver call', () => {
+    const args = extractCallArgs(strip(read('app', 'app', '[churchId]', 'diagnosis', 'page.tsx')), 'resolveReportSections')
+    expect(args).not.toBeNull()
+    expect(args).toMatch(/audience:\s*'screen'/)
+  })
+
+  it('the pdf route declares audience pdf inside its resolver call', () => {
+    const args = extractCallArgs(strip(read('app', 'api', 'report', '[runId]', 'pdf', 'route.ts')), 'resolveReportSections')
+    expect(args).not.toBeNull()
+    expect(args).toMatch(/audience:\s*'pdf'/)
+  })
+
+  it('the shared route declares audience shared and still passes the empty reflections literal', () => {
+    const args = extractCallArgs(strip(read('app', 'r', '[shareToken]', 'page.tsx')), 'assembleFallbackOnly')
+    expect(args).not.toBeNull()
+    expect(args).toMatch(/audience:\s*'shared'/)
+    // Non-vacuity: adding the audience must not have been an excuse to drop the structural
+    // exclusion. Both layers stand.
+    expect(args).toMatch(/reflections:\s*\[\s*\]/)
+  })
+
+  it('the shared route never declares itself as a private audience', () => {
+    const source = strip(read('app', 'r', '[shareToken]', 'page.tsx'))
+    expect(/audience:\s*'(screen|pdf)'/.test(source)).toBe(false)
+  })
+})
+

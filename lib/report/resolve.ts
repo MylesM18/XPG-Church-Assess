@@ -6,6 +6,7 @@ import type { AssembledSection } from '@/lib/report/compose'
 import { coverModel } from '@/lib/report/charts'
 import type { CoverModel } from '@/lib/report/charts'
 import { webVisuals, type WebVisuals } from '@/lib/report/web-visuals'
+import type { ReportAudience } from '@/lib/report/view'
 import type { PersistedReportLookup } from '@/lib/data/reports'
 
 type ReportInputsArgs = Parameters<typeof reportInputs>[0]
@@ -29,6 +30,10 @@ export type ResolveReportSectionsArgs = Omit<ReportInputsArgs, 'reflections'> & 
   reflections: ReadonlyArray<{ item_id: string; reflection: string | null }>
   /** The keyed array — respondent identity included. Goes to reportInputs and nowhere else. */
   hashReflections: ReportInputsArgs['reflections']
+  /** REQUIRED so both private surfaces must declare which one they are (tsc-enforced). It is
+   *  NOT part of the inputs hash — see the destructure in the body, which pulls it out of
+   *  `inputs` before reportInputs sees it. */
+  audience: ReportAudience
   readPersisted: (inputsHash: string) => Promise<PersistedReportLookup>
 }
 
@@ -52,7 +57,10 @@ export interface ResolvedReportSections {
 export async function resolveReportSections(
   args: ResolveReportSectionsArgs,
 ): Promise<ResolvedReportSections> {
-  const { reflections, hashReflections, readPersisted, ...inputs } = args
+  // `audience` is destructured out with the other non-hash fields ON PURPOSE: leaving it in
+  // `inputs` would spread it into reportInputs and put a rendering concern inside the inputs
+  // hash, invalidating every persisted report the moment a surface changed.
+  const { reflections, hashReflections, readPersisted, audience, ...inputs } = args
 
   const { inputsHash, baseFacts } = reportInputs({ ...inputs, reflections: hashReflections })
 
@@ -87,6 +95,7 @@ export async function resolveReportSections(
     reflections, // the KEYLESS array — never hashReflections
     persisted,
     liveInputsHash: inputsHash,
+    audience,
   })
 
   const cover = coverModel(facts, inputs.methodology)

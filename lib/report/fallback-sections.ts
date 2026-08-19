@@ -2,7 +2,7 @@ import { MIN_SUPPORT } from '../ai/theme-gates';
 import type { CategoryState } from '../engine/types';
 import type { Methodology, Offer, SectionId, Theme } from '../methodology/schema';
 import type { CategoryFact, FactsPack } from './facts';
-import { buildOutreachVoices, dependencyReadLines, interp, readingBand } from './view';
+import { buildOutreachVoices, dependencyReadLines, interp, readingBand, type ReportAudience } from './view';
 
 /**
  * The deterministic spine. Every one of the twelve sections renders from the facts pack and
@@ -19,6 +19,13 @@ export interface FallbackSectionArgs {
   facts: FactsPack;
   methodology: Methodology;
   reflections: ReadonlyArray<{ item_id: string; reflection: string | null }>;
+  /**
+   * Which surface is rendering. OPTIONAL and gated by an ALLOW-list (`screen`/`pdf`) rather
+   * than the deny-list buildReportView uses (view.ts) — so a call site that forgets to declare
+   * itself WITHHOLDS the private free-text instead of leaking it. The failure mode has to point
+   * that way: the only content this gates is respondents' verbatim reflections.
+   */
+  audience?: ReportAudience;
 }
 
 export interface SectionBody {
@@ -222,10 +229,18 @@ function s8Bullets(
   facts: FactsPack,
   methodology: Methodology,
   reflections: ReadonlyArray<{ item_id: string; reflection: string | null }>,
+  audience: ReportAudience | undefined,
 ): string[] {
   if (facts.themes.length > 0) {
     return facts.themes.map((t) => `${t.label}: ${t.gloss} (${t.support_count} people).`);
   }
+  // ⚠️ ORDER IS LOAD-BEARING. The audience gate sits BELOW the themes branch, never above it.
+  // Themes are k-gated AGGREGATES that already ship on the share page today; Natalie asked that
+  // the VERBATIM reflections become private, not the themes. A gate at the top of this function
+  // would strip themes from the share page — a silent content regression.
+  if (audience !== 'screen' && audience !== 'pdf') return [methodology.copy.s8_below_threshold];
+  // Orthogonal to audience, and kept on BOTH paths: dropping names is not dropping the
+  // k-threshold.
   if (facts.cover.respondent_count < MIN_SUPPORT) return [methodology.copy.s8_below_threshold];
   // buildOutreachVoices groups per category_id (Map<string, OutreachVoicesGroup[]>) — flatten
   // across the Map's values before producing lines (ruling 10). Verbatims never enter a
@@ -379,6 +394,7 @@ function bulletsFor(
   methodology: Methodology,
   reflections: ReadonlyArray<{ item_id: string; reflection: string | null }>,
   tokens: Record<string, string>,
+  audience: ReportAudience | undefined,
 ): string[] {
   switch (id) {
     case 's1':
@@ -400,7 +416,7 @@ function bulletsFor(
     case 's7':
       return s7Bullets(facts);
     case 's8':
-      return s8Bullets(facts, methodology, reflections);
+      return s8Bullets(facts, methodology, reflections, audience);
     case 's9':
       return s9Bullets(facts);
     case 's10':
@@ -417,7 +433,7 @@ function bulletsFor(
 }
 
 export function fallbackSection(id: SectionId, args: FallbackSectionArgs): SectionBody {
-  const { facts, methodology, reflections } = args;
+  const { facts, methodology, reflections, audience } = args;
   const section = methodology.report.sections[id];
 
   const tokens: Record<string, string> = {
@@ -436,7 +452,7 @@ export function fallbackSection(id: SectionId, args: FallbackSectionArgs): Secti
   return {
     title: section.title,
     body: interp(section.templates[facts.archetype], tokens),
-    bullets: bulletsFor(id, facts, methodology, reflections, tokens),
+    bullets: bulletsFor(id, facts, methodology, reflections, tokens, audience),
   };
 }
 
