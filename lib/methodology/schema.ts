@@ -240,11 +240,15 @@ export const ReportSectionSchema = z.object({
 // The thirteenth, `appendix` ("Methodology and caveats"), was removed on 2026-08-16 at
 // Natalie's request. It is this object that drives SectionId, so nothing downstream can
 // still name it — that is why the removal starts here.
+// ⚠️ KEY ORDER IS SECTION ORDER. Zod rebuilds the parsed object in THIS shape's key order,
+// whatever the YAML says, and both assemblers map over Object.keys(report.sections) — so the
+// report renders in the order below. s12 sits before s11 on purpose (Natalie, 2026-08-19):
+// "Where XPG can partner" closes the report, directly above the booking CTA.
 const ReportSectionsSchema = z.object({
   s1: ReportSectionSchema, s2: ReportSectionSchema, s3: ReportSectionSchema,
   s4: ReportSectionSchema, s5: ReportSectionSchema, s6: ReportSectionSchema,
   s7: ReportSectionSchema, s8: ReportSectionSchema, s9: ReportSectionSchema,
-  s10: ReportSectionSchema, s11: ReportSectionSchema, s12: ReportSectionSchema,
+  s10: ReportSectionSchema, s12: ReportSectionSchema, s11: ReportSectionSchema,
 });
 
 const ActionSetSchema = z.object({

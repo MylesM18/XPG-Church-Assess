@@ -148,10 +148,10 @@ const lowCapacityFoundationFacts: FactsPack = buildFacts({
 
 const ctx = { facts: constraintFacts, methodology, labels: ['Priscilla Vandermeer'] };
 
+// Summary-only since 2026-08-19: S2Schema dropped what_this_is_not / context_bullets, so every
+// mutation below hangs on `summary` — the schema's one field is also the gates' one surface.
 const goodS2 = {
   summary: `Overall health sits at ${constraintFacts.overall.capacity} out of 100, in the ${constraintFacts.overall.tier.name} band. ${constraintFacts.primary_constraint!.name} is holding the rest back.`,
-  what_this_is_not: 'This is not a verdict on anyone.',
-  context_bullets: [],
 };
 
 // s9's own well-formed shape (S9Schema = { narrative, working_model }), digit-free so gate 2
@@ -196,7 +196,7 @@ describe('gate 1 — field parity', () => {
     expect(gateSection('s2', goodS2, ctx)).toBeNull();
   });
   it('rejects a section with a blank required field', () => {
-    expect(gateSection('s2', { ...goodS2, what_this_is_not: '   ' }, ctx)).toMatchObject({ family: 'field parity' });
+    expect(gateSection('s2', { summary: '   ' }, ctx)).toMatchObject({ family: 'field parity' });
   });
   it('rejects output that does not match the schema at all', () => {
     expect(gateSection('s2', { nope: 1 }, ctx)).toMatchObject({ family: 'field parity' });
@@ -308,10 +308,10 @@ describe('gate 3 — required and banned mentions', () => {
     expect(gateSection('s2', { ...goodS2, summary: goodS2.summary.replace(constraintFacts.overall.tier.name, 'fine') }, ctx)).toMatchObject({ family: 'required mention' });
   });
   it('rejects capacity framing inside a constraint report', () => {
-    expect(gateSection('s2', { ...goodS2, what_this_is_not: 'Every stage is carrying its load.' }, ctx)).toMatchObject({ family: 'banned phrase' });
+    expect(gateSection('s2', { summary: `${goodS2.summary} Every stage is carrying its load.` }, ctx)).toMatchObject({ family: 'banned phrase' });
   });
   it('accepts a stage name, which is shared vocabulary and never banned', () => {
-    const withStage = { ...goodS2, what_this_is_not: `This is not a verdict on ${constraintFacts.categories[0]!.name}.` };
+    const withStage = { summary: `${goodS2.summary} This is not a verdict on ${constraintFacts.categories[0]!.name}.` };
     expect(gateSection('s2', withStage, ctx)).toBeNull();
   });
 });
@@ -347,8 +347,6 @@ describe('gate 3 — sub-70 register calibration (product owner ruling, fix roun
   // guard the loop does real, reachable work only for the 'foundation' archetype.
   const lowCapGoodS2 = {
     summary: `Overall health sits at ${lowCapacityConstraintFacts.overall.capacity} out of 100, in the ${lowCapacityConstraintFacts.overall.tier.name} band. ${lowCapacityConstraintFacts.primary_constraint!.name} is the constraint holding the rest back.`,
-    what_this_is_not: 'This is not a verdict on anyone.',
-    context_bullets: [],
   };
   const lowCapCtx = { ...ctx, facts: lowCapacityConstraintFacts };
 
@@ -372,8 +370,6 @@ describe('gate 3 — sub-70 register calibration (product owner ruling, fix roun
     expect(lowCapacityFacts.overall.capacity).toBeLessThan(70);
     const s2 = {
       summary: `Overall health sits at ${lowCapacityFacts.overall.capacity} out of 100, in the ${lowCapacityFacts.overall.tier.name} band. Every stage is carrying its load.`,
-      what_this_is_not: 'This is not a verdict on anyone.',
-      context_bullets: [],
     };
     expect(gateSection('s2', s2, { ...ctx, facts: lowCapacityFacts })).toBeNull();
   });
@@ -390,8 +386,6 @@ describe('gate 3 — sub-70 register calibration (product owner ruling, fix roun
     expect(lowCapacityFoundationFacts.overall.capacity).toBeLessThan(70);
     const s2 = {
       summary: `Overall health sits at ${lowCapacityFoundationFacts.overall.capacity} out of 100, in the ${lowCapacityFoundationFacts.overall.tier.name} band. Nothing is capping you except the gate.`,
-      what_this_is_not: 'This is not a verdict on anyone.',
-      context_bullets: [],
     };
     expect(gateSection('s2', s2, { ...ctx, facts: lowCapacityFoundationFacts })).toMatchObject({ family: 'banned phrase' });
   });
@@ -438,7 +432,7 @@ describe('gate 4 — anonymity', () => {
     expect(gateSection('s2', goodS2, ctx)).toBeNull();
   });
   it('rejects prose naming a respondent, case-insensitively', () => {
-    expect(gateSection('s2', { ...goodS2, what_this_is_not: 'priscilla vandermeer disagreed.' }, ctx)).toMatchObject({ family: 'anonymity' });
+    expect(gateSection('s2', { summary: `${goodS2.summary} priscilla vandermeer disagreed.` }, ctx)).toMatchObject({ family: 'anonymity' });
   });
 });
 
@@ -556,7 +550,7 @@ describe('gate failure detail (spec §4.1)', () => {
   });
 
   it('banned phrase reports the matched phrase', () => {
-    const f = gateSection('s2', { ...goodS2, what_this_is_not: 'Every stage is carrying its load.' }, ctx);
+    const f = gateSection('s2', { summary: `${goodS2.summary} Every stage is carrying its load.` }, ctx);
     expect(f?.family).toBe('banned phrase');
     expect(f!.detail.length).toBeGreaterThan(0);
     expect(methodology.report.banned_phrases[constraintFacts.archetype].map((p) => p.toLowerCase()))
@@ -566,7 +560,7 @@ describe('gate failure detail (spec §4.1)', () => {
   // THE security assertion of this task. Not "an index is present" — the LABEL IS ABSENT.
   it('anonymity reports the label index and NEVER the label', () => {
     const labels = ['Alice Brown', 'priscilla vandermeer', 'Carol Danvers'];
-    const leaked = { ...goodS2, what_this_is_not: 'priscilla vandermeer disagreed.' };
+    const leaked = { summary: `${goodS2.summary} priscilla vandermeer disagreed.` };
     const f = gateSection('s2', leaked, { ...ctx, labels });
     expect(f?.family).toBe('anonymity');
     expect(f?.detail).toBe('label 1');
@@ -575,7 +569,7 @@ describe('gate failure detail (spec §4.1)', () => {
 
   it('field parity and pattern claim carry an empty detail', () => {
     expect(gateSection('s2', { nope: 1 }, ctx)).toEqual({ family: 'field parity', detail: '' });
-    expect(gateSection('s2', { ...goodS2, what_this_is_not: '   ' }, ctx)).toEqual({ family: 'field parity', detail: '' });
+    expect(gateSection('s2', { summary: '   ' }, ctx)).toEqual({ family: 'field parity', detail: '' });
     const zeroTheology = { ...constraintFacts, pattern_counts: { ...constraintFacts.pattern_counts, systems: 2 } };
     const claim = { narrative: 'Systems dominate.', pattern_claim: 'None of the six lowest indicators are systems.' };
     expect(gateSection('s7', claim, { ...ctx, facts: zeroTheology })).toEqual({ family: 'pattern claim', detail: '' });

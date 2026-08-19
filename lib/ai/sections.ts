@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 import type { CategoryFact, FactsPack } from '../report/facts';
 import type { SectionId } from '../methodology/schema';
+import { plainProfileValue, profileInPlainEnglish } from '../report/profile-display';
 
 /**
  * GPT task: per-section composition (parent spec line 72).
@@ -18,10 +19,11 @@ import type { SectionId } from '../methodology/schema';
  * discipline as ReportBlocksSchema in prose.ts and ThemeSchema in themes.ts.
  */
 
+// Summary only since 2026-08-19 (Natalie, on a live report): the "what this is not" line and
+// the context bullets are gone from the executive summary. Legacy persisted rows still carry
+// both fields; safeParse strips unknown keys, so they keep parsing and render summary-only.
 export const S2Schema = z.object({
   summary: z.string(),
-  what_this_is_not: z.string(),
-  context_bullets: z.array(z.string()),
 });
 export const S4Schema = z.object({ thesis_word: z.string(), narrative: z.string() });
 export const S5Schema = z.object({
@@ -88,8 +90,18 @@ export const AI_SECTION_IDS = ['s2', 's4', 's5', 's6', 's7', 's9', 's12'] as con
 function head(facts: FactsPack) {
   return {
     archetype: facts.archetype,
-    overall: facts.overall,
-    primary_constraint: facts.primary_constraint,
+    // The reader words for the two headline numbers (step F), never the engine's. Handed
+    // `overall` raw, the model wrote "Capacity at 63 and throughput at 59" onto a live report
+    // (Natalie, 2026-08-19) — it can only speak the vocabulary this slice teaches it. The tier
+    // travels by NAME only; tier ids are slugs (healthy_stretched) with the same problem.
+    overall: {
+      'health score': facts.overall.capacity,
+      'real-world result': facts.overall.throughput,
+      'points lost to the weakest area': facts.overall.gap,
+      tier: facts.overall.tier.name,
+    },
+    // By name only — category_id is the same slug vocabulary the profile fix strips.
+    primary_constraint: facts.primary_constraint ? { name: facts.primary_constraint.name } : null,
   };
 }
 
@@ -97,6 +109,23 @@ function head(facts: FactsPack) {
 function themeDigest(facts: FactsPack) {
   return facts.themes.map((t) => ({
     label: t.label, gloss: t.gloss, support_count: t.support_count, item_ids: t.item_ids,
+  }));
+}
+
+/**
+ * bottom_items as a model may see them: PICKED field by field (the head() discipline), WITHOUT
+ * item_id, and with the AREA NAME in place of the category slug. The ids are engine vocabulary —
+ * handed the raw list under "use no name absent from this", the model wrote "COM6 and GEN6
+ * suggest ... D3, SYS3, and SYS6 together suggest a pattern" onto a live report (Natalie,
+ * 2026-08-19), and 'sys'/'comm' slugs are the same leak one field over. With only text, mean,
+ * theme and a real area name to quote, it can name a question solely by what it asks.
+ * (s5/s6's `categories` keep their ids on purpose: those schemas make the model echo
+ * category_id back, and the coverage gate checks it.)
+ */
+function itemsForModel(facts: FactsPack) {
+  const names = new Map(facts.categories.map((c) => [c.id, c.name]));
+  return facts.bottom_items.map((b) => ({
+    area: names.get(b.category_id) ?? b.category_id, mean: b.mean, text: b.text, theme: b.theme,
   }));
 }
 
@@ -109,11 +138,11 @@ export interface SectionRegistryEntry {
 }
 
 export const SECTION_REGISTRY: Record<AiSectionId, SectionRegistryEntry> = {
-  s2:  { schema: S2Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), cover: f.cover, profile: f.profile }) },
+  s2:  { schema: S2Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), cover: f.cover, profile: profileInPlainEnglish(f.profile) }) },
   s4:  { schema: S4Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories, gating: f.gating }) },
   s5:  { schema: S5Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories.slice(0, 3) }) },
-  s6:  { schema: S6Schema,  maxOutputTokens: 8000, slice: (f) => ({ ...head(f), categories: f.categories.slice(3), blind_spots: f.blind_spots, dispersion: f.dispersion, top_three: f.categories.slice(0, 3), bottom_items: f.bottom_items, growth_trajectory: f.profile.growth_trajectory ?? null }) },
-  s7:  { schema: S7Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), bottom_items: f.bottom_items, pattern_counts: f.pattern_counts }) },
+  s6:  { schema: S6Schema,  maxOutputTokens: 8000, slice: (f) => ({ ...head(f), categories: f.categories.slice(3), blind_spots: f.blind_spots, dispersion: f.dispersion, top_three: f.categories.slice(0, 3), bottom_items: itemsForModel(f), growth_trajectory: f.profile.growth_trajectory ? plainProfileValue('growth_trajectory', f.profile.growth_trajectory) : null }) },
+  s7:  { schema: S7Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), bottom_items: itemsForModel(f), pattern_counts: f.pattern_counts }) },
   s9:  { schema: S9Schema,  maxOutputTokens: 4000, slice: (f) => ({ ...head(f), dependencies: f.dependencies, gating: f.gating, themes: themeDigest(f) }) },
   s12: { schema: S12Schema, maxOutputTokens: 4000, slice: (f) => ({ ...head(f), categories: f.categories }) },
 };

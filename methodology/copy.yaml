@@ -37,9 +37,9 @@ dossier:
 # system.tsx / pdf/document.tsx; {fromName}/{toName} interpolated in lib/report/view.ts.
 dependency_reads:
   load_bearing: "{fromName} is weak here too, so this dependency is active and part of what it is costing you."
-  clear: "{fromName} is strong, so it is not what is capping your {toName}."
-  at_risk: "{toName} is strong for now, but {fromName} is weak beneath it, so that strength is running on borrowed time."
-  both_strong: "Both are strong. Nothing to flag here."
+  clear: "{fromName} is doing well, so it is not what is limiting your {toName}."
+  at_risk: "{toName} is holding up for now, but {fromName} is weak underneath it, and that will catch up with you if it is not addressed."
+  both_strong: "Neither area in this pair is holding the other back. The next gains here come from raising the areas themselves, not from fixing the link between them."
 # One deterministic XPG read per archetype x tier, for S3's Executive Health Dashboard.
 # S3 is not an AI section and never will be — the dashboard is the numbers layer, and it must
 # not degrade to prose when the model is unavailable (spec §3). Tier ids are rules.yaml's
@@ -48,8 +48,8 @@ xpg_read:
   capacity:
     healthy_ready: "Every area is carrying its load and the numbers are strong across the board. The most useful question now is not what to strengthen, it is what to build for the season ahead."
     healthy_stretched: "Every area is carrying its load, but the whole system is running near its limit. Adding load before adding capacity is how a healthy church becomes a strained one."
-    strained: "No single area has given way, but nothing has much room either. Read this as a whole-system capacity picture rather than a list of separate problems."
-    at_risk: "No single area has given way, yet every one of them is running low at once. Treat this as a capacity floor to build up from, not a list of separate problems."
+    strained: "No one area is failing, but every area is close to its limit at the same time. This is one capacity problem for the whole church, not eight separate problems."
+    at_risk: "No one area is failing on its own, but every area is running low at once. The work is to raise the whole church together, not to fix problems one at a time."
   constraint:
     healthy_ready: "One area is capping what an otherwise strong system can reach. Strengthening it is the highest-leverage move available to you this year."
     healthy_stretched: "One area is limiting an otherwise healthy system. That is where the ceiling sits, and lifting it lifts everything after it."
@@ -58,7 +58,7 @@ xpg_read:
   foundation:
     healthy_ready: "No stage is falling short, but an enabler is capping what the strong areas can reach. Strengthen what holds the weight before adding height."
     healthy_stretched: "Your stages are carrying their load; the enablers beneath them are not yet. Every area leaning on those enablers is capped at their level, whatever its own score says."
-    strained: "Nothing has given way outright, but the enablers underneath everything set the ceiling. Work those before the stages, because no stage rises above what supports it."
+    strained: "Nothing is failing outright, but the enablers underneath everything set the ceiling. Strengthen those first, because no stage can rise above what supports it."
     at_risk: "The enablers holding up every other area are the binding limit right now. Stage-level gains will be temporary until what supports them is strengthened."
 # The three s6 micro-template beats that had no data source until now (spec §4). The full beat
 # order is affirm -> pivot -> evidence -> not_statement -> reframe -> trajectory; affirm /

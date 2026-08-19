@@ -67,20 +67,9 @@ function AiFallback({ fallback }: { fallback: SectionBody }) {
 function S2View({ ai, fallback }: AiRendererProps) {
   const parsed = S2Schema.safeParse(ai)
   if (!parsed.success) return <AiFallback fallback={fallback} />
-  const { summary, what_this_is_not, context_bullets } = parsed.data
-  return (
-    <>
-      <p className={BODY}>{summary}</p>
-      <p className={BODY}>{what_this_is_not}</p>
-      {context_bullets.length > 0 && (
-        <ul className={LIST}>
-          {context_bullets.map((bullet) => (
-            <li key={bullet}>{bullet}</li>
-          ))}
-        </ul>
-      )}
-    </>
-  )
+  // Summary only (Natalie, 2026-08-19). safeParse STRIPS the removed legacy fields from
+  // pre-change persisted rows, so destructuring parsed.data — not `ai` — is load-bearing.
+  return <p className={BODY}>{parsed.data.summary}</p>
 }
 
 function S4View({ ai, fallback }: AiRendererProps) {
@@ -407,10 +396,10 @@ function S10PhaseBody({
 }
 
 /**
- * Renders the 13 report sections as the web mirror of the PDF's content pages (Part B spec):
+ * Renders the 12 report sections as the web mirror of the PDF's content pages (Part B spec):
  * each section opens with editorial chrome — a 3px BAND_FILL[band] tick, an `NN / TOTAL` caps
  * eyebrow, the title, then a 2px ink rule — then its charts, then its content; the booking CTA
- * renders once, immediately after s12, where document.tsx puts it. Page chrome — the toolbar,
+ * renders once, immediately after s11, the report's final section, where document.tsx puts it. Page chrome — the toolbar,
  * the notices, the cover, the shared-view footer — stays on the pages. `band` is the cover's
  * verdict band (`cover.band`): the colour IS the diagnosis, and every opener's tick wears it.
  *
@@ -468,7 +457,10 @@ export function ReportSections({ sections, band, visuals }: { sections: Assemble
               <WebBlock key={block.kind} model={block} />
             ))}
           </section>
-          {section.id === 's12' && (
+          {/* Anchored to s11 since the 2026-08-19 reorder: "Where XPG can partner" is the
+              report's final section (report.yaml key order puts s12 before it), so the CTA sits
+              directly under the partner brief it belongs to. */}
+          {section.id === 's11' && (
             <div className="flex flex-col items-start gap-2">
               <p className={SUBHEAD}>{bookingCta.heading}</p>
               <p className={BODY}>{bookingCta.body}</p>

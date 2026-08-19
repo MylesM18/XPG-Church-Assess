@@ -132,7 +132,7 @@ const aiSection = (id: string, title: string, ai: unknown): AssembledSection => 
 })
 
 const VALID_AI: Record<string, unknown> = {
-  s2: { summary: 'AI summary text', what_this_is_not: 'AI not-this text', context_bullets: ['ctx one', 'ctx two'] },
+  s2: { summary: 'AI summary text' },
   s4: { thesis_word: 'Alignment', narrative: 'AI s4 narrative' },
   s5: { strengths: [{ category_id: 'c1', heading: 'Strength head', body: 'Strength body' }] },
   s6: {
@@ -166,7 +166,7 @@ describe('AI renderers', () => {
 
   it('renders the distinctive content of each AI shape', () => {
     const expected: Record<string, string[]> = {
-      s2: ['AI summary text', 'AI not-this text', 'ctx one', 'ctx two'],
+      s2: ['AI summary text'],
       s4: ['Alignment', 'AI s4 narrative'],
       s5: ['Strength head', 'Strength body'],
       s6: ['affirm text', 'pivot text', 'evidence text', 'not statement text', 'reframe text', 'trajectory text'],
@@ -197,6 +197,27 @@ describe('AI renderers', () => {
     // vacuously.
     expect(positions.every((p) => p > -1)).toBe(true)
     expect(positions).toEqual([...positions].sort((a, b) => a - b))
+  })
+
+  /**
+   * Natalie, 2026-08-19: the executive summary is the summary paragraph, nothing else — the
+   * "This is not a full diagnosis..." line and the profile bullet list are gone. Persisted
+   * reports written before the change still carry both fields, and safeParse STRIPS unknown
+   * keys rather than failing, so a legacy row must render summary-only rather than fall back.
+   */
+  it('renders only the summary for s2, even when a legacy payload still carries the removed fields', () => {
+    const legacy = {
+      summary: 'AI summary text',
+      what_this_is_not: 'LEGACY not-this text',
+      context_bullets: ['LEGACY ctx bullet'],
+    }
+    const html = renderToStaticMarkup(
+      createElement(ReportSections, { visuals: VISUALS, band: BAND, sections: [aiSection('s2', 'Summary', legacy)] }),
+    )
+    expect(html).toContain('AI summary text')
+    expect(html).not.toContain('FALLBACK BODY s2') // parsed, not fallen back
+    expect(html).not.toContain('LEGACY not-this text')
+    expect(html).not.toContain('LEGACY ctx bullet')
   })
 
   it('omits the s7 pattern claim when it is null', () => {

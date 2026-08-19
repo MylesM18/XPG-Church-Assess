@@ -221,6 +221,9 @@ describe('resolveReportSections', () => {
   // `needsGeneration` collapses both into one signal computed from the ASSEMBLED sections, so it
   // needs no new column read and the module stays Supabase-free (D-P5-3). `stale` is untouched.
   describe('needsGeneration — no AI section is usable for the live inputs', () => {
+    // Deliberately keeps the two fields S2Schema DROPPED on 2026-08-19: this is the shape of a
+    // legacy persisted row, and safeParse must strip the extras and keep source 'ai' rather
+    // than fall back — the resolve-path half of the legacy test in sections-dispatch.test.ts.
     const S2_AI = {
       summary: 'Overall health is steady.',
       what_this_is_not: 'This is not a verdict on anyone.',

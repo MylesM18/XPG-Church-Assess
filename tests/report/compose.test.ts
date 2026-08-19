@@ -125,8 +125,6 @@ const constraintFacts: FactsPack = buildFacts({
 
 const goodS2 = {
   summary: `Overall health sits at ${constraintFacts.overall.capacity} out of 100, in the ${constraintFacts.overall.tier.name} band. ${constraintFacts.primary_constraint!.name} is holding the rest back.`,
-  what_this_is_not: 'This is not a verdict on anyone.',
-  context_bullets: [],
 };
 
 const good = (id: AiSectionId): unknown => {
@@ -248,8 +246,10 @@ function gateFailingS2() {
 // and keep the filler digit-free so gate 2 stays clear.
 function overlongS2() {
   const ceiling = methodology.report.sections.s2.length_ceiling;
-  const base = `${goodS2.summary} ${goodS2.what_this_is_not}`.length;
-  return { ...goodS2, what_this_is_not: `${goodS2.what_this_is_not} ${'x'.repeat(ceiling + 434 - base - 1)}` };
+  const base = goodS2.summary.length;
+  // Padding APPENDS to summary — S2Schema's only field since 2026-08-19 — so the required
+  // mentions it carries survive and the length gate, not gate 3, is what fires.
+  return { summary: `${goodS2.summary} ${'x'.repeat(ceiling + 434 - base - 1)}` };
 }
 
 // The s12 twin of overlongS2 above, and deliberately a DIFFERENT ceiling: s12's is 900 where
@@ -504,9 +504,9 @@ describe('composeReport', () => {
         if (id !== 's2') return Promise.resolve(unitKey ? goodUnit(id, unitKey) : good(id));
         correctives.push(corrective ?? null);
         n += 1;
-        // Hung on what_this_is_not, not summary: summary carries s2's required mentions, and
-        // gate 3 fires before gate 4 would ever see the label.
-        return Promise.resolve(n === 1 ? { ...goodS2, what_this_is_not: `${label} disagreed.` } : good('s2'));
+        // APPENDED to summary, never substituted for it: summary carries s2's required
+        // mentions, and replacing it would make gate 3 fire before gate 4 ever saw the label.
+        return Promise.resolve(n === 1 ? { summary: `${goodS2.summary} ${label} disagreed.` } : good('s2'));
       },
     );
     await composeReport({ facts: constraintFacts, methodology, labels: [label] });

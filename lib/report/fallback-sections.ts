@@ -34,22 +34,6 @@ export interface SectionBody {
   bullets: string[];
 }
 
-/** Settings-form labels for the 12 profile keys (app/app/[churchId]/settings/settings-form.tsx). */
-const PROFILE_LABELS: Record<string, string> = {
-  context: 'Context',
-  attendance_band: 'Weekend attendance (required)',
-  denomination: 'Denomination',
-  adults_band: 'Adults',
-  staff_fte_band: 'Staff (FTE)',
-  budget_band: 'Annual budget',
-  church_age_band: 'Church age',
-  campuses_band: 'Campuses',
-  growth_trajectory: 'Growth trajectory',
-  facility_status: 'Facility',
-  leadership_history: 'Leadership history',
-  consultant_notes: 'Consultant notes',
-};
-
 /** Exported for the web phase rail, which keys its opacity ramp off the PHASE rather than
  *  the entry's array position — see roadmapEntries below and lib/report/web-visuals.ts. */
 export type Phase = 'align' | 'build' | 'scale';
@@ -307,10 +291,30 @@ export function roadmapEntries(
         if (text) entries.push({ phase, dayLabel: DAY_LABELS[phase], text });
       }
     }
+  } else if (facts.improvement.priority_areas.length > 0) {
+    // Capacity path with real work to do (Natalie, 2026-08-19): the old generosity-only roadmap
+    // read as generic template copy, because it WAS — the same three lines whatever the church's
+    // own data said. The quarter now walks the church's own priority areas
+    // (improvement.priority_areas, worst first): 30 days aligns the weakest, 60 builds the
+    // second, 90 scales the third, each carrying that area's phase-matched action from
+    // action_library.categories. Fewer than three priorities and the LAST one keeps the later
+    // phases (one area ⇒ it gets the whole align/build/scale arc, the constraint treatment).
+    const priorities = facts.improvement.priority_areas;
+    PHASES.forEach((phase, i) => {
+      const area = priorities[Math.min(i, priorities.length - 1)]!;
+      const text = lib.categories[area.category_id]?.[phase];
+      if (text) {
+        entries.push({
+          phase,
+          dayLabel: DAY_LABELS[phase],
+          text: `${area.name}, ${area.score} out of 100: ${text}`,
+        });
+      }
+    });
   } else {
-    // Capacity path (and, structurally, any archetype that reaches here with no primary and no
-    // gating): the generosity entry, keyed by facts.generosity_mode, falling back to 'both'
-    // when null (Natalie's ruling 6) — never drop the bullet.
+    // Nothing below the standard (and no primary, no gating): the generosity entry, keyed by
+    // facts.generosity_mode, falling back to 'both' when null (Natalie's ruling 6) — never drop
+    // the bullet.
     const mode = facts.generosity_mode ?? 'both';
     const set = lib.generosity[mode];
     for (const phase of PHASES) {
@@ -395,7 +399,10 @@ function bulletsFor(
     case 's1':
       return [];
     case 's2':
-      return Object.entries(facts.profile).map(([k, v]) => `${PROFILE_LABELS[k] ?? k}: ${v}`);
+      // No bullets since 2026-08-19 (Natalie): the raw profile listing ("attendance_band:
+      // 250_499" and friends) read as debug output on a live report. The executive summary is
+      // the summary paragraph, nothing else.
+      return [];
     case 's3':
       // ONE bullet, not eight. The eight `Name: score — bandRead` lines this used to emit are
       // now the statGridModel chart (lib/report/charts.ts) on both surfaces, with the bar fill

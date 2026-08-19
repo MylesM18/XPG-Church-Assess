@@ -138,16 +138,9 @@ function AiFallback({ fallback }: { fallback: SectionBody }) {
 function S2View({ ai, fallback }: AiRendererProps) {
   const parsed = S2Schema.safeParse(ai);
   if (!parsed.success) return <AiFallback fallback={fallback} />;
-  const { summary, what_this_is_not, context_bullets } = parsed.data;
-  return (
-    <>
-      <Text style={s.body}>{summary}</Text>
-      <Text style={s.body}>{what_this_is_not}</Text>
-      {context_bullets.map((bullet) => (
-        <Text key={bullet} style={s.bullet}>{`•  ${bullet}`}</Text>
-      ))}
-    </>
-  );
+  // Summary only (Natalie, 2026-08-19). safeParse STRIPS the removed legacy fields from
+  // pre-change persisted rows, so rendering parsed.data — not `ai` — is load-bearing.
+  return <Text style={s.body}>{parsed.data.summary}</Text>;
 }
 
 function S4View({ ai, fallback }: AiRendererProps) {
@@ -312,7 +305,9 @@ export const PAGE_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
   ['s6'],
   ['s7', 's8'],
   ['s9', 's10'],
-  ['s11', 's12'],
+  // s12 before s11 since the 2026-08-19 reorder: the partner section closes the report,
+  // directly above the booking CTA on this final page.
+  ['s12', 's11'],
 ];
 
 type PageGroup = { key: string; sections: Array<{ section: AssembledSection; number: string; title: string }> };
@@ -402,7 +397,9 @@ export function ReportDocument({
             </View>
           ))}
 
-          {group.sections.some(({ section }) => section.id === 's12') ? (
+          {/* s11 ("Where XPG can partner") closes the report since the 2026-08-19 reorder;
+              the CTA renders at the end of its page, directly under the partner brief. */}
+          {group.sections.some(({ section }) => section.id === 's11') ? (
             <View style={s.section}>
               <Text style={s.ctaHeading}>{bookingCta.heading}</Text>
               <Text style={s.body}>{bookingCta.body}</Text>

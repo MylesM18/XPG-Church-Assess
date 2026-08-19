@@ -5,7 +5,7 @@
 #
 # This version feeds the report cache key (lib/report/report-hash.ts): bumping it regenerates
 # every report without staling any run.
-version: "0.3.0"
+version: "0.4.0"
 
 # The register. Kept word-for-word in sync with SYSTEM_PROMPT in lib/ai/prose.ts — the two
 # instruct the same model about the same copy, and letting them drift is how the AI path and the
@@ -109,8 +109,8 @@ sections:
     title: "Strategic direction"
     templates:
       capacity: >-
-        Nothing is capping you. The working model below shows which areas compound into which,
-        so growth investment lands where it multiplies.
+        No single area is holding the others back. The map below shows which areas feed which,
+        so you can point new investment where it will carry the furthest.
       constraint: >-
         {primary_name} is where the data points. The working model below shows what it caps, and
         why investment further along the path rarely holds.
@@ -123,19 +123,10 @@ sections:
   s10:
     title: "30/60/90 roadmap"
     templates:
-      capacity: "Ninety days, in three phases: align, build, scale."
+      capacity: "Ninety days in three phases, each with one focus and a concrete first move."
       constraint: "Ninety days in three phases. Align, build, scale, with every phase pointed at {primary_name}."
       foundation: "Ninety days in three phases. Align, build and scale, with the enablers going first."
     length_ceiling: 2400
-    required_mentions: []
-
-  s11:
-    title: "Where XPG can partner"
-    templates:
-      capacity: "Each phase above has a matching engagement."
-      constraint: "Each phase above has a matching engagement."
-      foundation: "Each phase above has a matching engagement."
-    length_ceiling: 1200
     required_mentions: []
 
   s12:
@@ -156,6 +147,18 @@ sections:
     length_ceiling: 900
     required_mentions: [tier_name, overall_percent]
 
+  s11:
+    title: "Where XPG can partner"
+    templates:
+      capacity: >-
+        XPG partners with churches end to end, bringing the resources most teams cannot staff on their own, from technology and working systems to leadership development and coaching. Each phase of the roadmap above has a matching engagement.
+      constraint: >-
+        XPG partners with churches end to end, bringing the resources most teams cannot staff on their own, from technology and working systems to leadership development and coaching. Each phase of the roadmap above has a matching engagement.
+      foundation: >-
+        XPG partners with churches end to end, bringing the resources most teams cannot staff on their own, from technology and working systems to leadership development and coaching. Each phase of the roadmap above has a matching engagement.
+    length_ceiling: 1200
+    required_mentions: []
+
 # Gate family 3. Each list captures the OTHER archetypes' thesis FRAMINGS — multi-word phrases,
 # never single generic words and never stage names, which are shared vocabulary and would
 # false-positive on every report. Matched case-insensitively as substrings.
@@ -170,11 +173,13 @@ banned_phrases:
     - "a question of capacity"
     - "what to build next rather than what to repair"
     - "nothing is capping you"
+    - "no single area is holding the others back"
   foundation:
     - "primary growth constraint"
     - "the area limiting the rest"
     - "every stage is carrying its load"
     - "a question of capacity"
+    - "no single area is holding the others back"
 
 # S10/S11 are fully deterministic in v1 (P4). Selection is keyed by archetype, primary
 # constraint, gated enablers and bottom items; the text is used verbatim.

@@ -26,6 +26,28 @@ function dirWithMissingReportSection(): string {
   return dir;
 }
 
+describe("report.yaml section order (Natalie, 2026-08-19)", () => {
+  /**
+   * "Where XPG can partner" closes the report, directly above the booking CTA, with the final
+   * executive assessment just before it. Section order is owned HERE — both assemblers map over
+   * Object.keys(methodology.report.sections) — so the swap is a YAML key reorder, and the
+   * renderers' 11/12 numbering follows the array index automatically.
+   */
+  it('ends with the final assessment then the partner section, in that order', () => {
+    const ids = Object.keys(loadMethodology().report.sections);
+    expect(ids.slice(-2)).toEqual(['s12', 's11']);
+  });
+
+  it('s11 briefs what XPG actually brings, technology through leadership', () => {
+    const s11 = loadMethodology().report.sections.s11;
+    for (const archetype of ARCHETYPES) {
+      const t = s11.templates[archetype].toLowerCase();
+      expect(t, archetype).toContain('technology');
+      expect(t, archetype).toContain('leadership');
+    }
+  });
+});
+
 describe("report.yaml carries no retired engine jargon in reader-facing copy", () => {
   const sections = loadMethodology().report.sections;
 
