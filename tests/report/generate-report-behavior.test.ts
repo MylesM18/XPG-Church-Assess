@@ -16,10 +16,16 @@ import type { Response } from '@/lib/engine/types';
  * infrastructure — @/lib/ai/themes and @/lib/report/compose are additionally mocked with the
  * same vi.hoisted idiom so no real OpenAI call is ever reachable.
  *
- * Global Constraint (plan L19): "AI is off" (PROSE_MODE unset) logs nothing at all; "AI is
- * broken" logs `[report] section <id>: <reason>`. That distinction is a TESTED invariant — the
- * "AI is broken" half is already covered at composeSection granularity by tests/ai/sections.test.ts;
- * the "logs nothing at all" half had zero coverage anywhere in the repo before this file.
+ * Global Constraint (plan L19): "AI is off" logs nothing under `[report]`; "AI is broken" logs
+ * `[report] section <id>: <reason>`. That distinction is a TESTED invariant — the "AI is broken"
+ * half is already covered at composeSection granularity by tests/ai/sections.test.ts; the
+ * "[report]-silent" half had zero coverage anywhere in the repo before this file.
+ *
+ * Since fix/prose-auto-generate-on-view "AI is off" means `proseEnabled()` is false
+ * (lib/ai/prose-mode.ts): PROSE_MODE=fallback, or PROSE_MODE unset AND OPENAI_API_KEY absent —
+ * key-present now turns AI ON. The one permitted off-log is that helper's single
+ * `[prose-mode] AI prose disabled: …` reason line, tagged `[prose-mode]` precisely so the
+ * `[report]`-silence invariant below stays exact. The "off" case therefore deletes BOTH env vars.
  */
 
 const { mockCreateClient, mockGenerateProse, mockClusterThemes, mockComposeReport } = vi.hoisted(() => ({
@@ -213,13 +219,18 @@ function reportLines(): string[] {
     .filter((line) => line.startsWith('[report]'));
 }
 
-describe('PROSE_MODE gate: AI off vs AI on is a tested invariant (R5)', () => {
-  it('AI off (PROSE_MODE unset): logs nothing under [report], and never calls clusterThemes, composeReport, or save_report', async () => {
-    const had = 'PROSE_MODE' in process.env;
-    const prev = process.env.PROSE_MODE;
+describe('proseEnabled() gate: AI off vs AI on is a tested invariant (R5)', () => {
+  it('AI off (PROSE_MODE unset AND OPENAI_API_KEY absent): logs nothing under [report], and never calls clusterThemes, composeReport, or save_report', async () => {
+    const hadMode = 'PROSE_MODE' in process.env;
+    const prevMode = process.env.PROSE_MODE;
+    const hadKey = 'OPENAI_API_KEY' in process.env;
+    const prevKey = process.env.OPENAI_API_KEY;
     delete process.env.PROSE_MODE;
-    // Confirm the ambient value really is unset so this case cannot silently invert.
+    delete process.env.OPENAI_API_KEY;
+    // Confirm the ambient values really are unset so this case cannot silently invert — with a
+    // key in the dev's shell, proseEnabled() would be TRUE and this would test the ON path.
     expect(process.env.PROSE_MODE).toBeUndefined();
+    expect(process.env.OPENAI_API_KEY).toBeUndefined();
 
     try {
       const { rpcCalls } = setupSupabase({ runRow: RUN_A_ROW });
@@ -231,8 +242,10 @@ describe('PROSE_MODE gate: AI off vs AI on is a tested invariant (R5)', () => {
       expect(mockComposeReport).not.toHaveBeenCalled();
       expect(rpcCalls.some((c) => c.name === 'save_report')).toBe(false);
     } finally {
-      if (had) process.env.PROSE_MODE = prev;
+      if (hadMode) process.env.PROSE_MODE = prevMode;
       else delete process.env.PROSE_MODE;
+      if (hadKey) process.env.OPENAI_API_KEY = prevKey;
+      else delete process.env.OPENAI_API_KEY;
     }
   });
 

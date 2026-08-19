@@ -441,7 +441,7 @@ Server-side, official `openai` SDK. **API key server-only.** Both calls are addi
 - Note the reasoning-model caveat: `gpt-5.1` rejects non-default sampling parameters, do not set custom `temperature`/`top_p`; call it plainly with `reasoning: { effort: 'low' }`. `max_output_tokens` counts reasoning tokens, so budget it high enough (shipped: 4000) that a truncated `status: 'incomplete'` response stays the rare case, and log it distinctly when it happens.
 
 ### 8.3 The fallback (`fallback.ts`) and the toggle
-- `PROSE_MODE=ai|fallback` env switch. And on **any** AI error/timeout, auto-fall-back.
+- `PROSE_MODE=ai|fallback` env switch — optional since fix/prose-auto-generate-on-view: unset ⇒ AI is on iff `OPENAI_API_KEY` is set (`lib/ai/prose-mode.ts` `proseEnabled()`); `fallback` forces off, `ai` forces on. And on **any** AI error/timeout, auto-fall-back.
 - `fallback.ts` fills the same nine-field `ReportBlocks` shape from templates in `copy.yaml`, interpolating the struct's values. Rougher, correct, complete.
 - `diagnoses.prose_source` records which was used. **This is the mechanism that makes the acceptance test pass.**
 
@@ -475,7 +475,7 @@ SUPABASE_SERVICE_ROLE_KEY=        # server only; used ONLY in /api/respond/*
 OPENAI_API_KEY=                   # server only
 OPENAI_MODEL_PROSE=gpt-5.1
 OPENAI_MODEL_CLASSIFY=            # deferred with §8.1; unset until that tier is built
-PROSE_MODE=ai                     # ai | fallback
+PROSE_MODE=                       # optional override: (unset) key decides | ai | fallback
 RESEND_API_KEY=
 EMAIL_FROM="Cairn <assess@yourdomain>"
 APP_URL=https://…
