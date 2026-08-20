@@ -15,6 +15,10 @@ export interface AnswerFormItem {
 
 const RANGE_LABEL: Record<'lo' | 'mid' | 'hi', string> = { lo: '1–3', mid: '4–7', hi: '8–10' }
 
+// Every unanswered question opens on the midpoint, already selected and already showing its number.
+// A member who means 5 presses Next; before this they had to drag off 5 and back to register it.
+const DEFAULT_SCORE = 5
+
 export function AnswerForm({
   categoryName,
   items,
@@ -30,8 +34,8 @@ export function AnswerForm({
   onSaveAnswer: (answer: AnswerInput) => Promise<{ ok: boolean; error?: string }>
   onComplete: () => void
 }) {
-  const [values, setValues] = useState<Record<string, number | null>>(
-    () => Object.fromEntries(items.map((i) => [i.id, initialValues[i.id] ?? null])),
+  const [values, setValues] = useState<Record<string, number>>(
+    () => Object.fromEntries(items.map((i) => [i.id, initialValues[i.id] ?? DEFAULT_SCORE])),
   )
   const [reflections, setReflections] = useState<Record<string, string>>(initialReflections)
   // Open at the first unanswered question; if all are answered (Take Again), open at step 0.
@@ -45,7 +49,6 @@ export function AnswerForm({
   const currentItem = items[step]
   const isLastStep = step === questionCount - 1
   const questionNumber = step + 1
-  const currentAnswered = currentItem != null && values[currentItem.id] != null
 
   // Move focus to the question heading on every step change (mirrors the original focus discipline).
   // A plain :focus outline guarantees a visible ring after PROGRAMMATIC focus (focus-visible may not fire).
@@ -145,24 +148,22 @@ export function AnswerForm({
             min={1}
             max={10}
             step={1}
-            value={values[currentItem.id] ?? 5}
+            value={values[currentItem.id] ?? DEFAULT_SCORE}
             onChange={(e) => setValues((v) => ({ ...v, [currentItem.id]: Number(e.target.value) }))}
             className="w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
             aria-label={currentItem.text}
             aria-describedby={`bands-${currentItem.id}`}
           />
           <span className="w-8 text-right font-body text-sm text-ink" aria-hidden="true">
-            {values[currentItem.id] ?? '—'}
+            {values[currentItem.id] ?? DEFAULT_SCORE}
           </span>
         </div>
-        {values[currentItem.id] == null && (
-          <p className="font-body text-xs text-ink-soft">Drag to choose 1–10.</p>
-        )}
+        <p className="font-body text-xs text-ink-soft">Drag to choose 1–10.</p>
 
         <ul id={`bands-${currentItem.id}`} className="flex flex-col gap-2">
           {BANDS.map((b) => {
-            const v = values[currentItem.id]
-            const active = v != null && band(v) === b.key
+            const v = values[currentItem.id] ?? DEFAULT_SCORE
+            const active = band(v) === b.key
             return (
               <li
                 key={b.key}
@@ -225,8 +226,8 @@ export function AnswerForm({
 
         <button
           type="submit"
-          aria-disabled={pending || !currentAnswered}
-          onClick={(e) => { if (pending || !currentAnswered) e.preventDefault() }}
+          aria-disabled={pending}
+          onClick={(e) => { if (pending) e.preventDefault() }}
           className="rounded-md border border-line bg-ink px-4 py-2 font-body text-paper transition-opacity hover:opacity-90 aria-disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
         >
           {isLastStep ? (pending ? 'Finishing…' : 'Finish') : (pending ? 'Saving…' : 'Next')}

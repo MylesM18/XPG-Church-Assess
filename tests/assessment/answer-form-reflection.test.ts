@@ -50,16 +50,24 @@ describe('answer-form reflection textarea', () => {
     expect(src).toContain("reflection: (reflections[currentItem.id] ?? '').trim()")
   })
 
-  it('gates Next/Finish on values alone — currentAnswered must never depend on reflections', () => {
-    // A `not.toContain('reflections[currentItem.id] &&')` pin (the pre-fix version of this test)
-    // is evadable: it only rejects that one exact spelling. A regression that appends a
-    // differently-worded reflections check to the SAME line — e.g.
-    // `... && !!reflections[currentItem.id]?.trim()` — leaves the original prefix intact, so a
-    // substring check still finds nothing to object to. Anchoring the FULL line with ^...$ (in
-    // multiline mode) closes that gap: anything appended or changed on this line fails the match,
-    // regardless of how the extra condition is spelled.
-    expect(src).toMatch(
-      /^\s*const currentAnswered = currentItem != null && values\[currentItem\.id\] != null\s*$/m,
-    )
+  it('gates Next/Finish on the save round-trip alone — never on reflections', () => {
+    // The reflection is optional: leaving the textarea empty must never strand a member on the
+    // step. This used to be pinned through `currentAnswered`; since every question now opens with
+    // DEFAULT_SCORE already chosen, the only gate left is `pending`, so the two gating lines are
+    // anchored instead. Anchoring the FULL line with ^...$ (multiline) is what makes the pin
+    // evasion-proof: a `not.toContain('reflections[currentItem.id] &&')` substring check only
+    // rejects one spelling, and a regression that appends a differently-worded reflections
+    // condition to the same line — e.g. `pending || !reflections[currentItem.id]?.trim()` —
+    // leaves the original prefix intact. Anything appended to these lines fails the match.
+    expect(src).toMatch(/^\s*aria-disabled=\{pending\}\s*$/m)
+    expect(src).toMatch(/^\s*onClick=\{\(e\) => \{ if \(pending\) e\.preventDefault\(\) \}\}\s*$/m)
+    // ...and nothing on the save path may bail out because a reflection is empty.
+    const bailsOnReflection = src
+      .split('\n')
+      .filter((l) => l.includes('reflections[') && /\breturn false\b|preventDefault\(\)/.test(l))
+    expect(
+      bailsOnReflection,
+      `reflection text is gating the save path: ${bailsOnReflection.join(' | ')}`,
+    ).toEqual([])
   })
 })
