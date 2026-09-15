@@ -82,7 +82,7 @@ Delivery is at-least-once, biased toward Kevin hearing about it:
    `markResultsViewedEmailed(supabase, churchId): Promise<boolean>`. Any RPC error, including "function
    does not exist" before the migration is applied, logs one reason-only warning and returns `false`.
 2. **`lib/notify/results-viewed.ts`** (pure builder plus orchestrator).
-   - `resultsViewedSummary({ churchName, cover, categories, methodologyCategories })` returns
+   - `resultsViewedSummary({ churchName, cover, areaScores, areaNames })` returns
      `{ churchName, overallScore, healthStage, areas: { name, score }[] }`. Areas follow the report's
      order (score high to low, ties by area id); a missing name falls back to the area id, as
      `lib/report/facts.ts` does. Total: never throws.
@@ -90,7 +90,9 @@ Delivery is at-least-once, biased toward Kevin hearing about it:
      `input = { viewerIsAdmin, runStatus, buildSummary: () => ResultsViewedSummary }` and
      `deps = { claim, send, mark }`. Order: gate (admin and complete) → build summary → claim → send →
      mark only on `ok` (building first means a claim is only taken when there is something to send). Returns an outcome: `skipped`, `not_claimed`, `sent`, `send_failed`, or `error`.
-     Never rejects: anything thrown by a dependency or the builder becomes `error`, logged reason-only.
+     Never rejects: a builder or claim that throws becomes `error`; a send that throws counts as
+     `send_failed`; a mark that fails or throws still returns `sent`, because the email went out. Each
+     failure logs one reason-only warning.
 3. **`lib/email/send-results-viewed.ts`**.
    `resultsViewedEmailContent(summary)` (pure: subject plus branded-email args) and
    `sendResultsViewedEmail(summary): Promise<{ ok: boolean }>`. Recipient constant
