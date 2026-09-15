@@ -86,6 +86,11 @@ names to seams that were previously expressed inline at many call sites. See
   and consumed by both the screen and the PDF adapters.
 - **Prose** — the AI-additive report blocks (`lib/ai/prose.ts`), fact-checked, with a
   deterministic **fallback** (`lib/ai/fallback.ts`). The AI rewords; it never decides.
+- **Results-viewed email** **(new)** — the one email to XP Gathering (kevin@xpgathering.com) sent the
+  first time an admin opens the report of a closed run: overall score, health stage, and area scores,
+  church-level only. Once per run through `claim_results_viewed_email` / `mark_results_viewed_emailed`
+  (claim, send, mark; a failed send retries after a 5-minute hold), and never able to break the report.
+  Interface: `notifyResultsViewed` (`lib/notify/results-viewed.ts`).
 
 ## The permission wall
 
