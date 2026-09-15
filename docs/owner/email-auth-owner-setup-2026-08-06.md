@@ -353,6 +353,64 @@ the marketing home page (see B3).
 
 ---
 
+## Part D — Invite = account creation (added 2026-09-14)
+
+> **Why this exists.** On 2026-09-11 fifteen leaders of one church each ended up on "Add your
+> church" and created twelve copies of it. No app invitation had been created for any of them, and
+> until now the app only learned an invitee's church at the very END of the invite path. Sending an
+> invitation now **creates the invitee's account and binds it to the church on the spot**, and the
+> invitation email's button signs them straight in. Spec:
+> `docs/superpowers/specs/2026-09-14-invite-account-binding-design.md`.
+
+### D1. Set the service-role key in Vercel
+
+The invite action provisions accounts through Supabase's admin API, which needs the service-role key
+on the server. Vercel → Project → Settings → Environment Variables → **Production**:
+
+- `SUPABASE_SERVICE_ROLE_KEY` = Supabase → Project Settings → API keys → **service_role** (secret).
+  Server-only; it must never get a `NEXT_PUBLIC_` prefix.
+
+Then **redeploy**. Without it the app degrades loudly: invitations are still created and emailed,
+the admin's form says *"Their account couldn't be prepared automatically"*, and `/accept/<token>`
+falls back to the old "Sign in to accept" path.
+
+### D2. Apply the migration and run pgTAP
+
+```bash
+supabase db push          # applies 20260914000100_invite_account_binding.sql
+npm run test:db           # includes supabase/tests/28_invite_account_binding_test.sql
+```
+
+### D3. What changed for the templates
+
+Nothing to paste. The `invited` flag the Confirm-signup template reads (B1a) is now set **at invite
+time** on the provisioned account, so the B1a limitation ("a leader who clicks BEGIN before opening
+their invitation keeps the admin copy") no longer applies to accounts created through an invitation.
+
+### D4. Verify end to end (owner-only — the agent cannot sign in)
+
+1. Invite a fresh address you control. The form should say *"Invitation emailed and their account is
+   ready."* Manage access → the person appears under **Pending invitations** as *account ready,
+   waiting for their first sign-in* — not under Members.
+2. Open the email; the button reads **Sign in and begin**. Clicking it should show "Signing you in…"
+   for a moment and land on the church dashboard with no church-creation step.
+3. Manage access again: the person now sits under **Members**; the pending row is gone.
+4. Invite another fresh address, but instead of the email go to the homepage → **BEGIN THE
+   ASSESSMENT** → enter that address → open the sign-in email. You must still land on the church
+   dashboard (never "Add your church"): the membership existed before you signed in.
+5. Revoke a pending invitation: that person can no longer reach the church (they get "Invitation
+   revoked" on the link and no church on sign-in).
+
+### D5. Repair the existing duplicate churches
+
+`docs/owner/merge-duplicate-churches.sql` merges every duplicate church into one canonical church:
+each duplicate's founder becomes a member of the canonical church, their answers move onto the
+canonical run, and the duplicate churches are deleted. It has a **dry-run** block and a
+`begin … rollback` wrapper — read the header, fill in the two parameters, run the dry run, then
+flip `rollback` to `commit`. Take a backup first (Supabase → Database → Backups).
+
+---
+
 ## Quick checklist
 
 - [ ] **A** — Resend domain `360churchhealthassessment.com` verified (DNS).
@@ -371,3 +429,8 @@ the marketing home page (see B3).
 - [ ] **C** — Google **Authorized redirect URIs** = `https://<project-ref>.supabase.co/auth/v1/callback` (Supabase URL, **not** the app's).
 - [ ] **C** — Google **Authorized JavaScript origins** = `https://www.360churchhealthassessment.com`.
 - [ ] **C** — Square ≥120×120 PNG logo uploaded (new owner asset, not the yellow wordmark).
+- [ ] **D** — `SUPABASE_SERVICE_ROLE_KEY` set in Vercel **Production**; **redeployed**.
+- [ ] **D** — `supabase db push` (20260914000100) + `npm run test:db` green (pgTAP 28).
+- [ ] **D** — Invited a fresh address; it showed *account ready* and the email button signed me straight into the church (D4 steps 1–3).
+- [ ] **D** — Same again via BEGIN THE ASSESSMENT instead of the email link; still landed on the church, never on "Add your church" (D4 step 4).
+- [ ] **D** — Duplicate churches merged with `merge-duplicate-churches.sql` after a backup (D5).
