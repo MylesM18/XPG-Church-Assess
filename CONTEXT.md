@@ -100,8 +100,9 @@ names to seams that were previously expressed inline at many call sites. See
   Security, never a hidden UI element. Members use the anon-key RLS client; privileged
   writes go through `SECURITY DEFINER` RPCs with explicit grants. A service-role client
   (`lib/supabase/service-role.ts`) exists only for server-trusted paths that either run without a user
-  (the reminder cron) or authorize the caller first (invitation binding, the results-viewed email);
-  those RPCs are granted to `service_role` and revoked from `authenticated`.
+  (the reminder cron) or authorize the caller first (invitation binding, the results-viewed email). The
+  RPCs those paths call are granted to `service_role` and revoked from `authenticated`; the cron also
+  reads and stamps its own tables directly.
 
 ## Branding
 

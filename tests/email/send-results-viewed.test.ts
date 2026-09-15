@@ -159,6 +159,9 @@ describe('sendResultsViewedEmail', () => {
     sendMock.mockResolvedValue({ data: { id: 'e1' }, error: null })
     await sendResultsViewedEmail(SUMMARY, RUN_ID)
     await sendResultsViewedEmail(SUMMARY, RUN_ID)
+    // Assert the key is there before comparing: two missing options would "match" each other, and this
+    // is the only test that exercises stability across two separate sends.
+    expect(sendMock.mock.calls[0]![1].idempotencyKey).toMatch(/^results-viewed-email\//)
     expect(sendMock.mock.calls[1]![1]).toEqual(sendMock.mock.calls[0]![1])
   })
 
