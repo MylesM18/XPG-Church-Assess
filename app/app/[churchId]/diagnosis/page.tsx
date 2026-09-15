@@ -32,6 +32,9 @@ import { regenerateReport } from '../actions'
 import { AutoGenerateReport } from './auto-generate-report'
 import { proseEnabled } from '@/lib/ai/prose-mode'
 import { loadWaitPhrases } from '@/lib/data/wait-phrases'
+import { notifyResultsViewed, resultsViewedSummary } from '@/lib/notify/results-viewed'
+import { claimResultsViewedEmail, markResultsViewedEmailed } from '@/lib/notify/results-viewed-store'
+import { sendResultsViewedEmail } from '@/lib/email/send-results-viewed'
 
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'
 
@@ -253,6 +256,35 @@ export default async function DiagnosisPage({
     cover = resolved.cover
     visuals = resolved.visuals
     inputsHash = resolved.inputsHash
+
+    // The results-viewed email to XP Gathering (docs/superpowers/specs/2026-09-15-results-viewed-
+    // email-design.md): the first time an admin opens the report of a CLOSED run, kevin@xpgathering.com
+    // gets one short summary built from this report's own numbers, which is why the call lives in this
+    // branch. Claim and mark are service-role-only RPCs (lib/notify/results-viewed-store.ts), so a church
+    // admin cannot suppress or postpone the email with their own session; the admin redirect above is
+    // what authorizes this server-side call. notifyResultsViewed never rejects and builds the summary
+    // inside its own guard, so a failed claim, send, or mark cannot stop the page from rendering.
+    // Awaited inline, not deferred with after(): simple, pinned by tests, and bounded (most views cost
+    // one small RPC; the first also waits on the send, capped at 5 s). No step needs this request's
+    // cookies any more, so after() is a candidate if that first-view wait ever matters.
+    await notifyResultsViewed(
+      {
+        viewerIsAdmin: isAdmin,
+        runStatus: run!.status,
+        buildSummary: () =>
+          resultsViewedSummary({
+            churchName: church.name,
+            cover: resolved.cover,
+            areaScores: resolution.diagnosis.categories,
+            areaNames: reportMethodology.questions.categories,
+          }),
+      },
+      {
+        claim: () => claimResultsViewedEmail(churchId),
+        send: (summary) => sendResultsViewedEmail(summary, run!.id),
+        mark: () => markResultsViewedEmailed(churchId),
+      },
+    )
   }
 
   // H7: a completed run with NO usable AI section — no `reports` row at all (diagnosis finished

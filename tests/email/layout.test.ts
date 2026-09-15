@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { renderBrandedEmail, inviteFrom, reminderFrom } from '@/lib/email/layout'
+import { renderBrandedEmail, inviteFrom, reminderFrom, notificationFrom } from '@/lib/email/layout'
 
 // The branded email shell is the single source of brand truth for every outgoing app email.
 // These tests pin the invariants the spec locks: table-based inline-styled HTML + a plaintext
@@ -205,5 +205,14 @@ describe('sender address split', () => {
   it('trims surrounding whitespace on the resolved address', () => {
     process.env.INVITE_FROM = '  welcome@360churchhealthassessment.com  '
     expect(inviteFrom()).toBe('welcome@360churchhealthassessment.com')
+  })
+
+  it('notificationFrom uses EMAIL_FROM, then the Resend test address, ignoring the invite and reminder overrides', () => {
+    expect(notificationFrom()).toBe('onboarding@resend.dev')
+    process.env.INVITE_FROM = 'welcome@360churchhealthassessment.com'
+    process.env.REMINDER_FROM = 'reminders@360churchhealthassessment.com'
+    expect(notificationFrom()).toBe('onboarding@resend.dev')
+    process.env.EMAIL_FROM = '  invites@360churchhealthassessment.com  '
+    expect(notificationFrom()).toBe('invites@360churchhealthassessment.com')
   })
 })

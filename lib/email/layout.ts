@@ -177,3 +177,8 @@ export function inviteFrom(): string {
 export function reminderFrom(): string {
   return envAddress('REMINDER_FROM') ?? envAddress('EMAIL_FROM') ?? DEFAULT_FROM
 }
+
+/** Staff notification sender (the results-viewed email to XP Gathering): EMAIL_FROM → Resend test address. */
+export function notificationFrom(): string {
+  return envAddress('EMAIL_FROM') ?? DEFAULT_FROM
+}
