@@ -6,7 +6,7 @@ import { LiveStatus } from '@/components/live-status'
 import { FieldInfo } from '@/app/get-started/field-info'
 import { inviteBoxText, type InviteWindow } from '@/lib/deadlines/countdown'
 
-const initial: InviteResult = { link: null, emailed: false, error: null }
+const initial: InviteResult = { link: null, emailed: false, bound: false, error: null }
 const inputClass =
   'rounded-md border border-line bg-paper px-3 py-2 font-body text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-50'
 
@@ -48,7 +48,9 @@ export function InviteMemberForm({ churchId, inviteWindow }: { churchId: string;
         message={
           state.link
             ? state.emailed
-              ? 'Invitation emailed. The link is shown below.'
+              ? state.bound
+                ? 'Invitation emailed and their account is ready. The link is shown below.'
+                : 'Invitation emailed, but their account could not be prepared. The link is shown below.'
               : 'Invitation created but not emailed. The link is shown below.'
             : null
         }
@@ -61,6 +63,11 @@ export function InviteMemberForm({ churchId, inviteWindow }: { churchId: string;
           <p className="font-body text-sm text-ink">
             {state.emailed ? 'Invitation emailed. Link:' : "Invitation created — we couldn’t email it, so share this link:"}
           </p>
+          {state.bound ? (
+            <p className="font-body text-xs text-ink-soft">Their account is ready and already belongs to this church. The link signs them straight in.</p>
+          ) : (
+            <p className="font-body text-xs text-berry">Their account couldn’t be prepared automatically (the server has no service-role key), so they must use this exact link to join.</p>
+          )}
           <code className="break-all font-body text-xs text-ink-soft">{state.link}</code>
         </div>
       )}

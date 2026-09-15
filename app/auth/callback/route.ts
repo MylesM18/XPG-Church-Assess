@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { resolveNext } from '@/lib/auth/resolve-next'
+import { settleInvitations } from '@/lib/auth/invited-account'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -19,6 +20,9 @@ export async function GET(request: Request) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
+      // Session established (Google). Settle any invitation addressed to this person so an invitee
+      // arriving by OAuth is routed to their church by /get-started, never to "Add your church".
+      await settleInvitations(supabase)
       // Behind a load balancer the real host is in x-forwarded-host; in local
       // dev `origin` is authoritative. (Canonical @supabase/ssr callback.)
       const forwardedHost = request.headers.get('x-forwarded-host')

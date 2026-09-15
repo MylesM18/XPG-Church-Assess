@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { pickMemberChurch } from '@/lib/auth/pick-member-church'
+import { settleInvitations } from '@/lib/auth/invited-account'
 import { GetStartedForm } from './form'
 
 export default async function GetStartedPage() {
@@ -18,6 +19,11 @@ export default async function GetStartedPage() {
   // default (next=/get-started) and a direct visit here. Ordered by created_at so a
   // multi-church member lands deterministically on their earliest church. A failed or
   // empty read simply falls through to the create form (no worse than before).
+  // Invite = account creation (spec 2026-09-14): an invitee already holds a membership, and a
+  // legacy pending invitation addressed to this e-mail is bound here on the spot, so the check
+  // below finds a church for anyone who was ever invited. Idempotent and best-effort.
+  await settleInvitations(supabase)
+
   const { data: memberships } = await supabase
     .from('church_members')
     .select('church_id')
