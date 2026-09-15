@@ -59,11 +59,11 @@ describe('provisionInvitedAccount', () => {
 describe('mintSignInToken', () => {
   it('asks for a magic link and hands back the hashed token with its verification type', async () => {
     const generateLink = vi.fn().mockResolvedValue({
-      data: { properties: { hashed_token: 'h4sh', verification_type: 'magiclink' } }, error: null,
+      data: { user: { id: 'u1' }, properties: { hashed_token: 'h4sh', verification_type: 'magiclink' } }, error: null,
     })
     const minted = await mintSignInToken(adminWith(generateLink), 'a@b.c')
     expect(generateLink.mock.calls[0]![0]).toEqual({ type: 'magiclink', email: 'a@b.c' })
-    expect(minted).toEqual({ tokenHash: 'h4sh', type: 'magiclink' })
+    expect(minted).toEqual({ tokenHash: 'h4sh', type: 'magiclink', userId: 'u1' })
   })
 
   it('returns null on error or a missing token — the caller falls back to the emailed sign-in', async () => {

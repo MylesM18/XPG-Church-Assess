@@ -62,9 +62,16 @@ unopened invitation) arrived with no membership and was handed a church to creat
   the message; the cohort above signed up over sixteen hours. Minting on click means the
   only long-lived secret is the invitation id the app already emails (14-day expiry,
   admin-revocable, single acceptance).
-- **The accept link is single-acceptance.** Once accepted, `/accept/<token>` sends a
-  signed-out visitor to `/sign-in` with the address prefilled; a signed-in one to
-  `/get-started`. This keeps parity with the one-time-token posture of PR #71.
+- **The accept link works for its whole 14-day life** (owner decision, 2026-09-14, replacing an
+  earlier single-acceptance draft). `accepted` is a roster/reminder fact, not the end of the
+  link: the continue route admits `pending` and `accepted` invitations while unexpired, never
+  `revoked`, and for an accepted one only while the person is still a member (an admin who
+  removed them has closed this door). A caller already signed in as the invited address skips
+  the minting and is simply routed to the church. Past expiry the page hands over to the
+  ordinary sign-in with the address prefilled; the membership already exists, so that lands on
+  the church too. The trade: the invitation id is a bearer sign-in for up to 14 days, which is
+  the same trust the emailed magic link carries for one hour, extended to how long volunteers
+  actually take — revocable (pending) or closable by removal (accepted) at any time.
 - **Completion clock starts at first sign-in, not at invite.** `bind_invited_member`
   leaves `assessment_deadline_at` null; `settle_my_invitations` /
   `accept_member_invitation` stamp `now() + 3 days` only where it is still null. A member
@@ -92,6 +99,5 @@ unopened invitation) arrived with no membership and was handed a church to creat
 
 ## Not in scope
 
-Re-usable (multi-use) accept links; a members-list "last signed in" column (would change
-`get_church_members`' return shape and pgTAP); deleting orphaned auth users of the
-duplicate churches.
+A members-list "last signed in" column (would change `get_church_members`' return shape and
+pgTAP); deleting orphaned auth users of the duplicate churches.

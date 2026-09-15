@@ -50,6 +50,8 @@ export async function provisionInvitedAccount(
 export interface SignInToken {
   tokenHash: string
   type: EmailOtpType
+  /** The account the token signs in — lets the caller check membership before spending it. */
+  userId: string | null
 }
 
 const VERIFY_TYPES: ReadonlySet<string> = new Set(['signup', 'invite', 'magiclink', 'recovery', 'email'])
@@ -69,7 +71,7 @@ export async function mintSignInToken(admin: SupabaseClient, email: string): Pro
   const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email })
   const tokenHash = data?.properties?.hashed_token
   if (error || !tokenHash) return null
-  return { tokenHash, type: toVerifyType(data?.properties?.verification_type) }
+  return { tokenHash, type: toVerifyType(data?.properties?.verification_type), userId: data?.user?.id ?? null }
 }
 
 /**

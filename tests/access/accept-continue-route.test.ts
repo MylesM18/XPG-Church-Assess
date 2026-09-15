@@ -46,14 +46,31 @@ describe('/accept/[token]/continue — invitation gate', () => {
     expect(CODE).toContain("from('member_invitations')")
   })
 
-  it('refuses anything but a pending, unexpired invitation before minting', () => {
+  it('admits pending AND accepted invitations (the link works for its whole life) but never revoked or expired ones, before minting', () => {
     const pending = CODE.indexOf("'pending'")
+    const accepted = CODE.indexOf("'accepted'")
     const expires = CODE.indexOf('expires_at')
     const mint = CODE.indexOf('mintSignInToken(')
     expect(pending).toBeGreaterThan(-1)
+    expect(accepted).toBeGreaterThan(-1)
     expect(expires).toBeGreaterThan(-1)
     expect(pending).toBeLessThan(mint)
+    expect(accepted).toBeLessThan(mint)
     expect(expires).toBeLessThan(mint)
+    expect(CODE, 'a revoked invitation must never be admitted').not.toMatch(/status\s*===\s*'revoked'/)
+  })
+
+  it('refuses an accepted invitation whose member was removed, before any token is spent', () => {
+    const membership = CODE.indexOf("from('church_members')")
+    const spend = CODE.indexOf('verifyOtp(')
+    expect(membership).toBeGreaterThan(-1)
+    expect(membership).toBeLessThan(spend)
+    expect(CODE).toContain("bounce('removed')")
+  })
+
+  it('skips minting for a caller already signed in as the invited address', () => {
+    expect(CODE).toMatch(/auth\.getUser\(\)/)
+    expect(CODE).toMatch(/if \(!alreadySignedIn\) \{[\s\S]*mintSignInToken\(/)
   })
 })
 
