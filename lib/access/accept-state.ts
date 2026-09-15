@@ -47,3 +47,33 @@ export function roleLabel(role: string): string {
   if (role === 'viewer') return 'member'
   return role
 }
+
+export type AcceptedEntry = 'continue' | 'sign_in_link' | 'wrong_account' | 'go_home'
+
+/**
+ * Entry decision for an invitation that has ALREADY been accepted. Owner decision (2026-09-14): the
+ * emailed link keeps signing its invitee in for its whole 14-day life, not just once — 'accepted'
+ * is a roster/reminder fact, not the end of the link. So:
+ *   - a different signed-in account is refused first, whatever else is true;
+ *   - the invitee (signed out, or signed in as the invited address) continues through the one-click
+ *     route while the link is unexpired and a service-role key can mint — the route resolves the
+ *     church id, which the anon preview deliberately never exposes;
+ *   - once the link is dead (expired) or nothing can mint, a signed-in member is routed home
+ *     (/get-started forwards members to their church) and a signed-out one to the ordinary
+ *     sign-in — the membership already exists, so both land on the church.
+ * Email comparison is case-insensitive, mirroring resolveAcceptState.
+ */
+export function resolveAcceptedEntry(input: {
+  isExpired: boolean
+  signedIn: boolean
+  sessionEmail: string | null
+  invitedEmail: string
+  oneClick: boolean
+}): AcceptedEntry {
+  const { isExpired, signedIn, sessionEmail, invitedEmail, oneClick } = input
+  const matches = signedIn && (sessionEmail ?? '').toLowerCase() === invitedEmail.toLowerCase()
+  if (signedIn && !matches) return 'wrong_account'
+  const linkWorks = !isExpired && oneClick
+  if (matches) return linkWorks ? 'continue' : 'go_home'
+  return linkWorks ? 'continue' : 'sign_in_link'
+}

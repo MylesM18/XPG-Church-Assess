@@ -32,6 +32,15 @@ describe('accept page — one-click sign-in', () => {
     expect(CODE).toContain('/sign-up?next=')
   })
 
+  it('offers the same one-click sign-in to a returning invitee (the link lives for 14 days)', () => {
+    expect(CODE).toContain('resolveAcceptedEntry(')
+    const accepted = CODE.indexOf("state === 'accepted'")
+    const expired = CODE.indexOf("state === 'expired'")
+    const branch = CODE.slice(accepted, expired)
+    expect(branch).toContain('<ContinueInterstitial')
+    expect(branch, 'a dead link falls back to the ordinary sign-in, never a dead end').toContain('/sign-in?email=')
+  })
+
   it('keeps the accept RPC behind every auth guard (auto-accept ordering is unchanged)', () => {
     const signIn = CODE.indexOf("state === 'sign_in'")
     const wrong = CODE.indexOf("state === 'wrong_email'")

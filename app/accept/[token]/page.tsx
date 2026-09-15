@@ -1,8 +1,11 @@
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { resolveAcceptState, roleLabel, type AcceptPreview } from '@/lib/access/accept-state'
+import {
+  resolveAcceptState, resolveAcceptedEntry, roleLabel, type AcceptPreview,
+} from '@/lib/access/accept-state'
 import { AcceptButton } from './accept-button'
 import { AnonymityNote } from '@/components/anonymity-note'
 import { LiveStatus } from '@/components/live-status'
@@ -19,13 +22,13 @@ const CONTINUE_FORM_ID = 'accept-continue'
 
 // What the invitee reads when app/accept/[token]/continue/route.ts bounces back with ?error=.
 const CONTINUE_FALLBACK_ERROR =
-  'We couldn’t sign you in automatically. Use the button below to get a sign-in email instead.'
+  'We couldn’t sign you in automatically. Use the link below to get a sign-in email instead.'
 const CONTINUE_ERRORS: Record<string, string> = {
   invalid:
     'This invitation can no longer sign you in. Ask an admin to resend it, or use your email to sign in below.',
-  unavailable:
-    'One-click sign-in isn’t available right now. Use the button below to get a sign-in email instead.',
-  mint: 'One-click sign-in isn’t available right now. Use the button below to get a sign-in email instead.',
+  removed: 'You no longer have access to this church. Ask an admin to invite you again.',
+  unavailable: 'One-click sign-in isn’t available right now. Use the link below to get a sign-in email instead.',
+  mint: 'One-click sign-in isn’t available right now. Use the link below to get a sign-in email instead.',
 }
 
 export default async function AcceptPage({
@@ -60,23 +63,51 @@ export default async function AcceptPage({
   // preview is guaranteed non-null past this point (resolver returns not_found for null).
   const p = preview!
   const label = roleLabel(p.role)
+  // Whether the one-click route has anything to mint with. Without a service-role key the page
+  // falls back to the emailed sign-in rather than rendering a form that would fail.
+  const oneClick = createServiceRoleClient() !== null
 
   if (state === 'revoked') {
     return <main id="main-content" tabIndex={-1} className={shell}><h1 className="font-display text-2xl text-ink">Invitation revoked</h1>
       <p className="font-body text-berry">This invitation was revoked. Ask an admin to invite you again.</p></main>
   }
   if (state === 'accepted') {
-    // Single-acceptance: the one-click link has already signed its invitee in once. A signed-in
-    // visitor is that invitee coming back through the same email — /get-started routes a member
-    // to their church. A signed-out one gets the ordinary sign-in with their address prefilled;
-    // the membership already exists, so that path lands on the church too.
-    if (user) redirect('/get-started')
+    // The link keeps working for its whole 14-day life (owner decision, 2026-09-14): 'accepted' is a
+    // roster fact, not the end of the link. Same interstitial as a first visit; the continue route
+    // resolves the church id for a returning member (signed in or not), which the anon preview
+    // never exposes. Past expiry, or with nothing to mint, the ordinary sign-in takes over — the
+    // membership already exists, so that path lands on the church too.
+    const entry = resolveAcceptedEntry({
+      isExpired: p.is_expired, signedIn: !!user, sessionEmail: user?.email ?? null,
+      invitedEmail: p.invited_email, oneClick,
+    })
+    if (entry === 'go_home') redirect('/get-started')
+    if (entry === 'wrong_account') {
+      return (
+        <main id="main-content" tabIndex={-1} className={shell}>
+          <h1 className="font-display text-2xl text-ink">Wrong account</h1>
+          <p className="font-body text-berry">You’re signed in as {user!.email}, but this invitation is for {p.invited_email}. Sign out and sign back in as {p.invited_email}.</p>
+          <Link href={`/sign-in?email=${encodeURIComponent(p.invited_email)}`} className={textLink}>Go to sign in</Link>
+        </main>
+      )
+    }
+    if (entry === 'sign_in_link') {
+      return (
+        <main id="main-content" tabIndex={-1} className={shell}>
+          <h1 className="font-display text-2xl text-ink">Welcome back to {p.church_name}</h1>
+          <p className="font-body text-ink-soft">This link can’t sign you in any more, but your assessment is right where you left it. Enter your email and we’ll send you a fresh sign-in link.</p>
+          <Link href={`/sign-in?email=${encodeURIComponent(p.invited_email)}`} className={button}>Sign in</Link>
+        </main>
+      )
+    }
     return (
-      <main id="main-content" tabIndex={-1} className={shell}>
-        <h1 className="font-display text-2xl text-ink">You’ve already joined {p.church_name}</h1>
-        <p className="font-body text-ink-soft">This invitation link has already been used to sign in. Enter your email and we’ll send you a fresh sign-in link — your assessment is right where you left it.</p>
-        <Link href={`/sign-in?email=${encodeURIComponent(p.invited_email)}`} className={button}>Sign in</Link>
-      </main>
+      <ContinueInterstitial
+        token={token} oneClick={oneClick} continueError={continueError}
+        heading={`Welcome back to ${p.church_name}`}
+        intro={`One moment while we sign you in as ${p.invited_email} and take you back to your assessment. If nothing happens, use the button below.`}
+      >
+        <Link href={`/sign-in?email=${encodeURIComponent(p.invited_email)}`} className={textLink}>Email me a sign-in link instead</Link>
+      </ContinueInterstitial>
     )
   }
   if (state === 'expired') {
@@ -90,32 +121,23 @@ export default async function AcceptPage({
     // mints and spends a sign-in token for the INVITED address — the same GET-renders / POST-spends
     // split as /auth/confirm, so an inbox scanner fetching this URL consumes nothing.
     //
-    // Two fallbacks keep the emailed sign-in path (/sign-up, "Glad you're here.") one click away:
-    // no service-role key in this deployment (nothing to mint with), or a bounce-back error from the
-    // continue route — in which case the form must NOT auto-submit again, or it would loop.
+    // The emailed sign-in path (/sign-up, "Glad you're here.") stays one click away as the fallback:
+    // it is the whole page when there is no service-role key to mint with, and the way out after a
+    // bounce-back error from the continue route.
     const next = encodeURIComponent(`/accept/${token}`)
     const email = encodeURIComponent(p.invited_email)
-    const oneClick = createServiceRoleClient() !== null
-    const autoSubmitting = oneClick && !continueError
     return (
-      <main id="main-content" tabIndex={-1} className={shell}>
-        <h1 className="font-display text-2xl text-ink">{autoSubmitting ? 'Signing you in…' : `Join ${p.church_name}`}</h1>
-        <p className="font-body text-ink-soft">
-          {autoSubmitting
-            ? `Your account at ${p.church_name} is ready. One moment while we sign you in as ${p.invited_email}. If nothing happens, use the button below.`
-            : `You’ve been invited to help lead ${p.church_name} as a ${label}. Sign in as ${p.invited_email} to continue.`}
-        </p>
-        <LiveStatus message={continueError} tone="error" className="font-body text-sm text-berry" />
-        {oneClick && (
-          <form id={CONTINUE_FORM_ID} method="post" action={`/accept/${encodeURIComponent(token)}/continue`} className="flex flex-col gap-3">
-            <button type="submit" className={button}>Continue</button>
-          </form>
-        )}
+      <ContinueInterstitial
+        token={token} oneClick={oneClick} continueError={continueError}
+        heading={`Join ${p.church_name}`}
+        intro={oneClick
+          ? `Your account at ${p.church_name} is ready. One moment while we sign you in as ${p.invited_email}. If nothing happens, use the button below.`
+          : `You’ve been invited to help lead ${p.church_name} as a ${label}. Sign in as ${p.invited_email} to continue.`}
+      >
         <Link href={`/sign-up?next=${next}&email=${email}`} className={oneClick ? textLink : button}>
           {oneClick ? 'Email me a sign-in link instead' : 'Sign in to accept'}
         </Link>
-        {autoSubmitting && <AutoSubmit formId={CONTINUE_FORM_ID} />}
-      </main>
+      </ContinueInterstitial>
     )
   }
 
@@ -167,6 +189,40 @@ export default async function AcceptPage({
       />
       <AnonymityNote />
       <AcceptButton token={token} />
+    </main>
+  )
+}
+
+/**
+ * The one-click sign-in interstitial. Inert on GET; `AutoSubmit` presses the form on mount, the
+ * visible button is what a reader sees if the script never runs, and `children` is the fallback
+ * link to the emailed sign-in. It must NOT auto-submit when the page was just bounced back with an
+ * error, or a failing continue route would loop; and it renders no form at all when there is no
+ * service-role key, because the route would have nothing to mint with.
+ */
+function ContinueInterstitial({
+  token, oneClick, continueError, heading, intro, children,
+}: {
+  token: string
+  oneClick: boolean
+  continueError: string | null
+  heading: string
+  intro: string
+  children: ReactNode
+}) {
+  const autoSubmitting = oneClick && !continueError
+  return (
+    <main id="main-content" tabIndex={-1} className={shell}>
+      <h1 className="font-display text-2xl text-ink">{autoSubmitting ? 'Signing you in…' : heading}</h1>
+      <p className="font-body text-ink-soft">{intro}</p>
+      <LiveStatus message={continueError} tone="error" className="font-body text-sm text-berry" />
+      {oneClick && (
+        <form id={CONTINUE_FORM_ID} method="post" action={`/accept/${encodeURIComponent(token)}/continue`} className="flex flex-col gap-3">
+          <button type="submit" className={button}>Continue</button>
+        </form>
+      )}
+      {children}
+      {autoSubmitting && <AutoSubmit formId={CONTINUE_FORM_ID} />}
     </main>
   )
 }

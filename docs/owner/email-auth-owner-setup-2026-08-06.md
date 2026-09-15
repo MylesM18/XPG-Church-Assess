@@ -400,6 +400,9 @@ their invitation keeps the admin copy") no longer applies to accounts created th
    dashboard (never "Add your church"): the membership existed before you signed in.
 5. Revoke a pending invitation: that person can no longer reach the church (they get "Invitation
    revoked" on the link and no church on sign-in).
+6. Sign out, then click the **same** email button again. It must sign you straight back in and land
+   on the church — the link keeps working for its whole 14 days. Then remove that member on Manage
+   access and click once more: you should see *"You no longer have access to this church"*.
 
 ### D5. Repair the existing duplicate churches
 
