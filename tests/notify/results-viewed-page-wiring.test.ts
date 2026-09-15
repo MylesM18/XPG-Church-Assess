@@ -75,3 +75,51 @@ describe('diagnosis page: results-viewed email wiring', () => {
     expect(PAGE).not.toContain('sendResultsViewedEmail(')
   })
 })
+
+/** Every `.tsx` file under the given repo-relative directories, as repo-relative paths. */
+function tsxFiles(dirs: string[]): string[] {
+  return dirs.flatMap((dir) =>
+    (fs.readdirSync(path.join(ROOT, dir), { recursive: true, encoding: 'utf8' }) as string[])
+      .filter((file) => file.endsWith('.tsx'))
+      .map((file) => path.join(dir, file)),
+  )
+}
+
+/** Every `<Link …>` opening tag, scanned to its closing `>` at brace depth 0 (so `=>` inside a prop is safe). */
+function linkTags(source: string): string[] {
+  const tags: string[] = []
+  const opener = /<Link[\s>]/g
+  let match: RegExpExecArray | null
+  while ((match = opener.exec(source)) !== null) {
+    let depth = 0
+    let end = match.index
+    for (; end < source.length; end++) {
+      const ch = source[end]
+      if (ch === '{') depth++
+      else if (ch === '}') depth--
+      else if (ch === '>' && depth === 0) break
+    }
+    tags.push(source.slice(match.index, end + 1))
+    opener.lastIndex = end + 1
+  }
+  return tags
+}
+
+describe('links to the report never prefetch it', () => {
+  // A full prefetch (`prefetch={true}`) renders the report page on the server without anyone opening
+  // it, which would claim and send the results-viewed email from a dashboard view. Next's default
+  // prefetch for this dynamic route (no loading.tsx, no PPR) stops at the router state and never runs
+  // the page. Raw source, not comment-stripped: stripping `//` would also cut URL strings and unbalance
+  // the brace scan.
+  it('no <Link> whose tag targets the diagnosis route carries a prefetch prop', () => {
+    const reportLinks = tsxFiles(['app', 'components']).flatMap((file) =>
+      linkTags(fs.readFileSync(path.join(ROOT, file), 'utf8'))
+        .filter((tag) => tag.includes('/diagnosis'))
+        .map((tag) => ({ file, tag })),
+    )
+    expect(reportLinks.length, "expected at least one <Link> to the report (the dashboard's View diagnosis)").toBeGreaterThan(0)
+    for (const { file, tag } of reportLinks) {
+      expect(tag, `${file}: a <Link> to the report must not set prefetch`).not.toMatch(/\bprefetch\b/)
+    }
+  })
+})

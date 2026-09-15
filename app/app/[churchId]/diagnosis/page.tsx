@@ -261,9 +261,10 @@ export default async function DiagnosisPage({
     // email-design.md): the first time an admin opens the report of a CLOSED run, kevin@xpgathering.com
     // gets one short summary built from this report's own numbers, which is why the call lives in this
     // branch. notifyResultsViewed never rejects and builds the summary inside its own guard, so a failed
-    // claim, send, or mark cannot stop the page from rendering. Awaited rather than after(): both RPCs
-    // need this request's cookie session, and Next 16 forbids request APIs inside after() in a Server
-    // Component. Most views cost one small RPC; the first also waits on the send, capped at 5 s.
+    // claim, send, or mark cannot stop the page from rendering. Awaited inline, not deferred with
+    // after(): simple, pinned by tests, and bounded (most views cost one small RPC; the first also waits
+    // on the send, capped at 5 s). after() could drop that first-view wait by reusing this request's
+    // already-created Supabase client, but that path is unverified; prove it in a preview first.
     await notifyResultsViewed(
       {
         viewerIsAdmin: isAdmin,

@@ -106,9 +106,11 @@ Delivery is at-least-once, biased toward Kevin hearing about it:
    `churchId`. The outcome is ignored; rendering continues either way.
 5. **`CONTEXT.md`**: one glossary line under "Report and delivery".
 
-Why inline and not `after()`: Next.js 16 forbids request-time APIs inside `after` in Server
-Components, and both RPCs need the admin's cookie session. Cost: one small RPC per view of a closed
-report; the first view also waits for the send, capped at 5 seconds.
+Why inline and not `after()`: inline keeps the claim, send, and mark inside the request, where tests
+pin them, and the cost is bounded: one small RPC per view of a closed report, and the first view also
+waits for the send, capped at 5 seconds. `after()` could remove that first-view wait by reusing the
+request's already-created Supabase client (Next.js only forbids calling `cookies()` itself inside the
+callback), but that path is unverified; prove it in a preview before switching.
 
 ## Email
 
