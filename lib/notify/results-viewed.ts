@@ -60,7 +60,7 @@ export interface NotifyResultsViewedInput {
 }
 
 export interface NotifyResultsViewedDeps {
-  /** Admin-gated DB claim: true only for the one caller allowed to send right now. */
+  /** Server-only DB claim (a service-role RPC): true only for the one caller allowed to send right now. */
   claim: () => Promise<boolean>
   send: (summary: ResultsViewedSummary) => Promise<{ ok: boolean }>
   /** Records the successful send so no later view repeats it. */

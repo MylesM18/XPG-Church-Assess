@@ -88,16 +88,20 @@ names to seams that were previously expressed inline at many call sites. See
   deterministic **fallback** (`lib/ai/fallback.ts`). The AI rewords; it never decides.
 - **Results-viewed email** — the one email to XP Gathering (kevin@xpgathering.com) sent the
   first time an admin opens the report of a closed run: overall score, health stage, and area scores,
-  church-level only. Once per run through `claim_results_viewed_email` / `mark_results_viewed_emailed`
-  (claim, send, mark; a failed send retries after a 5-minute hold), and never able to break the report.
-  Interface: `notifyResultsViewed` (`lib/notify/results-viewed.ts`).
+  church-level only. Once per run through the service-role-only `claim_results_viewed_email` /
+  `mark_results_viewed_emailed` (claim, send, mark; a failed send retries after a 5-minute hold, and a
+  Resend idempotency key keyed on the run stops a retry arriving twice), and never able to break the
+  report. Interface: `notifyResultsViewed` (`lib/notify/results-viewed.ts`), through
+  `lib/notify/results-viewed-store.ts`.
 
 ## The permission wall
 
 - **Permission wall** — access enforced at the database layer via Postgres Row-Level
   Security, never a hidden UI element. Members use the anon-key RLS client; privileged
-  writes go through `SECURITY DEFINER` RPCs with explicit grants. There is no
-  service-role client (`SUPABASE_SERVICE_ROLE_KEY` appears nowhere in code).
+  writes go through `SECURITY DEFINER` RPCs with explicit grants. A service-role client
+  (`lib/supabase/service-role.ts`) exists only for server-trusted paths that either run without a user
+  (the reminder cron) or authorize the caller first (invitation binding, the results-viewed email);
+  those RPCs are granted to `service_role` and revoked from `authenticated`.
 
 ## Branding
 

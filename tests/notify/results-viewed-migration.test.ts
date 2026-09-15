@@ -1,6 +1,7 @@
 // Source-reading tripwire (the agent cannot run pgTAP; supabase/tests/29_results_viewed_email_test.sql
 // is owner-run). Pins the database half of "one results-viewed email per closed run": two nullable
-// timestamps on assessment_runs, an admin-gated claim with a 5-minute hold, and an admin-gated mark.
+// timestamps on assessment_runs, a claim with a 5-minute hold, and a mark, both SERVICE-ROLE ONLY so a
+// church admin's own session cannot suppress or postpone the email (PR #91 review).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -48,16 +49,13 @@ describe('results-viewed email migration: columns', () => {
 describe('claim_results_viewed_email', () => {
   const body = fnBody('claim_results_viewed_email')
 
-  it('is a security-definer boolean resolved through current_run and gated by require_church_admin', () => {
+  it('is a security-definer boolean resolved through current_run, with no session-based admin gate', () => {
     expect(body).toContain('returns boolean')
     expect(body).toContain('security definer set search_path = public')
     expect(body).toContain('from public.current_run(p_church_id)')
-    expect(body).toContain('perform public.require_church_admin(v_run.id)')
-    // Both anchors are asserted present above and below, so indexOf cannot be -1 here.
-    expect(body).toContain('update public.assessment_runs')
-    expect(body.indexOf('perform public.require_church_admin(v_run.id)')).toBeLessThan(
-      body.indexOf('update public.assessment_runs'),
-    )
+    // Service-role callers have no auth.uid(), so a session gate would refuse every call; the page
+    // authorizes the admin before it calls.
+    expect(body).not.toContain('require_church_admin')
   })
 
   it('claims only a closed, not-yet-emailed run whose previous claim is absent or older than 5 minutes', () => {
@@ -74,11 +72,11 @@ describe('claim_results_viewed_email', () => {
 describe('mark_results_viewed_emailed', () => {
   const body = fnBody('mark_results_viewed_emailed')
 
-  it('is security definer, resolved through current_run, and gated by require_church_admin', () => {
+  it('is security definer and resolved through current_run, with no session-based admin gate', () => {
     expect(body).toContain('returns void')
     expect(body).toContain('security definer set search_path = public')
     expect(body).toContain('from public.current_run(p_church_id)')
-    expect(body).toContain('perform public.require_church_admin(v_run.id)')
+    expect(body).not.toContain('require_church_admin')
   })
 
   it('stamps emailed_at once and nothing ever clears it', () => {
@@ -89,10 +87,11 @@ describe('mark_results_viewed_emailed', () => {
 })
 
 describe('grants', () => {
-  it('revokes both functions from public and anon and grants them to authenticated', () => {
+  it('makes both functions service-role only, so a church admin session cannot suppress or postpone the email', () => {
     for (const fn of ['claim_results_viewed_email', 'mark_results_viewed_emailed']) {
-      expect(CODE).toContain(`revoke all on function public.${fn}(uuid) from public, anon;`)
-      expect(CODE).toContain(`grant execute on function public.${fn}(uuid) to authenticated;`)
+      expect(CODE).toContain(`revoke all on function public.${fn}(uuid) from public, anon, authenticated;`)
+      expect(CODE).toContain(`grant execute on function public.${fn}(uuid) to service_role;`)
     }
+    expect(CODE).not.toMatch(/to authenticated/)
   })
 })

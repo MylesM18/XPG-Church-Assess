@@ -62,17 +62,22 @@ describe('diagnosis page: results-viewed email wiring', () => {
     expect(args).toContain('areaNames: reportMethodology.questions.categories')
   })
 
-  it('reaches the database and Resend only through the seam, the sender, and the orchestrator', () => {
+  it('reaches the database and Resend only through the store, the sender, and the orchestrator', () => {
     const args = balanced(PAGE, PAGE.indexOf(CALL), '(', ')')
-    expect(PAGE).toContain("from '@/lib/data/results-viewed-email'")
+    expect(PAGE).toContain("from '@/lib/notify/results-viewed-store'")
     expect(PAGE).toContain("from '@/lib/email/send-results-viewed'")
     expect(PAGE).toContain("from '@/lib/notify/results-viewed'")
-    expect(args).toContain('claim: () => claimResultsViewedEmail(supabase, churchId)')
-    expect(args).toContain('send: sendResultsViewedEmail')
-    expect(args).toContain('mark: () => markResultsViewedEmailed(supabase, churchId)')
+    expect(PAGE).not.toContain('@/lib/data/results-viewed-email')
+    // The service-role store authorizes nothing itself: the page's admin redirect (pinned above) must
+    // come first, and the privileged client stays inside the store rather than being built here.
+    expect(args).toContain('claim: () => claimResultsViewedEmail(churchId)')
+    expect(args).toContain('mark: () => markResultsViewedEmailed(churchId)')
+    expect(PAGE).not.toContain('createServiceRoleClient')
+    // The run id keys the Resend idempotency key.
+    expect(args).toMatch(/send:\s*\(summary\)\s*=>\s*sendResultsViewedEmail\(summary, run!\.id\)/)
+    expect(PAGE.split('sendResultsViewedEmail(').length - 1).toBe(1)
     expect(PAGE).not.toContain("rpc('claim_results_viewed_email'")
     expect(PAGE).not.toContain("rpc('mark_results_viewed_emailed'")
-    expect(PAGE).not.toContain('sendResultsViewedEmail(')
   })
 })
 
