@@ -25,9 +25,13 @@ function routeExists(route: string): boolean {
   return ['page.tsx', 'route.ts'].some((f) => fs.existsSync(path.join(dir, f)))
 }
 
-const staticHrefs = [...CODE.matchAll(/href="(\/[^"{}]*)"/g)]
-  .map((m) => m[1])
-  .filter((href): href is string => typeof href === 'string')
+// Two shapes of internal link: a quoted static href, and a template href whose leading path
+// segment is static (`href={`/sign-up?next=${next}`}` → `/sign-up`). The one-click sign-in
+// rewrite (2026-09-14) left the page with only the second kind, so both are collected.
+const staticHrefs = [
+  ...[...CODE.matchAll(/href="(\/[^"{}]*)"/g)].map((m) => m[1]),
+  ...[...CODE.matchAll(/href=\{`(\/[^`?$]*)/g)].map((m) => m[1]),
+].filter((href): href is string => typeof href === 'string')
 
 describe('invitation accept page — internal links', () => {
   it('finds the static internal links it is meant to guard', () => {

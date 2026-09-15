@@ -32,10 +32,11 @@ export async function sendMemberInvitationEmail(
     previewText: `${churchName} invited you to the 360 Church Health Assessment.`,
     heading: subject,
     paragraphs: [
-      `${churchName} has invited you to help lead as a ${label}.`,
+      `${churchName} has invited you to help lead as a ${label}. Your account is ready — there is nothing to set up.`,
       'The 360 Church Health Assessment is a short, guided reflection on your church’s health. Your perspective helps paint the full picture.',
+      `The button below signs you in and takes you straight to ${churchName}’s assessment. No password needed.`,
     ],
-    cta: { label: 'Accept your invitation', url: link },
+    cta: { label: 'Sign in and begin', url: link },
     fallbackLink: { lead: 'Button not working?', linkText: 'Use this link instead' },
   })
   try {

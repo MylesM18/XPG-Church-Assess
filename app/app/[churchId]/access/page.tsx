@@ -5,6 +5,7 @@ import { loadChurchForMember } from '@/lib/data/churches'
 import { churchMembers } from '@/lib/data/members'
 import { MembersList, type Member } from './members-list'
 import { PendingInvitesList, type PendingInvite } from './pending-invites-list'
+import { splitRoster } from '@/lib/access/roster'
 
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:3000'
 
@@ -21,12 +22,18 @@ export default async function AccessPage({ params }: { params: Promise<{ churchI
 
   const { data: pendingRows } = await supabase
     .from('member_invitations')
-    .select('id, invited_email, role, status, expires_at, created_at')
+    .select('id, invited_email, role, status, expires_at, created_at, invited_user_id')
     .eq('church_id', churchId).eq('status', 'pending')
     .order('created_at', { ascending: false })
   const pending = (pendingRows ?? []) as PendingInvite[]
 
-  const admins = members.filter((m) => m.role === 'admin')
+  // Invite = account creation: a pending invitee already holds a church_members row. They belong
+  // under the invitations (Resend / Revoke live there), not among the members who have joined. The
+  // last-admin guard below is computed on the joined list on purpose: a co-admin who has never
+  // signed in must not count as the admin who would be left behind.
+  const { joined } = splitRoster(members, pending)
+
+  const admins = joined.filter((m) => m.role === 'admin')
   const disableRemoveFor = admins.length <= 1 ? (admins[0]?.user_id ?? null) : null
 
   return (
@@ -37,7 +44,7 @@ export default async function AccessPage({ params }: { params: Promise<{ churchI
         <p className="font-body text-sm text-ink-soft">{"Manage who can access this church's assessment."}</p>
       </header>
 
-      <MembersList churchId={churchId} members={members} currentUserId={user?.id ?? null} disableRemoveFor={disableRemoveFor} />
+      <MembersList churchId={churchId} members={joined} currentUserId={user?.id ?? null} disableRemoveFor={disableRemoveFor} />
       <PendingInvitesList churchId={churchId} invites={pending} appUrl={APP_URL} />
     </main>
   )

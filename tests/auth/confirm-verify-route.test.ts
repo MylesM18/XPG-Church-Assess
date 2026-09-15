@@ -106,15 +106,30 @@ describe('/auth/confirm/verify — destination', () => {
 // requested the link. Next.js's automatic Origin/Host check covers Server Actions only, not Route
 // Handlers, so this route has to state the check itself.
 describe('/auth/confirm/verify — request provenance', () => {
+  // The Origin/host comparison moved to lib/auth/same-origin.ts (shared with the invitation's
+  // one-click sign-in route, which spends a token on a POST the same way). The route's obligation
+  // is to CALL it, before the token is spent; the helper's own behaviour is unit-tested in
+  // tests/auth/same-origin.test.ts. The header/host assertions below read the shared source so a
+  // weakened comparison still fails here, next to the route that depends on it.
+  const SHARED = fs
+    .readFileSync(path.join(ROOT, 'lib', 'auth', 'same-origin.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+
+  it('imports the shared check rather than re-implementing it', () => {
+    expect(CODE).toMatch(/from\s*'@\/lib\/auth\/same-origin'/)
+    expect(CODE).not.toMatch(/function\s+isSameOrigin\s*\(/)
+  })
+
   it('inspects the Origin header', () => {
-    expect(CODE).toMatch(/headers\.get\(\s*'origin'\s*\)/)
+    expect(SHARED).toMatch(/headers\.get\(\s*'origin'\s*\)/)
   })
 
   it('compares Origin by host against the hosts it already trusts for the redirect', () => {
-    expect(CODE, 'a substring/startsWith compare matches evil-360churchhealthassessment.com').toMatch(
+    expect(SHARED, 'a substring/startsWith compare matches evil-360churchhealthassessment.com').toMatch(
       /new URL\(\s*originHeader\s*\)\.host/,
     )
-    expect(CODE).toMatch(/\.has\(\s*originHost\s*\)/)
+    expect(SHARED).toMatch(/\.has\(\s*originHost\s*\)/)
   })
 
   it('gates on provenance BEFORE spending the token', () => {
@@ -127,6 +142,6 @@ describe('/auth/confirm/verify — request provenance', () => {
   })
 
   it('treats an unparseable Origin as hostile rather than falling through', () => {
-    expect(CODE).toMatch(/catch\s*\{\s*return false/)
+    expect(SHARED).toMatch(/catch\s*\{\s*return false/)
   })
 })

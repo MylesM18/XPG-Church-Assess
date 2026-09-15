@@ -9,7 +9,14 @@ import { acceptLink } from '@/lib/access/accept-state'
 // there is. See the spec section 6.1.
 const PENDING_HEADING_ID = 'access-pending-invites-heading'
 
-export type PendingInvite = { id: string; invited_email: string; role: string; expires_at: string }
+export type PendingInvite = {
+  id: string
+  invited_email: string
+  role: string
+  expires_at: string
+  /** Set when invite-time binding created their account (spec 2026-09-14); null on a legacy invite. */
+  invited_user_id: string | null
+}
 
 export function PendingInvitesList({
   churchId, invites, appUrl,
@@ -35,7 +42,11 @@ export function PendingInvitesList({
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate font-body text-sm text-ink">{inv.invited_email}</p>
-                <p className="font-body text-xs text-ink-soft">{inv.role === 'admin' ? 'Co-admin' : 'Member'} · expires {new Date(inv.expires_at).toLocaleDateString()}</p>
+                <p className="font-body text-xs text-ink-soft">
+                  {inv.role === 'admin' ? 'Co-admin' : 'Member'}
+                  {' · '}{inv.invited_user_id ? 'account ready, waiting for their first sign-in' : 'waiting to sign in'}
+                  {' · '}link expires {new Date(inv.expires_at).toLocaleDateString()}
+                </p>
               </div>
               <div className="flex items-center gap-3">
                 <ResendInviteButton churchId={churchId} inviteId={inv.id} />
